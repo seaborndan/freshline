@@ -244,3 +244,114 @@ plausible, working, wrong ingester.
 The other half: when scoping felt like it was dragging, the thing that unblocked it was not another
 list of options. It was being asked what the data is actually worth to somebody. Every technical
 choice after that point had an obvious answer.
+
+---
+
+## M3 — Spatial and query performance
+
+**Date:** 2026-07-26 · **Tool:** Claude Code (Opus 5)
+
+### The milestone disproved its own premise
+
+M3 existed to add a spatial index and measure the improvement. The measurement said the spatial index
+made the map query **2.4× more expensive** — 40,359 logical reads against 16,933 for a plain
+`BETWEEN` on latitude and longitude.
+
+The reason is unglamorous. `Establishments` is about 1,408 pages, roughly 11 MB. Scanning it once
+beats seeking a spatial index and then doing 7,290 key lookups back into the clustered index. A
+spatial index hits the same selectivity tipping point as any other index, and at 23,528 rows the
+table is simply too small for it to win.
+
+The actual 3.9× improvement came from two ordinary things: an `INCLUDE` on the inspections index to
+remove key lookups, and replacing two correlated subqueries with one `CROSS APPLY`. Neither is
+spatial. Neither was what the milestone was about.
+
+This is the most useful thing in the project so far, and it only exists because the milestone was
+written as "measure it" rather than "add a spatial index". A version of this project that assumed the
+index helped would have shipped the assumption, and it would have looked exactly the same.
+
+### The mistake inside the measurement
+
+The first reading was 66,536 reads before and 16,933 after, and I nearly attributed all of it to the
+query rewrite. Re-running the *original* query after the covering index existed gave 32,458 — the
+naive query had improved on its own.
+
+So the honest attribution is roughly half the index and half the rewrite, not all rewrite. Both
+numbers were real; the story built from them would have been wrong. **Change one thing, measure,
+change the next.** Making two changes and measuring once at the end produces a number you cannot
+apportion, and the temptation is to credit whichever change you found more interesting.
+
+### The bug that widening found
+
+Scope was widened from Staten Island to all five boroughs so the measurement had enough rows to mean
+anything. That surfaced a genuine defect that had been latent since M1: **the watermark recorded how
+far ingestion had reached, but not what it had been asking for.**
+
+The stored position of 2026-07-22 was earned while requesting one borough. Reusing it against a
+request for the whole city would have left four boroughs with no history before that date — silently,
+while the row count grew by twenty thousand and every log line read as success.
+
+`SourceWatermark` now stores the scope it was earned under, and a mismatch discards it. Two tests
+cover it in both directions, because a signature that changed on every run would satisfy the first
+test while turning every run into a full backfill.
+
+Worth naming the general shape: a stored position is only meaningful together with the question it
+answered. That applies well beyond watermarks.
+
+### Where a rule was deliberately bent
+
+`CLAUDE.md` says Core takes no package references. Spatial support means `NetTopologySuite` in Core.
+
+I raised it rather than working around it quietly, argued that the rule targets infrastructure
+(persistence, transport, cloud SDKs) rather than a dependency-free geometry library, and recorded the
+trade-off in ADR-0004 as the conventions require. The alternative — an EF shadow property — would
+have preserved the rule exactly and made every spatial query stringly typed.
+
+That is a judgement, not a fact, and it is the kind of thing that should be argued with rather than
+inherited. It is written down so it can be.
+
+### Verification
+
+- **Both key correctness risks are pinned by tests.** Coordinate order is the spatial equivalent of
+  the grading direction: NetTopologySuite takes (X, Y) — longitude then latitude — while T-SQL's
+  `geography::Point` takes (latitude, longitude). The two APIs that write this same column take their
+  arguments in opposite orders. A swap throws nothing and relocates every New York restaurant to the
+  Southern Ocean. There is a unit test on the constructor and an integration test that compares the
+  stored geography against the published coordinates for **every row in the database**.
+- **The measurements reproduce.** Logical reads are identical across runs; the radius-query CPU
+  result was run twice and held (101 ms and 136 ms with the index forced off, 0 ms with it allowed).
+- **Elapsed time was deliberately not used to conclude anything.** At this data size several readings
+  came back as `0 ms`. Logical reads and CPU are the stable metrics; reporting elapsed milliseconds
+  as a result would have been decoration.
+- 47 tests green.
+
+### Where a human still has to look
+
+- **Two migrations.** `AddSpatialLocation` — which includes hand-written SQL for the backfill and for
+  `CREATE SPATIAL INDEX`, since EF's migration API cannot express the latter — and
+  `CoverLatestInspectionLookup`. Both applied cleanly, and `AddSpatialLocation`'s `Down` drops the
+  index before the column it is built on, which is the part that would fail if it were wrong.
+- **Two new package references**: `NetTopologySuite` in Core and
+  `Microsoft.EntityFrameworkCore.SqlServer.NetTopologySuite` in Infrastructure.
+
+### Where I took the tool's word for it
+
+- **That the spatial index is worth keeping.** It does not help the query it was added for. Keeping it
+  rests on M6's saved territories needing radius search — a feature that does not exist yet. That is
+  speculative and is labelled as such in ADR-0004 and in `performance.md`.
+- **Warm-cache numbers only.** No cold-cache measurement was taken, so every figure describes a
+  server whose working set is already in memory.
+- **That the conclusions survive more data.** 23,528 establishments is small, and the spatial finding
+  in particular depends on the table being cheap to scan. Nothing has been measured at 10×.
+- **The 30-day lookback**, still an unmeasured assumption carried from M1.
+
+### What I'd tell a junior
+
+M1's lesson was that the questions worth asking are about values, not schemas. M3's is narrower:
+**write the milestone as "measure it", not as "add the thing".**
+
+"Add a spatial index" would have been completed successfully, in less time, with a worse outcome and
+nobody any the wiser — including me. The only reason there is a finding here at all is that the
+acceptance criterion was a before-and-after with plans rather than the existence of an index.
+
+And the corollary, learned the slightly harder way: measure between changes, not just at the ends.
