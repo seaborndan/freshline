@@ -1,0 +1,20 @@
+<Project>
+
+  <PropertyGroup>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+
+    <!--
+      NuGet audits restore against the GitHub Advisory Database. By default a vulnerable
+      package is a warning, which means it is a line of build output nobody reads.
+      Promote the four audit codes to errors so a vulnerable dependency stops the build
+      here and in CI. NU1901-1904 = low/moderate/high/critical severity advisories.
+    -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <WarningsAsErrors>$(WarningsAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

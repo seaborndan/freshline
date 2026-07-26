@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Freshline.Api/Freshline.Api.csproj" />
+    <Project Path="src/Freshline.Core/Freshline.Core.csproj" />
+    <Project Path="src/Freshline.Infrastructure/Freshline.Infrastructure.csproj" />
+    <Project Path="src/Freshline.Ingestion/Freshline.Ingestion.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Freshline.Api.Tests/Freshline.Api.Tests.csproj" />
+  </Folder>
+</Solution>
