@@ -132,8 +132,16 @@ public sealed class ApiFixture : IAsyncLifetime
         Establishment sharedNameSecond = NewEstablishment(
             sourceRecord, "1005", "FIXTURE SHARED NAME", "Coffee", 40.7230, -73.9980, fetchedAt);
 
+        // A name carrying every character that could break the cursor if it were spelled naively:
+        // a colon (the codec's own separator), an apostrophe, an ampersand and a plus. Real names in
+        // this data contain all of them — the very first row of the live list is #1 GARDEN CHINESE
+        // RESTAURANT, whose leading # would be a fragment delimiter in an unencoded URL.
+        Establishment awkwardName = NewEstablishment(
+            sourceRecord, "1006", "FIXTURE O'BRIEN: BAR & GRILL + CAFE", "Irish", 40.7240, -73.9970, fetchedAt);
+
         dbContext.Establishments.AddRange(
-            inspectedTwice, neverInspected, withoutCoordinates, sharedNameFirst, sharedNameSecond);
+            inspectedTwice, neverInspected, withoutCoordinates, sharedNameFirst, sharedNameSecond,
+            awkwardName);
         await dbContext.SaveChangesAsync();
 
         // The newer inspection: graded, with two violations, one critical and one not.
@@ -211,6 +219,7 @@ public sealed class ApiFixture : IAsyncLifetime
             WithoutCoordinatesId = withoutCoordinates.Id,
             SharedNameFirstId = sharedNameFirst.Id,
             SharedNameSecondId = sharedNameSecond.Id,
+            AwkwardNameId = awkwardName.Id,
             NewerInspectionId = newer.Id,
             OlderInspectionId = older.Id,
         };
@@ -249,6 +258,10 @@ public sealed record SeededIds
     public required int WithoutCoordinatesId { get; init; }
     public required int SharedNameFirstId { get; init; }
     public required int SharedNameSecondId { get; init; }
+    public required int AwkwardNameId { get; init; }
+
+    /// <summary>Every establishment the fixture seeds. Paging tests assert against this total.</summary>
+    public int TotalEstablishments => 6;
     public required int NewerInspectionId { get; init; }
     public required int OlderInspectionId { get; init; }
 }

@@ -32,13 +32,25 @@ public class InspectionConfiguration : IEntityTypeConfiguration<Inspection>
         //   EstablishmentId  seeks straight to one establishment's inspections
         //   InspectedOn DESC puts the newest first, so TOP 1 stops after one row instead of
         //                    reading every inspection and sorting them
-        //   INCLUDE          carries the two columns the query selects, so a matched row does not
-        //                    then have to be fetched from the clustered index. Removing these two
-        //                    key lookups took the query from 32,529 logical reads to 15,525.
+        //   INCLUDE          carries the columns the query selects, so a matched row does not then
+        //                    have to be fetched from the clustered index. Removing these key
+        //                    lookups took the M3 query from 32,529 logical reads to 15,525.
+        //
+        // Outcome and ClosedByAuthority were added to the INCLUDE in M4. The M3 index covered what
+        // the M3 query selected; the list endpoint selects two columns more, and each one that is
+        // missing puts the key lookup back. Measured on a page of 50: 325 logical reads against the
+        // M3 index, 102 against this one, for 144 KB more index. Widening an INCLUDE is not free and
+        // should not become a habit — every column here is one the list query actually reads.
         builder
             .HasIndex(i => new { i.EstablishmentId, i.InspectedOn })
             .IsDescending(false, true)
-            .IncludeProperties(i => new { i.RawGrade, i.NormalisedSeverity })
+            .IncludeProperties(i => new
+            {
+                i.RawGrade,
+                i.NormalisedSeverity,
+                i.Outcome,
+                i.ClosedByAuthority,
+            })
             .HasDatabaseName("IX_Inspections_EstablishmentId_InspectedOn");
 
         builder

@@ -87,7 +87,11 @@ Measured against the M3 viewport (lat 40.700–40.775, lon −74.020 to −73.96
 | **Silently dropped** | **1,307** |
 
 Those 1,307 are the never-inspected establishments — precisely the greenfield signal M6's scoring is
-built on. The fix is `OUTER APPLY`.
+built on. The fix is left-join semantics.
+
+Counted across the whole table rather than one viewport, `CROSS APPLY` returns **19,923 of 23,528** —
+3,605 missing, exactly the count awaiting a first inspection. Slice 2 fixed this for the list
+endpoint and proved it: a walk of the live endpoint returns all 23,528 rows with no duplicates.
 
 **The M4 number will not be comparable to M3's 16,933**, because the two queries answer different
 questions. That has to be said wherever the numbers appear together rather than presented as a
@@ -117,7 +121,7 @@ still on screen and nothing gets written from recollection.
 | # | Slice | Status |
 |---|---|---|
 | 1 | Read-path seam, API foundation, detail endpoint | ✅ `61e1aa8` |
-| 2 | List with filtering and keyset pagination — **needs a migration** | in progress |
+| 2 | List with filtering and keyset pagination — **includes a migration** | ✅ |
 | 3 | Detail with inspection history — query-count assertion | mostly delivered in slice 1 |
 | 4 | Map viewport query — bounding box, `OUTER APPLY` | not started |
 | 5 | Rate limiting and CORS | not started |

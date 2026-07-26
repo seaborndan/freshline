@@ -31,4 +31,15 @@ public interface IEstablishmentQueries
     /// transport.</para>
     /// </summary>
     Task<EstablishmentDetail?> GetAsync(int id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns one page of establishments matching <paramref name="query"/>, ordered by name and
+    /// then by id.
+    ///
+    /// <para>The ordering is part of the contract rather than an implementation detail, because
+    /// keyset pagination only works if the sort is total and stable: the cursor is a position in
+    /// <em>this</em> order, and changing the order silently invalidates every cursor a client
+    /// holds.</para>
+    /// </summary>
+    Task<EstablishmentPage> ListAsync(EstablishmentListQuery query, CancellationToken cancellationToken);
 }
