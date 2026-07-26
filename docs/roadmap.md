@@ -10,9 +10,15 @@ Estimates are effort, not a schedule.
 ### M0 — Scaffold ✅ *(2026-07-25)*
 
 Repo, solution layout, README written before any code, ADR-0001 and ADR-0002, `CLAUDE.md`, CI that
-builds and tests both halves, branch protection on `main`.
+builds and tests both halves.
 
 **Done when:** a stranger can read the README and understand the goal; CI is green.
+
+> **Carried forward:** server-side branch protection is not enabled. GitHub requires Pro or a public
+> repository for rulesets, and this repository is private while I am still employed elsewhere. A
+> `.githooks/pre-push` hook refuses direct pushes to `main` as a local stand-in — a habit, not a
+> control, since `--no-verify` bypasses it. **Enable a real ruleset the day this goes public**, along
+> with a required status check on both CI jobs.
 
 ---
 

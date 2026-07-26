@@ -1,0 +1,35 @@
+#!/bin/sh
+#
+# Refuses a direct push to main.
+#
+# GitHub's own branch protection requires Pro or a public repository, and this
+# repository is private on a Free plan. This hook is the local stand-in: it
+# enforces the same habit — work on a branch, open a PR, let CI run — without
+# server-side enforcement.
+#
+# It is a habit, not a security control. `git push --no-verify` bypasses it, and
+# nothing stops someone pushing from another clone. When the repository goes
+# public, replace this with a real ruleset and delete the hook.
+#
+# Enabled by `git config core.hooksPath .githooks` (already set in this clone;
+# a fresh clone must run it again — hooks configuration is not cloned).
+
+protected_branch="main"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    case "$remote_ref" in
+        "refs/heads/$protected_branch")
+            echo "pre-push: refusing to push directly to '$protected_branch'." >&2
+            echo "" >&2
+            echo "  Open a pull request instead:" >&2
+            echo "    git switch -c feat/your-change" >&2
+            echo "    git push -u origin feat/your-change" >&2
+            echo "    gh pr create --fill" >&2
+            echo "" >&2
+            echo "  Deliberately overriding: git push --no-verify" >&2
+            exit 1
+            ;;
+    esac
+done
+
+exit 0
