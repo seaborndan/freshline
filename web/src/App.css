@@ -1,0 +1,15 @@
+.app-shell {
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
+  text-align: left;
+}
+
+.app-shell h1 {
+  margin-bottom: 0.25rem;
+}
+
+.tagline {
+  margin-top: 0;
+  opacity: 0.75;
+}
