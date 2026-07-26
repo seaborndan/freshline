@@ -74,6 +74,11 @@ Loading, error, and empty states. Keyboard navigation.
 **Done when:** someone can open the live URL, filter to an area, click a place, and understand what
 they are looking at without being told. **The URL goes on the resume the day this deploys.**
 
+> Deployment at this milestone is done by hand — Static Web Apps for the front end, App Service or a
+> container for the API — and that is fine. M7 replaces it with Bicep and deploy-on-merge. Getting the
+> thing in front of a human is worth more than getting the pipeline right first, and doing it manually
+> once is what makes the M7 automation legible rather than copied.
+
 ---
 
 ### M6 — Scoring and territories *(~5h)*
