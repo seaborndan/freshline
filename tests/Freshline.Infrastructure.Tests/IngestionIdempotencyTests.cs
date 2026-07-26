@@ -107,6 +107,61 @@ public class IngestionIdempotencyTests(SqlServerFixture fixture)
     }
 
     /// <summary>
+    /// Widening the ingestion scope must discard the watermark.
+    ///
+    /// This is the bug that widening Staten Island to the whole city would otherwise have caused:
+    /// the stored position was earned while asking for one borough, and reusing it against a wider
+    /// request leaves every newly-included establishment with no history before that date. Nothing
+    /// fails, the row count grows, the logs look healthy, and the data is quietly wrong.
+    /// </summary>
+    [Fact]
+    public async Task Widening_the_scope_discards_the_watermark_and_backfills()
+    {
+        await ResetAsync();
+
+        ReplayConnector narrow = new(
+            SourceId.NycDohmh, NycFixtures.LoadAll(), BackfillFloor, scopeSignature: "borough=Staten Island");
+
+        IngestionRunResult first = await RunAsync(narrow);
+        Assert.NotNull(first.WatermarkAfter);
+
+        // Same source, same data, wider request.
+        ReplayConnector wide = new(
+            SourceId.NycDohmh, NycFixtures.LoadAll(), BackfillFloor, scopeSignature: "borough=*");
+
+        await RunAsync(wide);
+
+        // The second run must have gone back to the floor rather than resuming from a position that
+        // was only ever true of the narrower scope.
+        Assert.NotNull(wide.LastWindow);
+        Assert.Equal(BackfillFloor, wide.LastWindow.From);
+    }
+
+    /// <summary>
+    /// The mirror of the above: an unchanged scope must <em>not</em> reset the watermark, or every
+    /// run becomes a full backfill and the incremental mechanism is decorative.
+    /// </summary>
+    [Fact]
+    public async Task An_unchanged_scope_keeps_the_watermark()
+    {
+        await ResetAsync();
+
+        ReplayConnector first = new(
+            SourceId.NycDohmh, NycFixtures.LoadAll(), BackfillFloor, scopeSignature: "borough=*");
+        IngestionRunResult firstRun = await RunAsync(first);
+
+        ReplayConnector second = new(
+            SourceId.NycDohmh, NycFixtures.LoadAll(), BackfillFloor, scopeSignature: "borough=*");
+        await RunAsync(second);
+
+        Assert.NotNull(second.LastWindow);
+        Assert.True(
+            second.LastWindow.From > BackfillFloor,
+            "an unchanged scope re-read from the floor, so the watermark is not being honoured");
+        Assert.Equal(firstRun.WatermarkAfter!.Value.AddDays(-30), second.LastWindow.From);
+    }
+
+    /// <summary>
     /// Never-inspected establishments must survive ingestion as establishments with no inspection.
     /// They are the newly-licensed signal, and the easiest way to lose them is to treat a row with
     /// no inspection as a row worth discarding.

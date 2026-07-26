@@ -31,4 +31,11 @@ internal static class ColumnWidths
     internal const int RawGrade = 8;
     internal const int ViolationCode = 32;
     internal const int ViolationDescription = 2048;
+
+    /// <summary>
+    /// Not measured from source data — this one is ours. It holds a rendered description of the
+    /// connector's scope, currently about 60 characters for NYC. Sized for a future connector with
+    /// several filters rather than for today's single one.
+    /// </summary>
+    internal const int ScopeSignature = 512;
 }

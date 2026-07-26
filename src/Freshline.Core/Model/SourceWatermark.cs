@@ -27,6 +27,21 @@ public class SourceWatermark
     /// </summary>
     public DateOnly? HighWaterMark { get; set; }
 
+    /// <summary>
+    /// What the connector was asking for when this watermark was earned — the borough filter and
+    /// backfill floor, rendered as a stable string.
+    ///
+    /// A watermark on its own is an incomplete statement. "I reached 2026-07-22" is only useful
+    /// alongside "…while asking for Staten Island". Widen the filter to the whole city and the
+    /// stored date is still true and no longer *means* anything: the next run would start from it
+    /// and the four boroughs never previously requested would silently have no history before that
+    /// date. Row counts grow, logs look healthy, and the database has a hole in it.
+    ///
+    /// So the scope is stored alongside the position. When it changes, the watermark no longer
+    /// applies and ingestion backfills from the floor again. See <see cref="Ingestion.IIngestionRunner"/>.
+    /// </summary>
+    public string? ScopeSignature { get; set; }
+
     public DateTimeOffset? LastRunStartedUtc { get; set; }
 
     public DateTimeOffset? LastRunCompletedUtc { get; set; }

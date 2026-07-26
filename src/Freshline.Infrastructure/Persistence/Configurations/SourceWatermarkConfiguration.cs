@@ -16,5 +16,7 @@ public class SourceWatermarkConfiguration : IEntityTypeConfiguration<SourceWater
         builder.HasKey(w => w.SourceId);
 
         builder.Property(w => w.SourceId).HasConversion<int>().ValueGeneratedNever();
+
+        builder.Property(w => w.ScopeSignature).HasMaxLength(ColumnWidths.ScopeSignature);
     }
 }

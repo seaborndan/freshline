@@ -14,11 +14,17 @@ public sealed class NycDohmhOptions
     public string ResourcePath { get; set; } = "resource/43nn-pn8j.json";
 
     /// <summary>
-    /// Restricts ingestion to one borough. M1 runs Staten Island: 9,587 rows all-time and 3,099
-    /// in the last twelve months, which is small enough that the whole schema-and-idempotency
-    /// loop runs in seconds. Set to null to ingest the whole city.
+    /// Restricts ingestion to one borough, or null for the whole city.
+    ///
+    /// M1 ran Staten Island — 3,237 rows — deliberately, so that the schema could go through a
+    /// revision cheaply while it was still unsettled. That purpose has been served, and M3 needs
+    /// volume: a before-and-after query measurement over 899 establishments measures timer jitter,
+    /// not indexing. Null from M3 onward.
+    ///
+    /// This is a filter on one source, not a second source. Widening it costs a configuration
+    /// value; adding a city would cost a connector, and there is no plan to.
     /// </summary>
-    public string? Borough { get; set; } = "Staten Island";
+    public string? Borough { get; set; }
 
     /// <summary>
     /// The earliest inspection date this deployment will ever request. Bounds the first run and
