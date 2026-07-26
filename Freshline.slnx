@@ -7,5 +7,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Freshline.Api.Tests/Freshline.Api.Tests.csproj" />
+    <Project Path="tests/Freshline.Infrastructure.Tests/Freshline.Infrastructure.Tests.csproj" />
   </Folder>
 </Solution>
