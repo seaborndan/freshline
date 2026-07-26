@@ -1,0 +1,28 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+artifacts/
+TestResults/
+*.coverage
+coverage/
+
+# Node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Environment / secrets
+.env
+.env.local
+.env.*.local
+appsettings.Development.json
+appsettings.Local.json
+*.pubxml
+*.publishsettings
+
+# OS
+Thumbs.db
+.DS_Store
