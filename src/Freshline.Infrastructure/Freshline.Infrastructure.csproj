@@ -1,7 +1,32 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
     <ProjectReference Include="..\Freshline.Core\Freshline.Core.csproj" />
+  </ItemGroup>
+
+  <!--
+    Dependency additions are a decision, not an implementation detail (CLAUDE.md), so what each
+    one is here for:
+
+      EntityFrameworkCore.SqlServer  the ORM and provider. The persistence story for the project.
+      EntityFrameworkCore.Design     design-time only; what `dotnet ef migrations` runs against.
+                                     PrivateAssets=all so it does not flow to referencing projects.
+      Extensions.Http                IHttpClientFactory, so the Socrata client gets a pooled,
+                                     correctly-disposed HttpClient rather than a static one.
+      Extensions.Options.*           binding connector settings from configuration with validation
+                                     at startup instead of a null reference at first fetch.
+
+    Versions are pinned to the 10.0.10 servicing band to match the SDK in global.json.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.10" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -9,5 +34,10 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+
+  <!-- So the SoQL builder can be tested directly without being made part of the public surface. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Freshline.Infrastructure.Tests" />
+  </ItemGroup>
 
 </Project>
