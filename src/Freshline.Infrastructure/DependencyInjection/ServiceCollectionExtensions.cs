@@ -26,7 +26,8 @@ public static class ServiceCollectionExtensions
                 $"No '{ConnectionStringName}' connection string is configured. Locally this comes from " +
                 "user secrets or the environment; in Azure it comes from Key Vault via managed identity.");
 
-        services.AddDbContext<FreshlineDbContext>(builder => builder.UseSqlServer(connectionString));
+        services.AddDbContext<FreshlineDbContext>(builder =>
+            builder.UseSqlServer(connectionString, sqlServer => sqlServer.UseNetTopologySuite()));
 
         // ValidateOnStart turns a misconfigured source into a startup failure with a readable
         // message, rather than a null reference on the first fetch an hour into a schedule.

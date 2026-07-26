@@ -188,6 +188,40 @@ public class IngestionIdempotencyTests(SqlServerFixture fixture)
     }
 
     /// <summary>
+    /// The coordinate order, checked against what SQL Server actually stored rather than against
+    /// what the managed constructor was asked to build.
+    ///
+    /// The two APIs that write this column take their arguments in opposite orders — T-SQL's
+    /// <c>geography::Point</c> is (Latitude, Longitude), NetTopologySuite's is (X, Y) which is
+    /// (Longitude, Latitude). One of them is written in a migration and the other in the runner, so
+    /// this asserts on the round-tripped result and would catch either being wrong.
+    /// </summary>
+    [Fact]
+    public async Task Stored_geography_agrees_with_the_published_latitude_and_longitude()
+    {
+        await ResetAsync();
+
+        await RunAsync(new ReplayConnector(SourceId.NycDohmh, NycFixtures.LoadAll(), BackfillFloor));
+
+        await using FreshlineDbContext dbContext = fixture.CreateDbContext();
+
+        int placed = await dbContext.Establishments.CountAsync(e => e.Location != null);
+        Assert.True(placed > 0, "no establishment was given a location, so this test proves nothing");
+
+        int misplaced = await dbContext.Database
+            .SqlQuery<int>($"""
+                SELECT COUNT(*) AS Value
+                FROM Establishments
+                WHERE Location IS NOT NULL
+                  AND (ABS(Location.Lat - Latitude) > 0.000001
+                    OR ABS(Location.Long - Longitude) > 0.000001)
+                """)
+            .SingleAsync();
+
+        Assert.Equal(0, misplaced);
+    }
+
+    /// <summary>
     /// Provenance, per ADR-0002: every canonical row points at the raw payload it came from, so a
     /// mapping bug is fixable by re-normalising what is stored rather than by re-fetching.
     /// </summary>

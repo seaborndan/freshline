@@ -240,6 +240,8 @@ public sealed class IngestionRunner(
             target.PostalCode = source.PostalCode;
             target.Latitude = source.Latitude;
             target.Longitude = source.Longitude;
+            // Derived on write, never edited independently of the two values above.
+            target.Location = GeoPoint.FromLatitudeLongitude(source.Latitude, source.Longitude);
             target.IsAwaitingFirstInspection = source.IsAwaitingFirstInspection;
             target.SourceRecordId = sourceRecordId;
         }

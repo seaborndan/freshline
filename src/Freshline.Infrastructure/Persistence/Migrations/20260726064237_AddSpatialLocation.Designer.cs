@@ -4,6 +4,7 @@ using Freshline.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NetTopologySuite.Geometries;
 
@@ -12,9 +13,11 @@ using NetTopologySuite.Geometries;
 namespace Freshline.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FreshlineDbContext))]
-    partial class FreshlineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260726064237_AddSpatialLocation")]
+    partial class AddSpatialLocation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -153,10 +156,7 @@ namespace Freshline.Infrastructure.Persistence.Migrations
                     b.HasIndex("SourceRecordId");
 
                     b.HasIndex("EstablishmentId", "InspectedOn")
-                        .IsDescending(false, true)
                         .HasDatabaseName("IX_Inspections_EstablishmentId_InspectedOn");
-
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("EstablishmentId", "InspectedOn"), new[] { "RawGrade", "NormalisedSeverity" });
 
                     b.HasIndex("SourceId", "ExternalId")
                         .IsUnique()

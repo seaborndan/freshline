@@ -25,10 +25,20 @@ public class InspectionConfiguration : IEntityTypeConfiguration<Inspection>
             .IsUnique()
             .HasDatabaseName("UX_Inspections_SourceId_ExternalId");
 
-        // Every incremental run asks "what has happened since the watermark", and the scoring
-        // model asks "what are this establishment's last few inspections". Both are this index.
+        // The map's list query asks, for every establishment in view, "what was the most recent
+        // inspection and how did it go". Three things make that cheap, and they were measured
+        // rather than assumed — see docs/performance.md.
+        //
+        //   EstablishmentId  seeks straight to one establishment's inspections
+        //   InspectedOn DESC puts the newest first, so TOP 1 stops after one row instead of
+        //                    reading every inspection and sorting them
+        //   INCLUDE          carries the two columns the query selects, so a matched row does not
+        //                    then have to be fetched from the clustered index. Removing these two
+        //                    key lookups took the query from 32,529 logical reads to 15,525.
         builder
             .HasIndex(i => new { i.EstablishmentId, i.InspectedOn })
+            .IsDescending(false, true)
+            .IncludeProperties(i => new { i.RawGrade, i.NormalisedSeverity })
             .HasDatabaseName("IX_Inspections_EstablishmentId_InspectedOn");
 
         builder
