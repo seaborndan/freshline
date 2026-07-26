@@ -28,6 +28,21 @@ jobs:
       - name: Restore
         run: dotnet restore
 
+      - name: Restore local tools
+        run: dotnet tool restore
+
+      # The integration tests need a real SQL Server, because the property they assert —
+      # that a unique index makes a repeated ingestion window a no-op — is not enforced by
+      # EF's in-memory provider at all, so a broken upsert would pass against it.
+      #
+      # Started from docker-compose.yml rather than as a GitHub Actions service container,
+      # for a specific reason: a service container needs the SA password written into this
+      # file, and no credential belongs in CI YAML. The compose file is the one place the
+      # throwaway local password is allowed to live, so CI reuses it and gets an identical
+      # database to the one developers run locally as a side effect.
+      - name: Start SQL Server
+        run: docker compose up -d --wait
+
       # Build and test run with --no-restore / --no-build so a failure here is a
       # real failure and not a silent second restore hiding a broken lock state.
       - name: Build
@@ -35,6 +50,10 @@ jobs:
 
       - name: Test
         run: dotnet test --no-build --configuration Release --verbosity normal
+
+      - name: Stop SQL Server
+        if: always()
+        run: docker compose down -v
 
   web:
     name: Web (React)
