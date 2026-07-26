@@ -22,7 +22,7 @@ builds and tests both halves.
 
 ---
 
-### M1 — Ingest one city *(~6h)*
+### M1 — Ingest one city ✅ *(2026-07-25)*
 
 NYC DOHMH connector. Canonical `Establishment` / `Inspection` / `Violation` model, EF Core
 migrations, SQL Server running locally in Docker. Incremental fetch with a watermark, idempotent
@@ -30,6 +30,18 @@ upsert on `(SourceId, ExternalId)`.
 
 **Done when:** the ingester runs twice over the same window and the row count does not change. That
 assertion is a test, not a manual check.
+
+> **Scoped to one borough.** Staten Island, from 2025-07-25 — 3,237 rows, 899 establishments. The
+> roadmap named NYC and NYC was the only verified source, but pointing a first connector at 295,294
+> records before the model has been through one revision is the expensive order to do things in.
+> Widening is a configuration change.
+>
+> **ADR-0002 was checked and partly wrong**, which is what M1 was supposed to find out. The
+> superseding record is [ADR-0003](adr/0003-nyc-identity-grading-and-watermarking-verified.md).
+>
+> **Carried forward:** the 30-day lookback window is an unmeasured assumption — nothing has
+> established how far back NYC actually restates records. Chicago's grain and grading remain
+> unverified; M2 tests them. Neither number nor claim is quoted anywhere as a finding.
 
 ---
 
