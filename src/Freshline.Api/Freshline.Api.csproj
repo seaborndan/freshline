@@ -15,9 +15,28 @@
       ASP.NET Core package ships a reference to a patched version itself.
     -->
     <PackageReference Include="Microsoft.OpenApi" Version="2.7.5" />
+    <!--
+      A browsable UI over the OpenAPI document. `AddOpenApi` / `MapOpenApi` generate and serve the
+      document itself — the JSON contract at /openapi/v1.json — and no user interface at all; the
+      .NET templates stopped shipping one when they moved off Swashbuckle. M4's acceptance criterion
+      is that a stranger can explore the API, so a UI is a requirement rather than a nicety.
+
+      Chosen over Swashbuckle.AspNetCore.SwaggerUI for one verified reason: on net10.0 this package
+      declares no package dependencies at all (checked in its nuspec, not assumed), so it adds a UI
+      without adding a supply chain. It is a rendering concern only — it reads the same document
+      any other client would.
+    -->
+    <PackageReference Include="Scalar.AspNetCore" Version="2.16.16" />
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Infrastructure is referenced so the host can call AddFreshlinePersistence at startup. Nothing
+      else in this project may use it: endpoints depend on the interfaces in Core and resolve them
+      from the container. ArchitectureTests enforces that by asserting this assembly compiles
+      without any reference to Entity Framework — see CLAUDE.md on the shortcut this layout exists
+      to prevent.
+    -->
     <ProjectReference Include="..\Freshline.Core\Freshline.Core.csproj" />
     <ProjectReference Include="..\Freshline.Infrastructure\Freshline.Infrastructure.csproj" />
   </ItemGroup>
