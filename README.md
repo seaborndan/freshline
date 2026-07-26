@@ -79,25 +79,20 @@ about — see Measured results)_
 All public, all free, no payment tier. Row counts below are from live `count(*)` calls made on
 2026-07-25, not estimates.
 
-| Source | What it provides | Rows | Access |
+| Source | What it provides | Rows | Status |
 |---|---|---|---|
-| [NYC Open Data — DOHMH Restaurant Inspections](https://data.cityofnewyork.us/Health/NYC-Restaurant-Inspection-Results/gv23-aida) (`43nn-pn8j`) | One row per violation, with grade, score, violation code, cuisine and coordinates, across 31,180 establishments | 295,294 | Socrata SODA, unauthenticated |
-| [Chicago — Food Inspections](https://data.cityofchicago.org/d/4ijn-s7e5) (`4ijn-s7e5`) | One row per inspection, violations packed into a text field | 313,268 | Socrata SODA, unauthenticated |
-| [Los Angeles — Restaurant and Market Health Inspections](https://data.lacity.org/d/29fd-3paw) (`29fd-3paw`) | One row per inspection, with score and grade | 67,573 | Socrata SODA, unauthenticated |
+| [NYC Open Data — DOHMH Restaurant Inspections](https://data.cityofnewyork.us/Health/NYC-Restaurant-Inspection-Results/gv23-aida) (`43nn-pn8j`) | One row per violation, with grade, score, violation code, cuisine and coordinates, across 31,180 establishments | 295,294 | **Ingested** (M1 — Staten Island slice only) |
+| [Chicago — Food Inspections](https://data.cityofchicago.org/d/4ijn-s7e5) (`4ijn-s7e5`) | One row per inspection, violations packed into a text field | 313,268 | _Access verified, no connector yet — M2_ |
+| [Los Angeles — Restaurant and Market Health Inspections](https://data.lacity.org/d/29fd-3paw) (`29fd-3paw`) | One row per inspection, with score and grade | 67,573 | _Access verified, no connector yet_ |
 
-Unauthenticated access to all three was confirmed by calling them. The anonymous rate limit has not
-been measured and is not claimed here.
+All three are reachable over Socrata SODA without a token; that was confirmed by calling them. The
+anonymous rate limit has not been measured and is not claimed here. Chicago's and LA's *schemas* have
+not been verified either — only that the data is there and free.
 
 **M1 ingests one slice**: NYC, Staten Island, inspections from 2025-07-25 onward — 3,237 rows,
 including 118 establishments that hold a permit and have never been inspected. Small on purpose, so
-the schema can go through a revision cheaply. Widening is configuration, not code.
-
-**Sources checked and rejected.** Tennessee and Hawaii both publish restaurant inspections only
-through a third-party portal whose `robots.txt` disallows all automated access, naming AI crawlers
-and "content aggregators" explicitly. Nashville's open-data portal has migrated off Socrata to ArcGIS
-Hub and carries no inspection data; Franklin's Socrata portal carries only aggregate building-permit
-statistics. There is no bulk-accessible restaurant inspection data for either state. The reasoning is
-in [the engineering log](docs/ai-engineering-log.md#m1--ingest-one-city).
+the schema can go through a revision cheaply. Widening the slice is configuration; adding a city is a
+connector.
 
 Per-city schema differences are the point, not an obstacle — see
 [ADR-0002](docs/adr/0002-per-source-connectors-and-a-canonical-schema.md), and
