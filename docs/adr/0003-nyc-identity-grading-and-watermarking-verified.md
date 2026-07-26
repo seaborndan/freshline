@@ -4,6 +4,17 @@
 - **Date:** 2026-07-25
 - **Supersedes:** [ADR-0002](0002-per-source-connectors-and-a-canonical-schema.md)
 
+> **Status note, added 2026-07-26.** This record repeatedly defers open questions to "M2", which at
+> the time meant a Chicago connector. **M2 was cut** ([roadmap](../roadmap.md#m2--ingest-a-second-city--cut)) —
+> the project is scoped to one source, deliberately. Read every reference to M2 below as *not
+> planned* rather than *scheduled*.
+>
+> Nothing about the NYC findings changes: they were verified against live responses and stand on
+> their own. What changes is that the Chicago-side claims inherited from ADR-0002 — its record grain,
+> its grading vocabulary, whether establishment identifiers collide across cities — are now
+> **permanently unverified** rather than pending. They should not be repeated as fact anywhere, and
+> if a second source is ever added, this ADR and ADR-0002 both need reopening rather than assuming.
+
 ## Why this supersedes ADR-0002 rather than editing it
 
 ADR-0002's *decision* — a connector per source, mapping into one canonical schema — still stands, and

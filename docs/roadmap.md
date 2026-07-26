@@ -40,19 +40,35 @@ assertion is a test, not a manual check.
 > superseding record is [ADR-0003](adr/0003-nyc-identity-grading-and-watermarking-verified.md).
 >
 > **Carried forward:** the 30-day lookback window is an unmeasured assumption — nothing has
-> established how far back NYC actually restates records. Chicago's grain and grading remain
-> unverified; M2 tests them. Neither number nor claim is quoted anywhere as a finding.
+> established how far back NYC actually restates records, and the number is not quoted anywhere as a
+> finding. It is measurable without a second city: re-fetch a window already held and compare against
+> the stored payloads to see how far back rows actually change.
 
 ---
 
-### M2 — Ingest a second city *(~5h)*
+### M2 — Ingest a second city — CUT
 
-Chicago connector. This is the milestone that proves ADR-0002 was right or wrong: a second source
-with a different grading system, a different record grain, and different identity semantics. Grading
-normalisation with per-source fixture tests.
+**Cut on 2026-07-26, before any work started.** Originally: a Chicago connector, to prove ADR-0002
+right or wrong against a second grading system and a second record grain.
 
-**Done when:** both cities are queryable through one model, and the normalisation tests would fail if
-a grading direction were inverted.
+**Why it was cut.** The scope of one area, done all the way through to a deployed map, is already
+the larger piece of work. Every milestone after this one — spatial queries, API, map UI, scoring,
+infrastructure, observability — is exercised just as hard by one city's data as by three, and each
+is worth more finished than a second connector is worth started. Cutting it moves M5, the milestone
+that produces a URL worth putting on a résumé, roughly five hours closer.
+
+**What is lost, stated plainly.** ADR-0002's central claim is that sources differ irreducibly and so
+each needs its own connector. With one source that claim is *reasoned* rather than *demonstrated*.
+The extension point exists, is behind an interface, and has exactly one implementation. Anywhere
+this project describes itself, it says that — it does not describe itself as multi-source.
+
+**What is not lost.** The grading-normalisation fixture tests were the genuinely valuable half of
+this milestone, and they already exist for NYC: six grade values mapped explicitly, an unknown
+seventh throws rather than defaulting, and the direction is pinned by a test against real captured
+responses that was verified to fail when the direction is inverted.
+
+**If it is ever revisited**, ADR-0002 and ADR-0003 both need reopening — ADR-0003's findings are
+about NYC specifically, and nothing in them should be assumed to generalise.
 
 ---
 
@@ -95,8 +111,14 @@ they are looking at without being told. **The URL goes on the resume the day thi
 
 ### M6 — Scoring and territories *(~5h)*
 
-The opportunity score: inspection trend, critical-violation recency, licence age. Saved territories,
-and a "what changed since you last looked" view.
+The opportunity score: inspection trend, critical-violation recency, and whether an establishment is
+newly permitted and not yet inspected. Saved territories, and a "what changed since you last looked"
+view.
+
+> The original wording said "licence age". There is no licence feed — that was going to come from a
+> second dataset that is no longer in scope. The nearest real signal already in the data is the
+> never-inspected sentinel: 118 establishments in the ingested slice hold a permit and have no
+> inspection history, which is the same "brand new business" signal arriving by a different route.
 
 **Done when:** the score is explainable field by field, and its weighting lives in one place that is
 unit tested.
@@ -144,6 +166,10 @@ Screenshots, architecture diagram, the full ADR set including decisions worth re
 
 ## Deliberately out of scope
 
+- **No second city, and no second dataset.** One source — NYC DOHMH restaurant inspections — filtered
+  to Staten Island, taken all the way through to a deployed, working map. Breadth is the cheap kind of
+  impressive; a system finished end to end is the expensive kind. See M2 above for the full reasoning
+  and for what that costs in claims this project can no longer make.
 - **No LLM or OCR anywhere in the product.** Everything here is structured public data. AI tooling is
   used to *build* the project, and that is recorded in `docs/ai-engineering-log.md` — a separate
   thing from the product using AI.

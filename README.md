@@ -1,11 +1,29 @@
 # Freshline
 
-Sales intelligence for companies that sell to restaurants. Freshline aggregates public health-inspection and
-business-licence data from city open-data portals, normalises it into one schema, scores each establishment,
-and puts the result on a map you can filter and work through.
+Sales intelligence for companies that sell to restaurants. Freshline takes a city's public
+health-inspection data, normalises it into one schema, scores each establishment, and puts the
+result on a map you can filter and work through.
 
 **Status: in development.** This README was written before the code, as a design document. Sections describing
 behaviour that does not exist yet are marked _(planned)_. Nothing here is claimed as working until it is.
+
+> ### Scope: one source, one area, finished properly
+>
+> Freshline ingests **one dataset — NYC DOHMH restaurant inspections — filtered to Staten Island.**
+> That is the whole scope, and it is a deliberate choice rather than a stopping point I drifted into.
+>
+> A second city was planned and **cut**. The reasoning is in [the roadmap](docs/roadmap.md#m2--ingest-a-second-city--cut):
+> the remaining milestones — spatial queries, API, map UI, scoring, infrastructure, observability —
+> are each worth more finished than a second connector is worth started, and every one of them is
+> exercised just as hard by one city's data as by three.
+>
+> The ingestion layer is **architected** so a second source is one connector class and a row of
+> configuration (see [ADR-0002](docs/adr/0002-per-source-connectors-and-a-canonical-schema.md)).
+> That extension point is designed and unused. It has not been proven by a second implementation,
+> and this README does not claim otherwise.
+>
+> Widening from Staten Island to all five boroughs is a configuration value, not code — 295,294 rows
+> instead of 3,237, no migration and no new class.
 
 ---
 
@@ -15,26 +33,28 @@ If you sell to restaurants — food distribution, pest control, POS systems, kit
 insurance — the useful question is not "who are the restaurants near me." Every list broker sells that. The
 useful question is **"which restaurants are about to need what I sell, and why do I think so."**
 
-That signal is sitting in public data. Health inspection results are published by most large US cities, in the
-open, with coordinates. An establishment whose inspection scores have degraded across three visits, or that
-just picked up a critical violation on refrigeration, or that has just been licensed and has no inspection
-history at all, is a materially different prospect from the one next door. Nobody is joining that up, because
-each city publishes it in a different shape and none of them publish it as a sales signal.
+That signal is sitting in public data. New York publishes every restaurant inspection in the open, with
+coordinates, violation codes and grades, updated within a couple of days. An establishment whose inspection
+scores have degraded across three visits, or that just picked up a critical violation on refrigeration, or that
+has just been licensed and has no inspection history at all, is a materially different prospect from the one
+next door. The city publishes all of that as a compliance record. Nobody publishes it as a sales signal.
 
-Freshline is the join.
+Turning the compliance record into the sales signal is what this does.
 
 The honest secondary reason: I wanted to own the whole shape of a system once — schema, ingestion, API,
-front end, deployment, monitoring — rather than adding features to architecture somebody else designed.
+front end, deployment, monitoring — rather than adding features to architecture somebody else designed. That
+is also why the scope is one area rather than many: the interesting problems are vertical, not horizontal.
 
 ## What it does
 
-- **Ingests** inspection and licence data from multiple city open-data portals on a schedule, incrementally,
-  without creating duplicates when a run overlaps a previous one.
-- **Normalises** the wildly different per-city schemas into one establishment/inspection/violation model, and
-  records exactly what each source field was mapped from.
-- **Scores** each establishment on inspection trend, critical-violation recency, and licence age, so a
-  salesperson can sort by "worth a call" rather than by distance. _(planned)_
-- **Maps** the results — clickable establishments coloured by score tier, with a legend, filterable by city,
+- **Ingests** NYC DOHMH restaurant inspections on a schedule, incrementally, without creating duplicates when
+  a run overlaps a previous one.
+- **Normalises** the source's shape into one establishment/inspection/violation model — collapsing its
+  one-row-per-violation grain, translating six grade values onto a documented scale, and recording what each
+  field was mapped from.
+- **Scores** each establishment on inspection trend and critical-violation recency, so a salesperson can sort
+  by "worth a call" rather than by distance. _(planned)_
+- **Maps** the results — clickable establishments coloured by score tier, with a legend, filterable by
   cuisine, grade, and score band. _(planned)_
 - **Saves territories** so a user can return to a filtered geographic slice, and get told what changed in it
   since last time. _(planned)_
@@ -43,13 +63,9 @@ front end, deployment, monitoring — rather than adding features to architectur
 
 ```mermaid
 flowchart LR
-    subgraph Sources["City open-data portals (Socrata)"]
-        NYC[NYC DOHMH]
-        CHI[Chicago]
-        OTHER[...]
-    end
+    NYC["NYC DOHMH<br/>Socrata · Staten Island"]
 
-    NYC & CHI & OTHER --> ING
+    NYC --> ING
 
     subgraph Azure
         ING[Ingestion worker<br/>incremental, idempotent]
@@ -63,41 +79,44 @@ flowchart LR
     end
 ```
 
+One source, drawn as one source. The connector sits behind an `ISourceConnector` interface so a second city
+would be a new class rather than a change to the pipeline — but no second class exists, and the diagram does
+not pretend one does.
+
 Ingestion is a background worker rather than a request-triggered job: the work is periodic, long-running, and
-must not be tied to a user waiting on an HTTP response. Each source has its own connector implementing a
-common interface, so adding a city is a new connector and a row of configuration, not a change to the pipeline.
+must not be tied to a user waiting on an HTTP response.
 
 Establishments are stored with a SQL Server `geography` point and a spatial index, because every meaningful
-query in the product is "what is in this part of the map, matching these filters" and doing that with raw
-latitude/longitude comparisons stops working as soon as there is more than one city in the database.
+query in the product is "what is in this part of the map, matching these filters", and doing that with raw
+latitude and longitude comparisons degrades as the row count grows — which is measured rather than asserted at
+M3.
 
 **What I would do differently at 100× the volume:** _(to be written once there are real numbers to reason
 about — see Measured results)_
 
-## Data sources
+## Data source
 
-All public, all free, no payment tier. Row counts below are from live `count(*)` calls made on
-2026-07-25, not estimates.
+One dataset. Public, free, no payment tier, no API token. Figures below are from live `count(*)`
+calls made on 2026-07-25, not estimates.
 
-| Source | What it provides | Rows | Status |
-|---|---|---|---|
-| [NYC Open Data — DOHMH Restaurant Inspections](https://data.cityofnewyork.us/Health/NYC-Restaurant-Inspection-Results/gv23-aida) (`43nn-pn8j`) | One row per violation, with grade, score, violation code, cuisine and coordinates, across 31,180 establishments | 295,294 | **Ingested** (M1 — Staten Island slice only) |
-| [Chicago — Food Inspections](https://data.cityofchicago.org/d/4ijn-s7e5) (`4ijn-s7e5`) | One row per inspection, violations packed into a text field | 313,268 | _Access verified, no connector yet — M2_ |
-| [Los Angeles — Restaurant and Market Health Inspections](https://data.lacity.org/d/29fd-3paw) (`29fd-3paw`) | One row per inspection, with score and grade | 67,573 | _Access verified, no connector yet_ |
+**[NYC Open Data — DOHMH Restaurant Inspections](https://data.cityofnewyork.us/Health/NYC-Restaurant-Inspection-Results/gv23-aida)** (`43nn-pn8j`)
 
-All three are reachable over Socrata SODA without a token; that was confirmed by calling them. The
-anonymous rate limit has not been measured and is not claimed here. Chicago's and LA's *schemas* have
-not been verified either — only that the data is there and free.
+| | |
+|---|---|
+| Grain | One row per violation — 295,294 rows across 31,180 establishments |
+| Carries | Grade, score, violation code and description, critical flag, cuisine, coordinates |
+| Freshness | Latest inspection was two days old when checked |
+| Access | Socrata SODA, unauthenticated. The anonymous rate limit has not been measured and is not claimed here |
+| **Ingested** | **Staten Island, from 2025-07-25 — 3,237 rows, 899 establishments, of which 118 hold a permit and have never been inspected** |
 
-**M1 ingests one slice**: NYC, Staten Island, inspections from 2025-07-25 onward — 3,237 rows,
-including 118 establishments that hold a permit and have never been inspected. Small on purpose, so
-the schema can go through a revision cheaply. Widening the slice is configuration; adding a city is a
-connector.
+Widening the slice to all five boroughs is a configuration value. Adding a different city would be a
+new connector class, and there is no plan to write one — see the
+[roadmap](docs/roadmap.md#m2--ingest-a-second-city--cut).
 
-Per-city schema differences are the point, not an obstacle — see
-[ADR-0002](docs/adr/0002-per-source-connectors-and-a-canonical-schema.md), and
-[ADR-0003](docs/adr/0003-nyc-identity-grading-and-watermarking-verified.md) for which of ADR-0002's
-assumptions survived contact with the actual data.
+[ADR-0002](docs/adr/0002-per-source-connectors-and-a-canonical-schema.md) explains why ingestion is
+shaped as a per-source connector behind an interface even with one source, and
+[ADR-0003](docs/adr/0003-nyc-identity-grading-and-watermarking-verified.md) records which of
+ADR-0002's assumptions survived contact with the actual data. Two of them did not.
 
 ## Notable engineering decisions
 

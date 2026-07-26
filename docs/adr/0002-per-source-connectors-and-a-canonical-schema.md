@@ -1,7 +1,24 @@
 # ADR-0002 — Per-source connectors mapping into one canonical schema
 
-- **Status:** Accepted
+- **Status:** Accepted — decision stands, context superseded, generalisation unexercised
 - **Date:** 2026-07-25
+- **Context superseded by:** [ADR-0003](0003-nyc-identity-grading-and-watermarking-verified.md) (2026-07-25)
+
+> **Status note, added 2026-07-26.** Two things a reader should know before taking the Context
+> section below at face value.
+>
+> **First: its factual claims were checked and are partly wrong.** They were written from an
+> assistant's recollection during M0 without either dataset being called. ADR-0003 records what
+> survived — NYC's grading direction did; "grades are A/B/C" did not, there are six values; and the
+> grade is not derivable from the score. The text below is left exactly as written, because a
+> decision record that gets quietly corrected is worth nothing.
+>
+> **Second: the decision is now applied to one source and will stay that way.** The second city that
+> would have tested whether this design generalises was cut before it was started
+> ([roadmap](../roadmap.md#m2--ingest-a-second-city--cut)). `ISourceConnector` has exactly one
+> implementation. The reasoning below for *why* a connector-per-source beats a config-driven generic
+> ingester still holds on its own terms — and it is reasoning, not evidence. Nothing here has been
+> demonstrated by a second implementation, and it should not be described as though it had been.
 
 ## Context
 
