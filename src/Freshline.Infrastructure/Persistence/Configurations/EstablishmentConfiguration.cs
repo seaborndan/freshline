@@ -29,12 +29,17 @@ public class EstablishmentConfiguration : IEntityTypeConfiguration<Establishment
             .IsUnique()
             .HasDatabaseName("UX_Establishments_SourceId_ExternalId");
 
-        // The map's primary filter is "what is in this part of the map". A real spatial index on
-        // a geography column arrives at M3; this is the ordinary index that makes the interim
-        // bounding-box query non-terrible, and it is not a substitute for one.
-        builder
-            .HasIndex(e => new { e.Latitude, e.Longitude })
-            .HasDatabaseName("IX_Establishments_Latitude_Longitude");
+        builder.Property(e => e.Location).HasColumnType("geography");
+
+        // The spatial index itself is created with raw SQL in the migration. EF's migration API has
+        // no first-class support for CREATE SPATIAL INDEX and its tessellation options, and hiding
+        // that behind a helper would obscure the one line here that actually determines whether the
+        // map query is fast.
+        //
+        // The old composite index on (Latitude, Longitude) was dropped in the same migration. It
+        // indexed two nullable floats that nothing queried, and a B-tree on two independent columns
+        // cannot answer a two-dimensional range query anyway — it can seek on latitude and must
+        // then scan every row in that band. That is the "naive" half of the M3 measurement.
 
         builder
             .HasOne(e => e.SourceRecord)

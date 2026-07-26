@@ -17,6 +17,19 @@ public interface ISourceConnector
     SourceId SourceId { get; }
 
     /// <summary>
+    /// A stable description of what this connector is currently configured to ask for — filters,
+    /// backfill floor, anything that changes which records are in scope.
+    ///
+    /// Persisted next to the watermark so that widening the scope invalidates it. Two runs with
+    /// different signatures cannot share a position, because the position was only ever true of the
+    /// narrower request. See <see cref="Model.SourceWatermark.ScopeSignature"/>.
+    ///
+    /// It must not include anything that varies run to run — a timestamp here would reset the
+    /// watermark on every pass and turn every run into a full backfill.
+    /// </summary>
+    string ScopeSignature { get; }
+
+    /// <summary>
     /// Decides what to ask for, given how far ingestion has previously reached.
     ///
     /// This lives on the connector rather than on the runner because the answer is a property of

@@ -129,11 +129,38 @@ Full set in [`docs/adr/`](docs/adr/).
   context after checking it against real API responses. NYC's grading direction held; "grades are
   A/B/C" did not (there are six); and the field that looks like a change timestamp turns out to
   stamp the whole extract, which is why ingestion uses a watermark plus a lookback window.
+- [ADR-0004](docs/adr/0004-spatial-types-in-core.md) — why a spatial type is allowed into Core when
+  nothing else is, and why the map query uses a bounding box rather than the spatial index that was
+  built for it. Both measured rather than argued.
 
 ## Measured results
 
-Deliberately empty. This section will hold real before/after numbers — query timings with execution plans,
-ingestion throughput, index impact — or it will stay empty. It will not hold estimates.
+Real measurements only. Full method, execution plans and caveats in
+[`docs/performance.md`](docs/performance.md).
+
+**The map list query** — establishments in a viewport with their latest inspection grade, top 50 by
+severity. Measured over 23,528 establishments and 29,601 inspections:
+
+| | Logical reads | CPU |
+|---|---|---|
+| Original: bounding box, two correlated subqueries | 66,536 | 78 ms |
+| After: covering index + `CROSS APPLY` | **16,933** | ~15 ms |
+
+**3.9× fewer logical reads.** Roughly half of that came from an `INCLUDE` on the inspections index
+removing key lookups, and half from asking for the latest inspection once instead of twice.
+
+**The result that was not expected:** the spatial index made this query **2.4× worse** — 40,359
+logical reads against 16,933 — because scanning an 11 MB table once beats 7,290 key lookups into it.
+It was kept anyway, because radius search is a question a bounding box cannot express, and there the
+same index takes CPU from over 100 ms to unmeasurable. Reasoning in
+[ADR-0004](docs/adr/0004-spatial-types-in-core.md).
+
+**Ingestion**, measured on the real backfill: 99,184 rows fetched in 104.6 s. The following
+incremental run re-read 12,690 rows through the lookback window, inserted nothing, left every row
+count identical, and took 13.4 s.
+
+**What I would do differently at 100× the volume:** _(not yet written — it needs numbers from a
+dataset large enough to have different bottlenecks, and 23,528 rows is not it.)_
 
 ## Stack
 

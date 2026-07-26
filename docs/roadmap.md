@@ -72,13 +72,32 @@ about NYC specifically, and nothing in them should be assumed to generalise.
 
 ---
 
-### M3 — Spatial and query performance *(~5h)*
+### M3 — Spatial and query performance ✅ *(2026-07-26)*
 
 `geography` column with a spatial index. Bounding-box and radius queries. Then the deliberate part:
 write the naive version of the main list query, measure it with a real execution plan, fix it,
 measure again, and write both numbers down.
 
 **Done when:** `docs/performance.md` holds a real before/after with plans. Real numbers or nothing.
+
+> **The measurement contradicted the milestone's own premise, which is the point of measuring.**
+> The spatial index did not make the map query faster — it made it **2.4× more expensive**, because
+> at 23,528 rows one scan of an 11 MB table beats 7,290 key lookups. The 3.9× improvement that was
+> achieved came from a covering index and replacing two correlated subqueries with a `CROSS APPLY`.
+>
+> The spatial index was kept regardless, because radius search is a question a bounding box cannot
+> ask, and there it takes CPU from over 100 ms to unmeasurable. Full numbers, plans and caveats in
+> [`docs/performance.md`](performance.md); the reasoning in
+> [ADR-0004](adr/0004-spatial-types-in-core.md).
+>
+> **Scope widened to all five boroughs** — 23,528 establishments, 29,601 inspections, 94,400
+> violations — because 899 establishments cannot demonstrate an index. Still one source, one city,
+> one connector: a configuration value, not new code.
+>
+> **Carried forward:** these are warm-cache numbers from a single-user laptop container, and 23,528
+> rows is small enough that the spatial conclusion could reverse at ten times the data. The decision
+> to keep the spatial index rests on an M6 feature that does not exist yet; if M6 changes shape, the
+> index should be reconsidered rather than inherited.
 
 ---
 

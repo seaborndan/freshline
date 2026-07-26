@@ -20,6 +20,12 @@
   -->
   <ItemGroup>
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.10" />
+    <!--
+      Maps NetTopologySuite geometry types to SQL Server `geography`, so a spatial column can be
+      queried through LINQ instead of hand-written SQL. The geometry types themselves are a Core
+      concern (see ADR-0004); translating them to a database is this layer's job.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer.NetTopologySuite" Version="10.0.10" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.10">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

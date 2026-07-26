@@ -22,7 +22,7 @@ public sealed class FreshlineDbContextFactory : IDesignTimeDbContextFactory<Fres
 
         DbContextOptions<FreshlineDbContext> options =
             new DbContextOptionsBuilder<FreshlineDbContext>()
-                .UseSqlServer(connectionString)
+                .UseSqlServer(connectionString, sqlServer => sqlServer.UseNetTopologySuite())
                 .Options;
 
         return new FreshlineDbContext(options);

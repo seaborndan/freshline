@@ -6,4 +6,17 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <!--
+    The only package reference in Core, and a deliberate exception to the rule in CLAUDE.md that
+    Core takes none. Reasoning is in ADR-0004: NetTopologySuite is a dependency-free geometry
+    library, not infrastructure, and a spatial point is domain vocabulary for a product whose
+    central question is "what is in this part of the map". It brings nothing transitively.
+
+    The EF Core integration that maps these types to SQL Server `geography` stays in
+    Infrastructure, where it belongs.
+  -->
+  <ItemGroup>
+    <PackageReference Include="NetTopologySuite" Version="2.6.0" />
+  </ItemGroup>
+
 </Project>

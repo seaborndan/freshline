@@ -22,6 +22,23 @@ public sealed class NycDohmhConnector(
 {
     public SourceId SourceId => SourceId.NycDohmh;
 
+    /// <summary>
+    /// Everything that changes which records are in scope: the dataset, the borough filter and the
+    /// backfill floor. Deliberately excludes the lookback, which changes how far back a run
+    /// re-reads but not which records exist in scope, and excludes the page size entirely.
+    /// </summary>
+    public string ScopeSignature
+    {
+        get
+        {
+            NycDohmhOptions settings = options.Value;
+            string borough = settings.Borough ?? "*";
+            string floor = settings.BackfillFloor.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+            return $"resource={settings.ResourcePath};borough={borough};floor={floor}";
+        }
+    }
+
     public IngestionWindow GetWindow(DateOnly? watermark)
     {
         NycDohmhOptions settings = options.Value;

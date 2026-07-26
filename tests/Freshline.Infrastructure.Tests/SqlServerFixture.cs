@@ -56,6 +56,6 @@ public sealed class SqlServerFixture : IAsyncLifetime
 
     public FreshlineDbContext CreateDbContext()
         => new(new DbContextOptionsBuilder<FreshlineDbContext>()
-            .UseSqlServer(ConnectionString)
+            .UseSqlServer(ConnectionString, sqlServer => sqlServer.UseNetTopologySuite())
             .Options);
 }

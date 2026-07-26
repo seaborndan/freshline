@@ -1,4 +1,5 @@
 using Freshline.Core.Sources;
+using NetTopologySuite.Geometries;
 
 namespace Freshline.Core.Model;
 
@@ -39,6 +40,24 @@ public class Establishment
     public double? Latitude { get; set; }
 
     public double? Longitude { get; set; }
+
+    /// <summary>
+    /// The establishment's position as a spatial point, stored as SQL Server <c>geography</c> with a
+    /// spatial index. Null when the source published no usable coordinates.
+    ///
+    /// Duplicates <see cref="Latitude"/> and <see cref="Longitude"/> on purpose. Those two are the
+    /// raw values as published, kept so a projection bug is fixable from stored data; this is the
+    /// queryable form. It is derived from them on write, never edited independently.
+    ///
+    /// <para><strong>Coordinate order is the trap.</strong> A NetTopologySuite <see cref="Point"/>
+    /// takes (X, Y) — that is <em>longitude first</em>, then latitude. Getting it backwards puts
+    /// every New York restaurant somewhere in Antarctica while every query still runs and every
+    /// distance still returns a number. It is pinned by a test, not by this comment.</para>
+    ///
+    /// <para>SRID 4326 is WGS 84 — the coordinate system GPS and every open-data portal publish in.
+    /// Mixing SRIDs makes SQL Server return nulls from spatial predicates rather than errors.</para>
+    /// </summary>
+    public Point? Location { get; set; }
 
     /// <summary>
     /// True when the source has published this establishment but recorded no inspection for it.

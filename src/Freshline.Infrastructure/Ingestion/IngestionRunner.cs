@@ -37,6 +37,27 @@ public sealed class IngestionRunner(
             .SingleOrDefaultAsync(w => w.SourceId == sourceId, cancellationToken);
 
         DateOnly? watermarkBefore = watermark?.HighWaterMark;
+        string scopeSignature = connector.ScopeSignature;
+
+        // A watermark is only a valid statement about coverage for the scope it was earned under.
+        // If the connector is now asking for something wider, the stored position is still true and
+        // no longer means anything — starting from it would leave the newly-included records with
+        // no history before that date, silently, while the row count grew and the logs looked fine.
+        bool scopeChanged =
+            watermark is not null &&
+            !string.Equals(watermark.ScopeSignature, scopeSignature, StringComparison.Ordinal);
+
+        if (scopeChanged)
+        {
+            logger.LogWarning(
+                "{Source}: ingestion scope changed from '{Previous}' to '{Current}'. Discarding the " +
+                "watermark at {Watermark} and backfilling from the floor, because that position was " +
+                "only ever true of the previous scope.",
+                sourceId, watermark!.ScopeSignature ?? "(none)", scopeSignature, watermarkBefore);
+
+            watermarkBefore = null;
+        }
+
         IngestionWindow window = connector.GetWindow(watermarkBefore);
 
         List<CanonicalRecord> fetched = [];
@@ -77,7 +98,7 @@ public sealed class IngestionRunner(
             await UpsertViolationsAsync(sourceId, records, rawIdsByKey, inspectionIds, cancellationToken);
 
         DateOnly? watermarkAfter = await AdvanceWatermarkAsync(
-            sourceId, watermark, watermarkBefore, records, startedAtUtc, cancellationToken);
+            sourceId, watermark, watermarkBefore, scopeSignature, records, startedAtUtc, cancellationToken);
 
         await transaction.CommitAsync(cancellationToken);
 
@@ -219,6 +240,8 @@ public sealed class IngestionRunner(
             target.PostalCode = source.PostalCode;
             target.Latitude = source.Latitude;
             target.Longitude = source.Longitude;
+            // Derived on write, never edited independently of the two values above.
+            target.Location = GeoPoint.FromLatitudeLongitude(source.Latitude, source.Longitude);
             target.IsAwaitingFirstInspection = source.IsAwaitingFirstInspection;
             target.SourceRecordId = sourceRecordId;
         }
@@ -357,6 +380,7 @@ public sealed class IngestionRunner(
         SourceId sourceId,
         SourceWatermark? watermark,
         DateOnly? watermarkBefore,
+        string scopeSignature,
         IReadOnlyList<CanonicalRecord> records,
         DateTimeOffset startedAtUtc,
         CancellationToken cancellationToken)
@@ -387,6 +411,7 @@ public sealed class IngestionRunner(
         }
 
         watermark.HighWaterMark = watermarkAfter;
+        watermark.ScopeSignature = scopeSignature;
         watermark.LastRunStartedUtc = startedAtUtc;
         watermark.LastRunCompletedUtc = timeProvider.GetUtcNow();
 

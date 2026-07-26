@@ -4,17 +4,19 @@ using Freshline.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
-using NetTopologySuite.Geometries;
 
 #nullable disable
 
 namespace Freshline.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(FreshlineDbContext))]
-    partial class FreshlineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260726060022_AddWatermarkScopeSignature")]
+    partial class AddWatermarkScopeSignature
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -60,9 +62,6 @@ namespace Freshline.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("nvarchar(64)");
 
-                    b.Property<Point>("Location")
-                        .HasColumnType("geography");
-
                     b.Property<double?>("Longitude")
                         .HasColumnType("float");
 
@@ -88,6 +87,9 @@ namespace Freshline.Infrastructure.Persistence.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("SourceRecordId");
+
+                    b.HasIndex("Latitude", "Longitude")
+                        .HasDatabaseName("IX_Establishments_Latitude_Longitude");
 
                     b.HasIndex("SourceId", "ExternalId")
                         .IsUnique()
@@ -153,10 +155,7 @@ namespace Freshline.Infrastructure.Persistence.Migrations
                     b.HasIndex("SourceRecordId");
 
                     b.HasIndex("EstablishmentId", "InspectedOn")
-                        .IsDescending(false, true)
                         .HasDatabaseName("IX_Inspections_EstablishmentId_InspectedOn");
-
-                    SqlServerIndexBuilderExtensions.IncludeProperties(b.HasIndex("EstablishmentId", "InspectedOn"), new[] { "RawGrade", "NormalisedSeverity" });
 
                     b.HasIndex("SourceId", "ExternalId")
                         .IsUnique()

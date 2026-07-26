@@ -19,12 +19,18 @@ internal sealed class ReplayConnector(
     SourceId sourceId,
     IReadOnlyList<CanonicalRecord> records,
     DateOnly backfillFloor,
-    int lookbackDays = 30) : ISourceConnector
+    int lookbackDays = 30,
+    string scopeSignature = "test-scope") : ISourceConnector
 {
     /// <summary>How many times <see cref="FetchAsync"/> has been enumerated.</summary>
     internal int FetchCount { get; private set; }
 
+    /// <summary>The window the most recent fetch was asked for, so tests can assert on it.</summary>
+    internal IngestionWindow? LastWindow { get; private set; }
+
     public SourceId SourceId => sourceId;
+
+    public string ScopeSignature => scopeSignature;
 
     public IngestionWindow GetWindow(DateOnly? watermark)
         => IngestionWindow.FromWatermark(watermark, backfillFloor, lookbackDays);
@@ -34,6 +40,7 @@ internal sealed class ReplayConnector(
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         FetchCount++;
+        LastWindow = window;
 
         foreach (CanonicalRecord record in records)
         {
