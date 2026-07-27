@@ -74,19 +74,25 @@ describe('App', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/loading/i)
   })
 
-  it('reports how many places are in view once they arrive', async () => {
+  // Two numbers, not one. They match here — the five fixture establishments are at five different
+  // addresses — and they do not match in the real data, where 518 establishments in the opening
+  // viewport occupy 306 points. That gap is why the caption states both: a reader who counts dots
+  // must not conclude the map is broken. The stacking itself is covered in geoJson.test.ts.
+  it('reports both the number of places and the number of dots they draw as', async () => {
     fetchMap.mockResolvedValue(loaded)
 
     render(<App />)
 
-    expect(await screen.findByText(/5 places around Times Square/)).toBeInTheDocument()
+    const status = await screen.findByText(/places around Times Square/)
+    expect(status).toHaveTextContent('5 places')
+    expect(status).toHaveTextContent('at 5 points')
   })
 
   it('draws the pins it was given', async () => {
     fetchMap.mockResolvedValue(loaded)
 
     render(<App />)
-    await screen.findByText(/5 places/)
+    await screen.findByText(/places around Times Square/)
 
     expect(addSource).toHaveBeenCalled()
     // Two layers over one source: the ordinary pins, and the ones that must not be painted over.

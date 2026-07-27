@@ -12,6 +12,7 @@ import type { MapResult } from './api/contract'
 import { ApiProblemError, ApiUnreachableError, isAbortError } from './api/errors'
 import { initialViewport } from './map/initialView'
 import { Legend } from './map/Legend'
+import { distinctPointCount } from './map/geoJson'
 import { MapView } from './map/MapView'
 import './App.css'
 
@@ -122,10 +123,16 @@ function Status({ state }: { state: LoadState }) {
     return <p role="status">No establishments in this area.</p>
   }
 
+  // Both numbers, because they differ a lot and only one of them is countable on screen. Saying
+  // "518 places" over about three hundred dots invites the reader to count and conclude the map is
+  // wrong — see distinctPointCount.
+  const points = distinctPointCount(items)
+
   return (
     <p role="status">
-      {items.length.toLocaleString('en-GB')} places around Times Square. Panning does not load more
-      yet.
+      {items.length.toLocaleString('en-GB')} places around Times Square, at{' '}
+      {points.toLocaleString('en-GB')} points — some addresses hold dozens. Panning does not load
+      more yet.
     </p>
   )
 }

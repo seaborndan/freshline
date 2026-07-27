@@ -41,6 +41,27 @@ export interface PinFeatureCollection {
   features: PinFeature[]
 }
 
+/**
+ * How many dots a person can actually count on the map.
+ *
+ * **Not the same number as the establishment count, and the gap is large.** New York geocodes many
+ * establishments to the same address: in the opening viewport, 518 establishments occupy 306
+ * distinct points, 75 points carry more than one, and a single address on Broadway carries 49. Those
+ * pins are drawn exactly on top of each other, so 212 of them are invisible.
+ *
+ * This exists because the page said "518 places" over a map showing about three hundred dots, which
+ * invites a reader to count them and conclude the map is broken. Naming both numbers is the honest
+ * fix; hiding one of them is not.
+ */
+export function distinctPointCount(establishments: readonly MapEstablishment[]): number {
+  // Exact coordinate equality, deliberately, because that is what stacking is: the source published
+  // the identical geocode for several establishments. Rounding to a tolerance would merge
+  // neighbouring restaurants that genuinely are drawn as separate dots.
+  return new Set(
+    establishments.map((establishment) => `${establishment.latitude},${establishment.longitude}`),
+  ).size
+}
+
 export function toFeatureCollection(
   establishments: readonly MapEstablishment[],
 ): PinFeatureCollection {

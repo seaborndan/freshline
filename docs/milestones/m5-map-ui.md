@@ -483,12 +483,21 @@ mutation-tested: reverting it fails exactly the test written for it. The initial
 outcome mix were re-measured against the committed bounds rather than the ones the sweep used — 518
 establishments, not the 517 first written down.
 
-**Verified against the running app, not only in jsdom.** Headless Chromium here will not rasterise a
-WebGL canvas — screenshots come back blank and the drawing buffer reads all black — so the map was
-interrogated instead of photographed: the GeoJSON source holds **518 features** and
-`queryRenderedFeatures` reports **223 pins actually painted** in the visible viewport. Before the fix
-the same probe reported an empty source. The layout, the legend and the error path were confirmed
-from screenshots.
+**Confirmed by eye, in a browser, because nothing here could confirm it otherwise.** Headless
+Chromium on this machine will not rasterise a WebGL canvas — screenshots come back blank, the drawing
+buffer reads all black, and because the render loop never runs the map never requests tiles, which
+makes `queryRenderedFeatures` return zero no matter what is correct. Probes through that path
+produced a reading of "223 pins painted" that was not measuring what it appeared to measure, and it
+has been removed rather than left in as a plausible number. What is verified: the GeoJSON source
+holds 518 features, both layers are added, and a person looking at the running app sees a few hundred
+dots over the streets.
+
+**The dot count is not the establishment count, and the caption used to imply it was.** 518
+establishments in the opening viewport occupy **306 distinct points**; 75 points carry more than one
+and a single address on Broadway carries **49**. They draw exactly on top of each other, so 212 pins
+are invisible. The page said "518 places" over about three hundred dots, which invites a reader to
+count them and conclude the map is broken — found by a reader doing exactly that. Both numbers are
+now stated.
 
 ---
 
@@ -508,6 +517,12 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
 ---
 
 ## Open items carried into M5
+
+- **Establishments stacked on one coordinate have no way to be told apart, and slice 5 needs an
+  answer.** 49 of them share one address in the opening viewport alone. A click at that point is
+  ambiguous today — whichever feature MapLibre returns first wins, arbitrarily — and the honest
+  options are a cluster count, a spiderfier, or a detail panel that opens on a list rather than on an
+  establishment. Recorded here rather than decided in passing.
 
 - **The rate limiter partitions on `RemoteIpAddress`, which becomes the proxy's address behind any
   ingress.** Every caller then shares one bucket and a per-client limit becomes a global one that

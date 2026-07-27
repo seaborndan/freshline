@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MapEstablishment } from '../api/contract'
-import { toFeatureCollection } from './geoJson'
+import { distinctPointCount, toFeatureCollection } from './geoJson'
 
 const timesSquare: MapEstablishment = {
   id: 1328,
@@ -74,5 +74,34 @@ describe('toFeatureCollection', () => {
 
   it('gives every feature the establishment id, so a click needs no lookup table', () => {
     expect(toFeatureCollection([timesSquare]).features[0].id).toBe(1328)
+  })
+})
+
+describe('distinctPointCount', () => {
+  // The number a reader can actually count on screen, which is not the number of establishments.
+  // New York geocodes many of them to the same address: in the opening viewport 518 establishments
+  // occupy 306 points, and one address on Broadway carries 49 of them.
+  it('counts stacked establishments as one dot', () => {
+    const sameAddress: MapEstablishment = { ...timesSquare, id: 9999, name: 'ANOTHER TENANT' }
+
+    expect(distinctPointCount([timesSquare, sameAddress])).toBe(1)
+  })
+
+  it('counts establishments at different addresses separately', () => {
+    const elsewhere: MapEstablishment = { ...timesSquare, id: 9999, latitude: 40.7581 }
+
+    expect(distinctPointCount([timesSquare, elsewhere])).toBe(2)
+  })
+
+  // Not a tolerance. Two restaurants a few metres apart are drawn as two dots and must be counted
+  // as two; only an identical published geocode is a stack.
+  it('does not merge neighbours that are merely close', () => {
+    const nextDoor: MapEstablishment = { ...timesSquare, id: 9999, latitude: 40.75709624051 }
+
+    expect(distinctPointCount([timesSquare, nextDoor])).toBe(2)
+  })
+
+  it('is zero for an empty viewport', () => {
+    expect(distinctPointCount([])).toBe(0)
   })
 })
