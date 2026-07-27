@@ -22,6 +22,7 @@
  * disabled one with a sentence beside it teaches them something true about the data.
  */
 
+import { memo } from 'react'
 import type { EstablishmentFilter, EstablishmentFilterOptions } from '../api/contract'
 import { inspectionOutcomes } from '../api/contract'
 import { pinStyles } from '../map/pinStyle'
@@ -33,7 +34,7 @@ export interface FilterPanelProps {
   onChange: (filters: EstablishmentFilter) => void
 }
 
-export function FilterPanel({ filters, options, onChange }: FilterPanelProps) {
+function FilterPanelContent({ filters, options, onChange }: FilterPanelProps) {
   const onlyNeverInspected = filters.awaitingFirstInspection === true
 
   // Undefined removes the key, which is what "no filter" means to the client — an empty string
@@ -144,3 +145,11 @@ export function FilterPanel({ filters, options, onChange }: FilterPanelProps) {
     </section>
   )
 }
+
+/**
+ * Memoised because it renders a hundred and two `<option>` elements — the 89 cuisines especially —
+ * and its parent re-renders on every pan and every loading flip. Its three props are all stable
+ * between those renders: `filters` changes only when a filter changes, `options` is fetched once,
+ * and `onChange` is a `useState` setter.
+ */
+export const FilterPanel = memo(FilterPanelContent)

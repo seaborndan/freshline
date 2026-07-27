@@ -6,7 +6,7 @@
  * state: that is what makes a shared link reproduce the view rather than approximate it.
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EstablishmentFilter } from './api/contract'
 import type { Viewport } from './api/viewport'
 import { FilterPanel } from './filters/FilterPanel'
@@ -89,6 +89,11 @@ function App() {
 function Status({ view, filters }: { view: EstablishmentsView; filters: EstablishmentFilter }) {
   const { result, isLoading, unaskable } = view
 
+  // Recomputed only when the pins change, not on every loading flip. It walks every establishment
+  // building a key per one; at a thousand pins that is nothing, but it is nothing that used to run
+  // twice per request for no reason.
+  const points = useMemo(() => (result === null ? 0 : distinctPointCount(result.items)), [result])
+
   // Zoomed out past what the API will answer. Said as an instruction rather than as an error,
   // because it is a place the user can get to with two scroll wheels and nothing has gone wrong.
   if (unaskable !== null) {
@@ -131,8 +136,8 @@ function Status({ view, filters }: { view: EstablishmentsView; filters: Establis
   // wrong — see distinctPointCount.
   return (
     <p role="status">
-      {items.length.toLocaleString('en-GB')} places at{' '}
-      {distinctPointCount(items).toLocaleString('en-GB')} points — some addresses hold dozens.
+      {items.length.toLocaleString('en-GB')} places at {points.toLocaleString('en-GB')} points —
+      some addresses hold dozens.
       {isLoading ? ' Updating…' : ''}
     </p>
   )

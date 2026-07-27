@@ -78,6 +78,49 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
   const latestOnViewportChange = useRef(onViewportChange)
   latestOnViewportChange.current = onViewportChange
 
+  /**
+   * Pins that arrived while the user was still moving the map, held until they stop.
+   *
+   * **Why this exists.** `setData` is the most expensive thing this component does, and almost none
+   * of that cost is JavaScript — the whole client-side pipeline, validating a thousand pins and
+   * turning them into GeoJSON, measures about 2ms. What costs is what MapLibre does next: the source
+   * is re-tiled, and that work shares a worker pool with parsing the basemap tiles for wherever the
+   * user is panning *into*. Doing it in the middle of a drag makes the drag stutter, which is a much
+   * worse thing to be than a second late with the dots.
+   *
+   * So new data waits for the gesture to finish. The pins are then always at most one `moveend`
+   * behind, and the map never does bookkeeping while somebody is holding it.
+   */
+  const pendingData = useRef<ReturnType<typeof toFeatureCollection> | null>(null)
+
+  function setOrDefer(target: MapLibreMap, data: ReturnType<typeof toFeatureCollection>) {
+    const source = target.getSource(sourceId) as GeoJSONSource | undefined
+
+    if (source === undefined) {
+      return
+    }
+
+    // `isMoving` covers panning, zooming, rotating and the inertial glide after a flick — every way
+    // the camera can be in motion, including ones no single event name would catch.
+    if (target.isMoving()) {
+      pendingData.current = data
+      return
+    }
+
+    source.setData(data)
+  }
+
+  function flushPendingData(target: MapLibreMap) {
+    const data = pendingData.current
+
+    if (data === null) {
+      return
+    }
+
+    pendingData.current = null
+    ;(target.getSource(sourceId) as GeoJSONSource | undefined)?.setData(data)
+  }
+
   // Created once and never recreated: the effect has no dependencies, so a change of pins re-runs
   // the second effect rather than tearing down a WebGL context and rebuilding the basemap.
   useEffect(() => {
@@ -117,6 +160,9 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
     // including at the end of MapLibre's inertial glide. The debounce downstream is for the case
     // this does not cover: several discrete gestures in quick succession, like wheel-zoom steps.
     created.on('moveend', () => {
+      // Anything that arrived mid-gesture has been waiting for exactly this moment.
+      flushPendingData(created)
+
       latestOnViewportChange.current?.(viewportOf(created))
     })
 
@@ -167,14 +213,17 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
     // eslint-disable-next-line react-hooks/exhaustive-deps -- constructed once; see above.
   }, [])
 
-  // Pushes new pins into the existing source. Guarded because the pins usually arrive *before* the
-  // style has loaded, in which case there is no source to push them into yet — and the handler above
-  // then picks them up from the ref. Those two paths together are what makes the ordering safe in
-  // both directions; neither one is sufficient alone.
+  // Pushes new pins into the existing source, unless the user is mid-gesture — see `setOrDefer`.
+  // Guarded because the pins usually arrive *before* the style has loaded, in which case there is no
+  // source to push them into yet, and the `style.load` handler picks them up from the ref instead.
+  // Those two paths together make the ordering safe in both directions; neither is sufficient alone.
   useEffect(() => {
-    const source = map.current?.getSource(sourceId) as GeoJSONSource | undefined
+    if (map.current === null) {
+      return
+    }
 
-    source?.setData(toFeatureCollection(establishments))
+    setOrDefer(map.current, toFeatureCollection(establishments))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setOrDefer reads only refs.
   }, [establishments])
 
   return (

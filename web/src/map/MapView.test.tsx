@@ -25,6 +25,9 @@ const addLayer = vi.fn()
 const setData = vi.fn()
 let sourceExists = false
 
+/** Whether the fake map says the camera is in motion. The test decides. */
+let moving = false
+
 vi.mock('maplibre-gl', () => ({
   Map: class {
     addControl = vi.fn()
@@ -35,6 +38,7 @@ vi.mock('maplibre-gl', () => ({
     }
     addLayer = addLayer
     getSource = () => (sourceExists ? { setData } : undefined)
+    isMoving = () => moving
     on(event: string, handler: () => void) {
       handlers.set(event, handler)
     }
@@ -46,6 +50,13 @@ vi.mock('maplibre-gl', () => ({
 function loadStyle() {
   act(() => {
     handlers.get('style.load')?.()
+  })
+}
+
+function endMovement() {
+  moving = false
+  act(() => {
+    handlers.get('moveend')?.()
   })
 }
 
@@ -92,6 +103,7 @@ beforeEach(() => {
   addLayer.mockClear()
   setData.mockClear()
   sourceExists = false
+  moving = false
 })
 
 afterEach(() => {
@@ -142,5 +154,65 @@ describe('MapView', () => {
     })
 
     expect(getByRole('alert')).toHaveTextContent('WebGL is not supported')
+  })
+
+  // Reported from a browser: panning stutters while a request for the current view is resolving.
+  // The cost is not this client's — validating a thousand pins and turning them into GeoJSON is
+  // about 2ms — it is MapLibre re-tiling the source, which shares a worker pool with parsing the
+  // basemap tiles for wherever the user is panning into. So the expensive call waits for the
+  // gesture to end rather than landing in the middle of it.
+  it('does not touch the source while the map is moving', () => {
+    const { rerender } = render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+    setData.mockClear()
+
+    moving = true
+    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
+
+    expect(setData).not.toHaveBeenCalled()
+  })
+
+  it('applies the pins it held back as soon as the movement ends', () => {
+    const { rerender } = render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+    setData.mockClear()
+
+    moving = true
+    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
+    endMovement()
+
+    expect(setData).toHaveBeenCalledTimes(1)
+    expect((setData.mock.calls[0][0] as { features: unknown[] }).features).toHaveLength(2)
+  })
+
+  // Only the last one. Three viewports resolving during one long drag must not become three
+  // re-tilings the instant the user lets go.
+  it('applies only the newest pins when several arrived during one gesture', () => {
+    const { rerender } = render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+    setData.mockClear()
+
+    moving = true
+    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
+    rerender(
+      <MapView
+        establishments={[pin, { ...pin, id: 2 }, { ...pin, id: 3 }]}
+        initialViewport={viewport}
+      />,
+    )
+    endMovement()
+
+    expect(setData).toHaveBeenCalledTimes(1)
+    expect((setData.mock.calls[0][0] as { features: unknown[] }).features).toHaveLength(3)
+  })
+
+  it('does not re-apply anything on a movement that held nothing back', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+    setData.mockClear()
+
+    endMovement()
+
+    expect(setData).not.toHaveBeenCalled()
   })
 })

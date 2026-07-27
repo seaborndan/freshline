@@ -590,6 +590,36 @@ controls are disabled and the panel says why — disabled rather than hidden, be
 vanishes leaves a user wondering what they did while a sentence teaches them something true about the
 data.
 
+#### Movement is never interrupted to draw pins
+
+Reported from a browser after slice 4: panning and rotating stutter while a request for the current
+view is resolving, and go smooth again once it lands.
+
+**The client's own work is not the cost.** Measured over synthetic payloads: validating a thousand
+pins takes 1.5ms, turning them into GeoJSON 0.1ms, counting distinct points 0.2ms — about 2ms for the
+whole pipeline, and 10ms even at the API's maximum of 5,000. The expense is what MapLibre does next:
+`setData` re-tiles the source, and that work shares a worker pool with parsing the basemap tiles for
+wherever the user is panning *into*.
+
+So `setData` is never called while the camera is in motion. New pins are held and applied on the next
+`moveend` — only the newest set, so three viewports resolving during one long drag do not become
+three re-tilings the moment the user lets go. `isMoving()` rather than any single event name, because
+it covers panning, zooming, rotating and the inertial glide after a flick.
+
+**The trade this makes, stated plainly:** pins can be up to one gesture late. That is the trade the
+map should make. A stutter while dragging is a much worse thing to be than a moment behind with the
+dots, and unlike the dots it cannot be waited out.
+
+Three smaller costs went with it, all of them work landing on frames a gesture needed: the legend and
+the filter panel are memoised — the panel renders 102 `<option>` elements and its parent re-renders
+on every pan — and the distinct-point count is recomputed only when the pins change rather than on
+every loading flip.
+
+**Still available if it is not enough:** fetching a box larger than the viewport, so that small pans
+need no request and no re-tiling at all. Not done here because it has a real cost — a padded box
+holds more establishments, so it truncates sooner, and truncation is the thing the opening view was
+shaped to avoid.
+
 #### Decision 3, partly reversed
 
 The URL carries the filters and the viewport, synced with `URLSearchParams` and `replaceState`, no
