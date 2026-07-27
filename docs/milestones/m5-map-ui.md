@@ -380,7 +380,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | # | Slice | Status |
 |---|---|---|
 | 1 | API client and types, error and 429 handling | **done** |
-| 2 | Map with pins, coloured by outcome, with a legend | not started |
+| 2 | Map with pins, coloured by outcome, with a legend | **done** |
 | 3 | Viewport-driven fetching, debounced, with truncation handling | not started |
 | 4 | Filter panel | not started |
 | 5 | Detail panel with inspection history | not started |
@@ -424,6 +424,58 @@ detail request returned its history, and a 404 surfaced the API's own sentence.
 
 That truncated whole-city response is the measurement behind the initial-viewport decision: at the
 maximum limit the API allows, the city does not fit.
+
+### Slice 2, as built
+
+`web/src/map/` — `pinStyle.ts` (the one table the layer and the legend are both generated from),
+`geoJson.ts`, `layers.ts`, `initialView.ts`, `MapView.tsx`, `Legend.tsx`. No new npm dependencies.
+
+**The good end of the scale is blue, not green, and that was measured.** Green-amber-red was tried
+first. Status green against status red measures **ΔE 4.1 under deuteranopia** — so the two colours
+carrying "best restaurant here" and "worst restaurant here" are the pair the most common
+colour-vision deficiency cannot separate, on a map where colour is the entire message. The shipped
+scale measures **ΔE 9.1 at its worst pair under deuteranopia and 16.3 under normal vision**, checked
+across all pairs rather than adjacent ones because any two pins can end up beside each other.
+Severity is additionally carried by **size** — worse is bigger — which doubles as the fix for `Poor`
+being 0.4% of the data and nearly invisible at city zoom.
+
+Two validator checks are deliberately not met, recorded rather than worked around: the grey for
+`Ungraded` fails a chroma floor because it "reads gray", which is the intended meaning of *no grade
+was published*; and the amber for `Fair` sits below 3:1 contrast, which is documented as by-design
+for a warning step and is mitigated by the visible label the legend always shows.
+
+**Closure is a ring, never a colour**, because an establishment can be closed at any grade — giving
+it a hue would overwrite the grade it actually has. **Never-inspected is hollow**, so it differs from
+`Ungraded` by shape as well as fill; they are the two largest non-grades and the pair most likely to
+be collapsed into "no data".
+
+**The basemap is CARTO Positron**, from `basemaps.cartocdn.com`, with no API key. Named as a runtime
+dependency on a third party: if that CDN is down the pins draw on a blank background and the page
+still works. Greyscale by design, so the data on top of it can have the colour. Rejected: MapTiler
+and Stadia, which are better and need a key — a key in a client bundle is a key in the repository;
+and raster OpenStreetMap tiles, whose usage policy asks applications not to use them.
+
+**Two bugs were found by running the app, and neither could have been found by a test.**
+
+1. **Vite's dependency pre-bundler broke MapLibre's worker.** It rewrites the `new Worker(new URL(…))`
+   call to a file it then does not emit, so on the dev server the worker never starts and the map
+   never finishes loading — silently, with the rest of the page working normally. Fixed with
+   `optimizeDeps: { exclude: ['maplibre-gl'] }`.
+2. **The radius expression was invalid and took the whole pin layer down with it.** Writing it as
+   `['*', interpolateOnZoom, matchOnState]` reads naturally and is illegal: MapLibre allows `['zoom']`
+   only at the top level of a paint property. `addLayer` was rejected, and the result was a basemap
+   with no pins on it. Found because the map surfaces its own errors on screen — an error handler
+   added while chasing the first bug, and worth keeping: a blank canvas is otherwise
+   indistinguishable from an area with no restaurants in it.
+
+**Verified.** 77 web tests pass, `tsc -b`, `vite build` and lint clean. The initial viewport and its
+outcome mix were re-measured against the committed bounds rather than the ones the sweep used — 518
+establishments, not the 517 first written down.
+
+**Not verified, and stated as such:** that the pins render correctly in a browser. Headless Chromium
+on this machine will not rasterise a WebGL canvas — screenshots come back blank and the drawing
+buffer reads all black — so the layout, the legend and the error path were confirmed visually and the
+painted map was not. It needs one look at `http://localhost:5173`.
 
 ---
 
