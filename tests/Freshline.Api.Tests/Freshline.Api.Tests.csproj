@@ -21,6 +21,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Freshline.Api\Freshline.Api.csproj" />
+    <!--
+      Referenced so the fixture can build its database from the committed migrations and seed it
+      through the real DbContext. This is a test-only reference: the API project itself is asserted
+      not to reference Entity Framework at all — see ArchitectureTests.
+    -->
+    <ProjectReference Include="..\..\src\Freshline.Infrastructure\Freshline.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,6 +1,8 @@
 using Freshline.Core.Ingestion;
+using Freshline.Core.Queries;
 using Freshline.Infrastructure.Ingestion;
 using Freshline.Infrastructure.Persistence;
+using Freshline.Infrastructure.Queries;
 using Freshline.Infrastructure.Sources.Nyc;
 using Freshline.Infrastructure.Sources.Socrata;
 using Microsoft.EntityFrameworkCore;
@@ -17,7 +19,27 @@ public static class ServiceCollectionExtensions
     /// <summary>The connection string name used by every host that talks to the Freshline database.</summary>
     public const string ConnectionStringName = "Freshline";
 
+    /// <summary>
+    /// Everything the ingestion worker needs: the database and the source connectors.
+    /// </summary>
     public static IServiceCollection AddFreshlineInfrastructure(
+        this IServiceCollection services,
+        IConfiguration configuration)
+        => services
+            .AddFreshlinePersistence(configuration)
+            .AddFreshlineIngestion(configuration);
+
+    /// <summary>
+    /// The database and the read path over it. This is all the API takes.
+    ///
+    /// <para><strong>Why this is separate from <see cref="AddFreshlineIngestion"/>.</strong> The
+    /// connector registration binds <c>NycDohmhOptions</c> with <c>ValidateOnStart</c> and creates a
+    /// named <c>HttpClient</c> pointed at NYC's portal. An API that called it would refuse to start
+    /// unless a source it never talks to was configured, and would hold a connection pool to a
+    /// portal it never calls. Those are the worker's concerns, and the API should not inherit them
+    /// just because both processes talk to the same database.</para>
+    /// </summary>
+    public static IServiceCollection AddFreshlinePersistence(
         this IServiceCollection services,
         IConfiguration configuration)
     {
@@ -29,6 +51,17 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<FreshlineDbContext>(builder =>
             builder.UseSqlServer(connectionString, sqlServer => sqlServer.UseNetTopologySuite()));
 
+        services.AddScoped<IEstablishmentQueries, EstablishmentQueries>();
+        services.AddScoped<IReadinessProbe, ReadinessProbe>();
+
+        return services;
+    }
+
+    /// <summary>Fetching from sources and writing the results. The worker's half.</summary>
+    public static IServiceCollection AddFreshlineIngestion(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
         // ValidateOnStart turns a misconfigured source into a startup failure with a readable
         // message, rather than a null reference on the first fetch an hour into a schedule.
         services

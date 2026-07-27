@@ -355,3 +355,130 @@ nobody any the wiser — including me. The only reason there is a finding here a
 acceptance criterion was a before-and-after with plans rather than the existence of an index.
 
 And the corollary, learned the slightly harder way: measure between changes, not just at the ends.
+
+---
+
+## M4 — API
+
+**Date:** 2026-07-26 · **Tool:** Claude Code (Opus 5)
+
+### The milestone's most valuable output was a bug in the previous milestone's conclusion
+
+M3 finished with a measured, plan-backed, written-up recommendation: get the latest inspection with
+`CROSS APPLY`. M4 implemented it and found it was wrong. `CROSS APPLY` is an inner join, so every
+establishment that had never been inspected vanished from the result — **19,923 of 23,528 rows
+returned**, with the 3,605 missing being exactly those awaiting a first inspection. Which is the
+greenfield signal the product is partly built on.
+
+Nothing failed. The query ran, returned thousands of rows, and looked healthy. **No performance
+measurement could ever have surfaced it, because the fastest way to answer a question is to answer
+less of it.** The correctness fix turned out to be free: identical logical reads, 1,307 more rows.
+
+The M3 block in `docs/performance.md` was left as written with a warning attached rather than edited,
+on the grounds that a quietly corrected number is indistinguishable from one that was never wrong.
+
+### Where measuring twice reversed a conclusion I had already drawn
+
+Against the M3 indexes, EF Core's generated SQL for the list query cost 1.6× a hand-written
+`OUTER APPLY`, and I had concluded — with numbers in hand — that this query should drop to raw SQL.
+An hour later that was wrong. The window function was expensive because it scanned the *clustered*
+index; once a narrow covering index could answer it, the same plan fell from 2,809 logical reads to
+132, and the gap to hand-written SQL closed to 7%. **The fix was the index, not the ORM.**
+
+The generalisable part: a comparison between two implementations is only valid against the schema it
+was run on. I had measured the right thing and drawn a conclusion about the wrong variable.
+
+And the map endpoint lands on the *opposite* side of the same argument — at 1,000 rows the window
+form beats `OUTER APPLY` by 18×, because `APPLY` costs roughly two reads per row while the window
+costs one index pass regardless. Two endpoints that look like the same query with a different
+`WHERE` clause, and the crossover between them sits near 55 rows.
+
+### Three things found by running the thing rather than by testing it
+
+Every one of these passed a green test suite first.
+
+- **The rate limiter's rejection message said the API allows "roughly 0 requests per second".** It
+  divided the two replenishment settings into a per-second rate, which rounds to zero at slow refill
+  rates. True to two decimal places and useless. It now states the configured numbers verbatim.
+- **The OpenAPI document described no authentication at all.** `AddOpenApi` does not infer a security
+  scheme from registered authentication, so `/me` appeared callable by anyone, returned 401 to
+  everyone, and offered nowhere in the UI to enter a token — in a milestone whose acceptance criterion
+  is that a *stranger can explore live documentation*. The first fix then produced `"security": [{}]`,
+  a valid and entirely empty requirement, because the scheme reference cannot serialise its own name
+  without a host document. Both were found by reading the generated JSON.
+- **The Development CORS origin was written to a gitignored file.** It would have worked on exactly
+  one machine, and everyone else — including CI and M5's web app — would have hit a CORS error in a
+  browser console with nothing pointing at configuration.
+
+### The security comment that was confidently wrong
+
+I wrote, on the `ValidAlgorithms` pin, that it defeats the algorithm-confusion attack — signing an
+HS256 token with the API's published RSA public key as the HMAC secret. I had a test minting exactly
+that token, and it passed.
+
+Then I deleted the pin and ran it again. **It still passed.** What refuses that token is the key set:
+an `RsaSecurityKey` cannot serve as an HMAC key, so nothing resolves for HS256. The pin is real but
+narrower — it refuses RS512 signed by the correct private key, which is now its own test and does
+fail without the line.
+
+Both are kept. What is worth recording is the failure mode: a passing test plus a plausible
+explanation is not evidence that the explanation is right, and in a security file the wrong
+explanation is precisely what someone reads before deciding a line is redundant. The check that
+caught it took two minutes — delete the line, run the test, see whether it fails.
+
+### Where a rule was applied rather than bent
+
+The asymmetric key came out of taking the milestone's own words literally. The brief said this API
+validates tokens and does not issue them; a shared symmetric secret contradicts that, because with
+HMAC the power to verify *is* the power to forge. RSA makes the split a property of the cryptography
+rather than a promise about restraint — and as a side effect the auth configuration contains nothing
+confidential at all, so `CLAUDE.md`'s no-secrets rule is satisfied by there being no secret.
+
+### What was delegated, and how it was verified
+
+- **Rate limiting and CORS**, verified against the running API over real sockets rather than only
+  through the in-memory test host — which sets no `RemoteIpAddress` and therefore cannot test per-IP
+  partitioning at all. 127.0.0.1 was driven to 429 while 192.168.1.192 got a fresh bucket from the
+  same instance.
+- **JWT validation**, verified end to end with a keypair from `openssl` and a token hand-assembled
+  from base64url segments and signed with `openssl dgst`. Nothing in this repository produced that
+  token, which is the strongest available form of the claim that this API validates rather than
+  issues.
+- **136 tests green, 0 warnings**, and one dependency added.
+
+### Where a human still has to look
+
+- **All of slice 6.** Auth logic, flagged before it was written and flagged again in the PR. The
+  specific list is in `docs/milestones/m4-api.md`: every line of `TokenValidationParameters`, the
+  agreement between `MapInboundClaims`, `NameClaimType` and `RoleClaimType`, and the deliberate
+  asymmetry where an *unconfigured* key starts the API but a *malformed* one fails startup.
+- **The slice 2 index migration**, `CoverEstablishmentListQuery`.
+- **One dependency added**: `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.10, pulling seven
+  transitive `Microsoft.IdentityModel.*` packages at 8.19.2.
+
+### Where I took the tool's word for it
+
+- **The rate limits themselves.** 60 burst, 30 per 10 seconds. Nothing has load tested this API;
+  those numbers are sized against what a human browsing a map produces, which is a much weaker
+  justification than a measurement, and they are labelled as such wherever they appear.
+- **That per-IP partitioning is the right granularity.** It is per-instance and per-address, so it
+  slows one caller down and does nothing about many. Adequate here, and not a defence against a
+  distributed attack.
+- **That the `outcome` filter is affordable.** It is correct — there is a test proving it matches the
+  latest inspection rather than any past one — but nobody has looked at what it costs, and it is the
+  filter most likely to be slow.
+
+### What I'd tell a junior
+
+M3's lesson was to write the milestone as "measure it" rather than "add the thing". M4's is the
+sharper version of the same idea: **a test suite tells you the code does what you told it to do, and
+nothing else.**
+
+Everything genuinely wrong this milestone — the dropped 3,605 rows, the "0 requests per second"
+message, the invisible auth in the documentation, the security comment naming the wrong cause — got
+past a green suite. Three were found by running the thing and reading the output, and one by deleting
+a line to see whether anything noticed.
+
+So: **when you believe a specific line is what prevents a specific failure, delete it and check.** If
+nothing fails, you have learned something more valuable than a passing test — you have learned that
+your explanation was wrong, while it is still cheap to find out.

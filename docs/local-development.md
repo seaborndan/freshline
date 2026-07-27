@@ -44,8 +44,20 @@ The password is the throwaway local one in `docker-compose.yml`. It is not a sec
 nothing but a container of public open data. No real credential is ever read from source — see the
 security rules in `CLAUDE.md`.
 
+**Docker Desktop's process running is not the same as its engine being up.** Seeing it in the tray
+proves nothing; `docker info` is the check that matters, and `docker compose up` against a
+not-yet-ready engine fails with a message about the pipe rather than about Docker.
+
 `dotnet test` needs the container running. The integration tests **fail rather than skip** when it is
 absent, deliberately: a silently skipped test looks exactly like a passing one.
+
+**A running API locks its own DLLs on Windows**, so a `dotnet run` left in another terminal makes
+`dotnet test` fail with MSB3027 — a file-in-use error that reads like a corrupted build and is not
+one:
+
+```powershell
+Get-Process -Name "Freshline.Api" -ErrorAction SilentlyContinue | Stop-Process -Force
+```
 
 ## Browsing the database
 
