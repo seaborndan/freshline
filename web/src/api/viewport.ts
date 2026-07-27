@@ -70,6 +70,34 @@ export function viewportProblem(viewport: Viewport): string | null {
 }
 
 /**
+ * Coordinates as the query string spells them: fixed at six decimal places, about 10cm.
+ *
+ * Lives here rather than in the client because two callers have to agree on it. A map reports its
+ * bounds as full float64 and the trailing digits change on every frame of a drag, so the rounding is
+ * what decides both what goes on the wire *and* whether the viewport is considered to have changed
+ * at all. If those two used different precisions, a viewport could differ enough to trigger a
+ * request and not enough to change the request — an infinite loop of identical queries.
+ */
+export function formatCoordinate(value: number): string {
+  return value.toFixed(6)
+}
+
+/**
+ * A viewport's identity: two viewports with the same key produce the same request, so there is no
+ * reason to send the second one.
+ */
+export function viewportKey(viewport: Viewport): string {
+  return [
+    viewport.minLatitude,
+    viewport.maxLatitude,
+    viewport.minLongitude,
+    viewport.maxLongitude,
+  ]
+    .map(formatCoordinate)
+    .join(',')
+}
+
+/**
  * Whether a point falls inside the viewport, with a tolerance.
  *
  * The tolerance is for the float arithmetic between reading bounds off a map, rounding them into a
