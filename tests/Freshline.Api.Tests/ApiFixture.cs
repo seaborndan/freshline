@@ -77,7 +77,24 @@ public sealed class ApiFixture : IAsyncLifetime
 
         Seeded = await SeedAsync(dbContext);
 
-        _factory = new FreshlineApiFactory(ConnectionString);
+        // The rate limiter is left switched on — the middleware runs, the policy is applied, and
+        // every request below goes through it — but its ceiling is raised far above anything this
+        // collection produces.
+        //
+        // The reason is a real property of the test host rather than a convenience.
+        // WebApplicationFactory's in-memory server sets no RemoteIpAddress, so every request from
+        // every test in this collection partitions to the same bucket. At the production default of
+        // 60 the paging walks alone would exhaust it, and unrelated tests would start failing with
+        // 429s that say nothing about what they were testing.
+        //
+        // Throttling is asserted in RateLimitTests, which starts its own host with a deliberately
+        // tiny limit. That is the honest split: this fixture proves the limiter does not break the
+        // endpoints, and that one proves it works.
+        _factory = new FreshlineApiFactory(ConnectionString, new Dictionary<string, string>
+        {
+            ["RateLimiting:BurstSize"] = "100000",
+            ["RateLimiting:TokensPerPeriod"] = "100000",
+        });
     }
 
     public Task DisposeAsync()

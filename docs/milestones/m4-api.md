@@ -97,6 +97,67 @@ endpoint and proved it: a walk of the live endpoint returns all 23,528 rows with
 questions. That has to be said wherever the numbers appear together rather than presented as a
 regression.
 
+### Slice 5 — what rate limiting and CORS actually bound
+
+Both are framework features. **No package was added**, which is worth stating because CLAUDE.md makes
+a dependency an explicit decision: `Microsoft.AspNetCore.RateLimiting` and `System.Threading.RateLimiting`
+ship in the ASP.NET Core shared framework, and the build confirms it — the API's `.csproj` is
+unchanged.
+
+**A token bucket per client IP, not a fixed window.** A fixed window lets a caller spend the whole
+allowance at the end of one window and the whole allowance again at the start of the next — twice the
+intended rate, decided by where their burst happens to land relative to a clock. A token bucket
+refills continuously and has no boundary to sit on. It also matches the traffic: panning a map fires
+several requests in a second or two and then nothing for a minute, which is the normal shape here
+rather than abuse.
+
+**One bucket across all three endpoints, not one per endpoint.** The map query is the expensive one,
+but every endpoint here reaches the database, and what needs bounding is the load one caller can put
+on that database. Three buckets would let one caller spend three budgets.
+
+**The health checks and the OpenAPI document sit outside it.** A readiness probe is polled constantly
+from a handful of addresses — exactly what a per-IP limiter reads as abuse. Throttling it returns a
+429 to the load balancer, which reads that as an unhealthy instance and pulls it from rotation: the
+rate limiter becomes the outage. There is a test for this.
+
+**`UseCors` is registered before `UseRateLimiter`, and the order is load-bearing.** CORS attaches its
+headers on the way in, so a 429 produced later still carries them. Reversed, a browser gets a 429 it
+is not allowed to read and reports a generic network error — the client cannot tell "slow down, retry
+in 30 seconds" from "the API is down", which is the only thing a 429 exists to say. There is a test
+that fails on that reversal and on nothing else.
+
+**CORS is a configured origin list with credentials off.** There is a real argument for
+`AllowAnyOrigin` here — the data is public, the endpoints are anonymous, and CORS protects a user's
+credentials rather than the data. It is rejected because slice 6 puts an `Authorization` header on
+this API and a permissive list is one `AllowCredentials()` away from letting any site make
+authenticated calls with a visitor's session. Credentials stay off permanently, not until auth
+arrives: bearer tokens are attached explicitly by JavaScript and cross origins without it, so turning
+it on would only add automatic cookie sending — the mechanism CSRF runs on — for a capability this
+API does not use.
+
+**The Development origin default lives in code, not in `appsettings.Development.json`.** That file is
+in `.gitignore`, so an origin put there would exist on one machine and every other developer — and CI
+— would get an API the M5 web app cannot call, failing as a CORS error in the browser console rather
+than as anything pointing at configuration. The fallback is committed, applies only under
+`IsDevelopment()` with nothing configured, and there is a test asserting a non-Development
+environment with nothing configured allows nothing.
+
+**The limits are chosen, not measured**, and are labelled that way in `RateLimitOptions`. 60 burst,
+30 tokens per 10 seconds. Nothing has established what this API can serve; that needs a load test
+against deployed hardware, and `docs/performance.md` is explicit that its figures come from one
+unconstrained workstation with the whole database in memory. No number from slice 5 appears in
+`performance.md`, because slice 5 measured nothing.
+
+**Verified live, not just in tests.** The in-memory test host sets no `RemoteIpAddress`, so every
+test request falls into the same partition and the per-IP claim is the one thing the test suite
+cannot prove. Checked against the real API over real sockets on 2026-07-26: 127.0.0.1 was driven to
+429 while 192.168.1.192 got a full fresh bucket from the same instance, and `/health`,
+`/health/ready` and `/openapi/v1.json` all answered 200 from the exhausted address. That run also
+caught a defect no test had: the rejection message divided the two replenishment settings into a
+per-second rate and told callers the API allows "roughly 0 requests per second". It now states the
+configured numbers verbatim. The Development CORS fallback was verified the same way and for the same
+reason — the test host runs as `Testing` and deliberately never as `Development`.
+
 ---
 
 ## Correctness traps
@@ -124,7 +185,7 @@ still on screen and nothing gets written from recollection.
 | 2 | List with filtering and keyset pagination — **includes a migration** | ✅ |
 | 3 | Detail with inspection history — query-count assertion | ✅ |
 | 4 | Map viewport query — bounding box, left join | ✅ |
-| 5 | Rate limiting and CORS | not started |
+| 5 | Rate limiting and CORS | ✅ |
 | 6 | JWT auth surface | not started |
 | 7 | Consolidation — ADR-0005, README, roadmap, log | not started |
 
@@ -217,6 +278,23 @@ optional.
 - **Conventional commits. Branch and PR, CI green before merge. Never push to `main`.**
 
 ---
+
+## Open items created by M4
+
+- **The rate limiter partitions on `RemoteIpAddress`, which will be the proxy's the moment one
+  exists.** Behind a reverse proxy, CDN or Azure ingress every caller collapses into one bucket and a
+  per-client limit silently becomes a global one that locks everybody out together. The fix is
+  `UseForwardedHeaders` with `KnownProxies` or `KnownNetworks` populated with that proxy's actual
+  addresses — and only that way round, because trusting `X-Forwarded-For` from anywhere is worse than
+  ignoring it: the header is caller-supplied, so an attacker mints a fresh bucket per request and
+  turns the limiter off for precisely the caller it exists to stop. Those addresses are a property of
+  a deployment that does not exist yet, so this is **M5 work and a deploy-time blocker**, not a
+  cleanup.
+- **The limiter is per-instance.** It lives in one process's memory, so two instances behind a load
+  balancer permit twice the configured rate. Acceptable at M5's expected scale and stated so nobody
+  reads the configured number as a system-wide guarantee.
+- **The rate limits have never been load tested.** They bound one caller against a number nobody
+  measured. See the slice 5 notes above.
 
 ## Open items carried into M4
 

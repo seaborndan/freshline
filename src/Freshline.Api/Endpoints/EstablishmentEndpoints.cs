@@ -35,7 +35,13 @@ internal static class EstablishmentEndpoints
     {
         RouteGroupBuilder establishments = api
             .MapGroup("/establishments")
-            .WithTags("Establishments");
+            .WithTags("Establishments")
+
+            // Declared on the group because it is true of the group: every endpoint here is behind
+            // the same rate-limit bucket. A 429 that only appears under load is precisely the
+            // response a client author will not have handled unless the document told them it
+            // existed.
+            .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
         establishments
             .MapGet("/", ListAsync)

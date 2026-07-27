@@ -13,7 +13,14 @@ namespace Freshline.Api.Tests;
 /// from the committed migrations. A test that replaced the database with an in-memory provider
 /// would stop exercising the thing most likely to be wrong.</para>
 /// </summary>
-internal sealed class FreshlineApiFactory(string connectionString) : WebApplicationFactory<Program>
+/// <param name="settings">
+/// Extra configuration for this host, in <c>Section:Key</c> form. Used by the tests that are about
+/// configuration itself — the rate limiter and CORS — so each can start a host with the settings its
+/// assertion needs rather than every other test having to tolerate them.
+/// </param>
+internal sealed class FreshlineApiFactory(
+    string connectionString,
+    IReadOnlyDictionary<string, string>? settings = null) : WebApplicationFactory<Program>
 {
     /// <summary>Counts the commands the host's own <c>DbContext</c> sends. See
     /// <see cref="CommandCounter"/> for why this is worth asserting on.</summary>
@@ -39,5 +46,10 @@ internal sealed class FreshlineApiFactory(string connectionString) : WebApplicat
         // UseSetting writes into host configuration, which `builder.Configuration` includes from
         // the moment it exists.
         builder.UseSetting("ConnectionStrings:Freshline", connectionString);
+
+        foreach ((string key, string value) in settings ?? new Dictionary<string, string>())
+        {
+            builder.UseSetting(key, value);
+        }
     }
 }

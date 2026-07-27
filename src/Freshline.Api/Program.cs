@@ -1,6 +1,8 @@
 using System.Text.Json.Serialization;
+using Freshline.Api.Cors;
 using Freshline.Api.Endpoints;
 using Freshline.Api.Health;
+using Freshline.Api.RateLimiting;
 using Freshline.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Scalar.AspNetCore;
@@ -30,6 +32,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     // establishments. Those are facts about the data and the response should state them.
 });
 
+builder.Services.AddFreshlineCors(builder.Configuration, builder.Environment);
+builder.Services.AddPublicApiRateLimiting(builder.Configuration);
+
 builder.Services.AddOpenApi();
 
 builder.Services
@@ -49,6 +54,20 @@ app.UseExceptionHandler();
 app.UseStatusCodePages();
 
 app.UseHttpsRedirection();
+
+// Before UseRateLimiter, and the order is load-bearing rather than conventional.
+//
+// CORS middleware attaches its headers on the way in, so a response produced by anything after it
+// still carries them. Put the rate limiter first instead and a 429 goes back with no CORS headers on
+// it — at which point the browser refuses to hand the response to the calling script and reports a
+// generic network failure. The client would be unable to tell "you are being throttled, here is how
+// long to wait" apart from "the API is down", which is the one distinction the 429 exists to make.
+//
+// It also means a CORS preflight never reaches the limiter. UseCors answers OPTIONS itself and
+// short-circuits, so a cross-origin GET costs one token rather than two.
+app.UseCors(CrossOriginPolicy.PolicyName);
+
+app.UseRateLimiter();
 
 // The OpenAPI document and its UI are served in every environment, not just development.
 //
@@ -75,7 +94,19 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 // Version in the path, as a literal string. A versioning package would add a configuration surface
 // and a dependency for a v1 that has no v2; the discipline that actually matters is evolving
 // without a v2 at all — add optional fields, never remove or repurpose one.
-RouteGroupBuilder api = app.MapGroup("/api/v1");
+//
+// Rate limiting is applied to this group, which is to say to the three endpoints that reach the
+// database — and deliberately not to the health checks above it.
+//
+// A readiness probe is polled continuously from a small number of addresses, so it is exactly the
+// traffic a per-IP limiter would classify as abuse. Throttling it would give the load balancer a 429,
+// which it reads as "this instance is unhealthy", which takes the instance out of rotation. The
+// limiter would then be the outage. The OpenAPI document and its UI are also outside the group; they
+// touch no database and are the first thing the stranger in this milestone's acceptance criterion
+// loads.
+RouteGroupBuilder api = app
+    .MapGroup("/api/v1")
+    .RequireRateLimiting(PublicApiRateLimiting.PolicyName);
 
 api.MapEstablishmentEndpoints();
 
