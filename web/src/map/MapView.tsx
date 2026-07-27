@@ -23,7 +23,7 @@ import {
   ordinaryFilter,
   priorityFilter,
 } from './layers'
-import { basemapStyleUrl } from './initialView'
+import { basemapStyleUrl, dataBounds, minimumZoom } from './initialView'
 import { viewportOf } from './viewportOf'
 
 const sourceId = 'establishments'
@@ -140,6 +140,16 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
         [initialViewport.maxLongitude, initialViewport.maxLatitude],
       ),
       fitBoundsOptions: { padding: 24 },
+
+      // The camera cannot leave the city, and cannot zoom out past it. This product has data about
+      // one city; letting someone drift to the Atlantic shows them an empty map that reads as
+      // broken rather than as out of scope. It also stops the basemap fetching and parsing tiles for
+      // places nothing here will ever describe, on the same worker that draws the pins.
+      maxBounds: new LngLatBounds(
+        [dataBounds.minLongitude, dataBounds.minLatitude],
+        [dataBounds.maxLongitude, dataBounds.maxLatitude],
+      ),
+      minZoom: minimumZoom,
 
       // The map is one input among several, not the whole page. Scroll-zoom that captures the wheel
       // as soon as the pointer crosses the canvas makes the page impossible to scroll past on a

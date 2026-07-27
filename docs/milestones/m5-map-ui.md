@@ -620,6 +620,31 @@ need no request and no re-tiling at all. Not done here because it has a real cos
 holds more establishments, so it truncates sooner, and truncation is the thing the opening view was
 shaped to avoid.
 
+#### The camera cannot leave New York
+
+Raised from a browser: it is odd to be able to zoom out and see the whole world in a product scoped
+to one city. Asked as a performance question, and the honest answer is that performance is the
+weaker half of the argument.
+
+**Zooming out costs the API nothing** — past one degree the client already declines to ask, so a
+world view produces no requests at all. It is not free, though: the basemap keeps fetching and
+parsing tiles for places this product will never describe, on the same worker pool that competes with
+drawing the pins, which is the contention the smoothness fix above is about. The stronger reason is
+the one that was actually noticed: a map of the Atlantic with no dots on it reads as a broken
+product rather than as a product with a scope.
+
+`maxBounds` is the measured data extent — latitude 40.499563 to 40.912822, longitude -74.249101 to
+-73.701712 across 23,017 rows — plus 0.02° on each side so an establishment at the edge can be
+centred rather than pinned against the frame. `minZoom` is 9.5.
+
+Verified in a browser rather than assumed: jumping the camera to 0°, 0° at zoom 2 lands at
+**40.596, -73.975 at zoom 10.73** — still New York, both constraints holding.
+
+Zoomed fully out on a wide window the view still exceeds one degree and the page says "zoom in to
+load establishments". No single value fixes that, because the span depends on the window's width: a
+minimum zoom keeping an ultrawide monitor under a degree would stop a phone from seeing the city at
+all. The one-degree guard remains the real backstop.
+
 #### Decision 3, partly reversed
 
 The URL carries the filters and the viewport, synced with `URLSearchParams` and `replaceState`, no

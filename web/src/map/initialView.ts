@@ -60,6 +60,44 @@ export const initialViewport: Viewport = {
 }
 
 /**
+ * How far the map lets anyone wander.
+ *
+ * **Measured from the data**, not drawn around a city on a map: every establishment with coordinates
+ * falls inside latitude 40.499563 to 40.912822 and longitude -74.249101 to -73.701712 — 23,017 rows
+ * on 2026-07-26. A margin of 0.02° (roughly two kilometres) is added on each side so an establishment
+ * at the edge can be centred rather than pinned against the frame.
+ *
+ * **Why constrain it at all.** Not for the API's sake: past one degree the client already declines
+ * to ask, so a world view costs zero requests. The costs are elsewhere and both are real. The
+ * basemap keeps fetching and parsing tiles for places this product will never have data about, on
+ * the same worker pool that competes with drawing the pins. And a map of the Atlantic with no dots
+ * on it looks like a broken product rather than a product scoped to one city — which is the same
+ * reasoning as the scope fence, applied to the camera.
+ */
+export const dataBounds = {
+  minLatitude: 40.4796,
+  maxLatitude: 40.9328,
+  minLongitude: -74.2691,
+  maxLongitude: -73.6817,
+}
+
+/**
+ * The furthest out the map will zoom.
+ *
+ * A compromise, and worth saying which way it errs. At zoom 9.5 a normal desktop window shows a
+ * little more than the whole city — enough to get your bearings. Lower would allow a view of the
+ * eastern seaboard; higher would stop a narrow phone window from ever seeing the city whole.
+ *
+ * **Zoomed fully out, a wide window shows no pins**, and that is worth being precise about rather
+ * than glossing: on a 1440px window this zoom spans about 1.4° of longitude, past the degree the API
+ * will answer, so the page says "zoom in to load establishments". No value fixes that for every
+ * screen — the span depends on the window's width, so a minimum zoom that keeps an ultrawide monitor
+ * under a degree would stop a phone from seeing the city at all. The one-degree guard is the real
+ * backstop; this constant just stops the map showing the Atlantic.
+ */
+export const minimumZoom = 9.5
+
+/**
  * The basemap.
  *
  * **CARTO Positron**, served from `basemaps.cartocdn.com` with no API key. This is a runtime
