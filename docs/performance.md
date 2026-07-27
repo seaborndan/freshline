@@ -16,9 +16,20 @@ change to the query's shape. The spatial index earns its place somewhere else en
 most recent inspection, top 50 by severity. It is the query behind the main screen, so it is the one
 worth being fast.
 
-**Environment.** SQL Server 2022 in Docker on a development laptop. Single user, warm cache, no
-concurrent load. Reported as-is; see [Limits](#limits-of-these-numbers) before drawing conclusions
-from the absolute values.
+**Environment.** SQL Server 2022 in Docker, single user, warm cache, no concurrent load and no
+network between client and server. The machine matters enough to state precisely rather than
+describe:
+
+| | |
+|---|---|
+| CPU | Intel Core i7-13700KF — 16 physical / 24 logical cores |
+| RAM | 32 GB |
+| Container limits | none — SQL Server sees all 24 schedulers |
+| SQL Server memory target | ~10.9 GB, against a database whose largest table is ~11 MB |
+
+That last row is not a footnote. **Every page of this database is permanently resident in memory** —
+physical reads were zero in every run reported here — and one of the conclusions below depends on
+that being true. See [Limits](#limits-of-these-numbers).
 
 **Data.** 23,528 establishments (23,017 with coordinates), 29,601 inspections, 94,400 violations.
 The `Establishments` clustered index is about 1,408 pages — roughly 11 MB. That figure turns out to
@@ -417,15 +428,30 @@ returns `isTruncated: true` rather than a silently partial map.
 
 Stated plainly, because a benchmark without its caveats is decoration.
 
-- **Warm cache throughout.** No cold-cache measurement was taken. Physical reads were zero in every
-  run, so these figures describe a server whose working set is already in memory.
-- **One user, one laptop, one container.** No concurrency, no network latency between application and
-  database, no other load. Absolute timings are not transferable to a deployed environment.
-- **23,528 establishments is small.** The whole table is roughly 11 MB. Scanning it is cheap, and that
-  cheapness is precisely why the spatial index loses the viewport comparison. At ten times the data
-  the conclusion could reverse, and nothing here should be quoted as though it would not.
-- **Elapsed time is not used to conclude anything.** At this scale it is mostly noise; several
-  readings were `0 ms`. Where CPU exceeds elapsed, the plan went parallel.
+### Which of these numbers travel
+
+- **Logical reads travel.** They count 8 KB page accesses inside the engine and do not depend on the
+  hardware underneath. 16,933 is 16,933 anywhere. This is why every conclusion above is drawn from
+  them.
+- **CPU time travels as a ratio, not as a value.** "78 ms to 15 ms" says the work fell by roughly
+  five times on this processor. It says nothing about what it costs on an Azure SQL vCore.
+- **Elapsed time does not travel at all**, and nothing here is concluded from it. Several readings
+  came back as `0 ms`. Where CPU exceeds elapsed — 78 ms CPU against 13 ms elapsed — the plan went
+  parallel across 24 schedulers, which a modest Azure SQL tier will not reproduce.
+
+### What could change the answer
+
+- **Everything is cached, permanently.** ~10.9 GB of buffer pool against an ~11 MB table means
+  physical reads were zero in every run. The finding that a scan beats 7,290 key lookups **depends on
+  that scan being pure memory access.** On a smaller tier, with more data and pages actually
+  evicting, physical reads appear and the balance between a scan and an index seek shifts. No
+  cold-cache measurement was taken, and that is the single biggest gap in this document.
+- **23,528 establishments is small.** At ten times the data the spatial conclusion could reverse, and
+  nothing here should be quoted as though it would not.
+- **No concurrency and no network hop.** In a deployed environment the application and the database
+  are not the same machine, and other queries compete for the same buffer pool.
+- **A workstation, not a server, and not a production tier.** 24 logical cores and unconstrained
+  memory is more generous than most deployment targets this project would realistically use.
 - **One viewport, one radius, one query.** Filters that a real user will apply — cuisine, grade,
   score band — were not part of the measurement and will change the plans.
 - **The M4 list numbers are for the unfiltered list.** Every filter measurement was a correctness

@@ -190,6 +190,10 @@ dotnet run --project src/Freshline.Ingestion       # one ingestion pass, then ex
 `dotnet test` needs the SQL Server container running — the integration tests fail rather than skip
 when it is missing, on the grounds that a silently skipped test looks exactly like a passing one.
 
+**[`docs/local-development.md`](docs/local-development.md)** has the rest: how to browse the database
+from VS Code, and why Visual Studio 2022 cannot build this project at all (it is the .NET 10 target,
+not the `.slnx` solution file).
+
 _(The API and web app are still the M0 scaffolds; they arrive at M4 and M5.)_
 
 ## What's next
