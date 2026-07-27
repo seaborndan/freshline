@@ -255,6 +255,23 @@ public class EstablishmentListEndpointTests(ApiFixture fixture)
     }
 
     /// <summary>
+    /// A page is one query, however many rows it holds. The latest-inspection lookup is nested per
+    /// establishment, which is precisely the shape that becomes one query per row if it is ever
+    /// materialised outside the projection — and the JSON would be identical either way.
+    /// </summary>
+    [Fact]
+    public async Task Reads_a_page_in_a_single_query()
+    {
+        HttpClient client = fixture.CreateClient();
+        fixture.Commands.Reset();
+
+        HttpResponseMessage response = await client.GetAsync("/api/v1/establishments?pageSize=100");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, fixture.Commands.Count);
+    }
+
+    /// <summary>
     /// An unknown outcome fails parameter binding before the handler runs. It still has to come back
     /// as ProblemDetails rather than as a bare 400 with an empty body.
     /// </summary>

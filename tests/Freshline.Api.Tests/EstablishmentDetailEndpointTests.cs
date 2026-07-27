@@ -199,6 +199,44 @@ public class EstablishmentDetailEndpointTests(ApiFixture fixture)
     }
 
     /// <summary>
+    /// One request, one round trip to the database — the assertion the <c>AsSplitQuery</c> comment
+    /// in <c>EstablishmentQueries</c> depends on.
+    ///
+    /// <para>This is the N+1 guard. An establishment with nine inspections, each with violations,
+    /// is exactly the shape that becomes eleven queries the moment somebody materialises the parent
+    /// before projecting the children — and the response would be byte-for-byte identical, so every
+    /// other test here would still pass. Only the count changes.</para>
+    /// </summary>
+    [Fact]
+    public async Task Reads_an_establishment_in_a_single_query()
+    {
+        HttpClient client = fixture.CreateClient();
+        fixture.Commands.Reset();
+
+        HttpResponseMessage response =
+            await client.GetAsync($"/api/v1/establishments/{fixture.Seeded.InspectedTwiceId}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(1, fixture.Commands.Count);
+    }
+
+    /// <summary>
+    /// A request for an establishment that does not exist must not cost more than one query either.
+    /// A "check it exists, then load it" implementation passes the 404 test and fails this one.
+    /// </summary>
+    [Fact]
+    public async Task Answers_a_miss_in_a_single_query()
+    {
+        HttpClient client = fixture.CreateClient();
+        fixture.Commands.Reset();
+
+        HttpResponseMessage response = await client.GetAsync("/api/v1/establishments/999999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(1, fixture.Commands.Count);
+    }
+
+    /// <summary>
     /// The read path projects to read models, which are not entities, so nothing lands in the
     /// change tracker. That is why <c>AsNoTracking</c> is absent from the query rather than
     /// forgotten — this asserts the claim the comment there makes.

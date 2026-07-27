@@ -52,6 +52,10 @@ public sealed class ApiFixture : IAsyncLifetime
     /// on a response.</summary>
     public IServiceProvider Services => _factory!.Services;
 
+    /// <summary>Counts SQL commands issued by the host. Reset it immediately before the request
+    /// under test; tests in this collection run sequentially, so nothing else is counting.</summary>
+    public CommandCounter Commands => _factory!.Commands;
+
     public async Task InitializeAsync()
     {
         await using FreshlineDbContext dbContext = CreateDbContext();

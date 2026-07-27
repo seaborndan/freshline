@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Freshline.Api.Tests;
 
@@ -15,9 +15,20 @@ namespace Freshline.Api.Tests;
 /// </summary>
 internal sealed class FreshlineApiFactory(string connectionString) : WebApplicationFactory<Program>
 {
+    /// <summary>Counts the commands the host's own <c>DbContext</c> sends. See
+    /// <see cref="CommandCounter"/> for why this is worth asserting on.</summary>
+    public CommandCounter Commands { get; } = new();
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+
+        // Nothing is replaced or faked here — this only listens. EF logs each executed command at
+        // Information under this category, so the level has to be raised or there is nothing to
+        // hear; that is the same switch used to capture the SQL in docs/performance.md.
+        builder.UseSetting(
+            $"Logging:LogLevel:{CommandCounter.Category}", "Information");
+        builder.ConfigureLogging(logging => logging.AddProvider(Commands));
 
         // UseSetting rather than ConfigureAppConfiguration, and the difference is a real one.
         //

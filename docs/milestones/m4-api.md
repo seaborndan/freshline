@@ -122,7 +122,7 @@ still on screen and nothing gets written from recollection.
 |---|---|---|
 | 1 | Read-path seam, API foundation, detail endpoint | ✅ `61e1aa8` |
 | 2 | List with filtering and keyset pagination — **includes a migration** | ✅ |
-| 3 | Detail with inspection history — query-count assertion | mostly delivered in slice 1 |
+| 3 | Detail with inspection history — query-count assertion | ✅ |
 | 4 | Map viewport query — bounding box, `OUTER APPLY` | not started |
 | 5 | Rate limiting and CORS | not started |
 | 6 | JWT auth surface | not started |
