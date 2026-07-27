@@ -23,8 +23,53 @@ import {
   ordinaryFilter,
   priorityFilter,
 } from './layers'
-import { basemapStyleUrl, dataBounds, labelMinimumZoom, minimumZoom } from './initialView'
+import {
+  basemapAttribution,
+  basemapRasterTiles,
+  basemapStyleUrl,
+  dataBounds,
+  labelMinimumZoom,
+  minimumZoom,
+} from './initialView'
 import { viewportOf } from './viewportOf'
+
+const rasterSourceId = 'basemap-geometry'
+const rasterLayerId = 'basemap-geometry'
+
+/**
+ * Replaces the basemap's geometry with pictures, keeping its lettering.
+ *
+ * Positron arrives as 95 layers: a background, 9 fills, 56 lines, 2 circles and 27 symbol layers.
+ * Everything but the background and the symbols is removed and a single raster layer put in its
+ * place, underneath the labels. See `basemapRasterTiles` for the measurements behind this — the
+ * short version is that a vector tile has to be parsed before it can be drawn and an image does not,
+ * and parsing is what makes the map stutter when it moves somewhere new.
+ *
+ * The labels stay vector so they stay upright when the map is rotated. Baked into a picture they
+ * would turn with it and never turn back.
+ */
+function drawGeometryFromRasterTiles(map: MapLibreMap): void {
+  const layers = map.getStyle().layers
+  const firstSymbolLayer = layers.find((layer) => layer.type === 'symbol')?.id
+
+  map.addSource(rasterSourceId, {
+    type: 'raster',
+    tiles: [basemapRasterTiles],
+    // 256 with an @2x URL: the images are 512 pixels drawn into 256 of layout, which is how a raster
+    // basemap stays sharp on a high-density display.
+    tileSize: 256,
+    attribution: basemapAttribution,
+  })
+
+  // Beneath the labels, above the background.
+  map.addLayer({ id: rasterLayerId, type: 'raster', source: rasterSourceId }, firstSymbolLayer)
+
+  for (const layer of layers) {
+    if (layer.type === 'fill' || layer.type === 'line' || layer.type === 'circle') {
+      map.removeLayer(layer.id)
+    }
+  }
+}
 
 /**
  * Stops the basemap drawing labels below `labelMinimumZoom`.
@@ -188,6 +233,24 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
       // can never be looked at, and not drawing them is free.
       renderWorldCopies: false,
 
+      // Hold on to parsed tiles far longer than the default, which keeps roughly what fits on
+      // screen. Rotating in place is the case this is for: turning the map sweeps tiles through the
+      // corners of the viewport, out again, and back, and each eviction means parsing the same
+      // hundreds of kilobytes of geometry a second time. Measured from CARTO: a zoom-14 tile over
+      // Manhattan is 389KB, zoom 12 is 98KB.
+      //
+      // The cost is memory, and it is not free — a few hundred parsed tiles is tens of megabytes.
+      // Bounded deliberately rather than left to grow.
+      maxTileCacheSize: 150,
+
+      // Keep tiles from more zoom levels than the default of five, so zooming out and back in
+      // re-uses what was already parsed instead of re-fetching each level on the way.
+      maxTileCacheZoomLevels: 8,
+
+      // The basemap of a city does not change while somebody is looking at it. Re-requesting tiles
+      // because a cache header expired mid-session buys nothing here and costs a parse.
+      refreshExpiredTiles: false,
+
       // The map is one input among several, not the whole page. Scroll-zoom that captures the wheel
       // as soon as the pointer crosses the canvas makes the page impossible to scroll past on a
       // laptop; the modifier key is the standard escape and MapLibre writes the instruction itself.
@@ -225,6 +288,11 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
       // it was, and the first request would be the one the user's first pan triggered.
       latestOnViewportChange.current?.(viewportOf(created))
 
+      drawGeometryFromRasterTiles(created)
+
+      // Applied after the geometry swap, so the only vector layers left are the ones this restricts.
+      // That is what stops the vector tiles being fetched at all below this zoom: MapLibre asks a
+      // source for tiles only when a visible layer needs them.
       quietenLabelsWhenZoomedOut(created)
 
       created.addSource(sourceId, {

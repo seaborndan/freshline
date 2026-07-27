@@ -38,16 +38,26 @@ const styleLayers = [
 
 const setLayerZoomRange = vi.fn()
 const setLayoutProperty = vi.fn()
+const removeLayer = vi.fn()
+const addedSources: unknown[][] = []
+const addedLayers: unknown[][] = []
 
 vi.mock('maplibre-gl', () => ({
   Map: class {
     addControl = vi.fn()
     remove = vi.fn()
     addSource = (...args: unknown[]) => {
-      sourceExists = true
+      addedSources.push(args)
+      if (args[0] === 'establishments') {
+        sourceExists = true
+      }
       addSource(...args)
     }
-    addLayer = addLayer
+    addLayer = (...args: unknown[]) => {
+      addedLayers.push(args)
+      addLayer(...args)
+    }
+    removeLayer = removeLayer
     getSource = () => (sourceExists ? { setData } : undefined)
     isMoving = () => moving
     getStyle = () => ({ layers: styleLayers })
@@ -120,6 +130,9 @@ beforeEach(() => {
   moving = false
   setLayerZoomRange.mockClear()
   setLayoutProperty.mockClear()
+  removeLayer.mockClear()
+  addedSources.length = 0
+  addedLayers.length = 0
 })
 
 afterEach(() => {
@@ -156,8 +169,10 @@ describe('MapView', () => {
 
     loadStyle()
 
-    expect(addSource).toHaveBeenCalledTimes(1)
-    expect(addLayer).toHaveBeenCalledTimes(2)
+    const pinLayers = addedLayers.filter(
+      (call) => (call[0] as { source?: string }).source === 'establishments',
+    )
+    expect(pinLayers).toHaveLength(2)
   })
 
   it('says so when the map itself fails, rather than leaving a blank rectangle', () => {
@@ -260,5 +275,38 @@ describe('MapView', () => {
 
     expect(setLayoutProperty).toHaveBeenCalledWith('country-label', 'visibility', 'none')
     expect(setLayerZoomRange.mock.calls.map((call) => call[0])).not.toContain('country-label')
+  })
+
+  // A vector tile must be parsed before it can be drawn; an image must not. Measured against CARTO
+  // over Manhattan, a zoom-14 vector tile is 389KB against 26KB of raster, and their vector tiles
+  // stop at 14 — which is exactly where the reported jitter stopped, because above it MapLibre
+  // overzooms tiles it has already parsed.
+  it('draws the basemap geometry from raster tiles', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    const raster = addedLayers.find((call) => (call[0] as { type?: string }).type === 'raster')
+    expect(raster).toBeDefined()
+    // Underneath the labels, so they draw over the picture rather than beneath it.
+    expect(raster?.[1]).toBe('place-label')
+  })
+
+  it('removes the vector geometry it replaced', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    const removed = removeLayer.mock.calls.map((call) => call[0])
+    expect(removed).toContain('water')
+    expect(removed).toContain('road')
+  })
+
+  // The labels stay vector so they stay upright when the map is rotated. Baked into a picture they
+  // would turn with it and never turn back, which is the reason this is a hybrid at all.
+  it('keeps the label layers rather than flattening them into the picture', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    expect(removeLayer.mock.calls.map((call) => call[0])).not.toContain('place-label')
+    expect(setLayerZoomRange).toHaveBeenCalledWith('place-label', 14, 24)
   })
 })

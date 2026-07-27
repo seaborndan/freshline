@@ -634,11 +634,49 @@ the camera has stopped. World copies are off too, since the camera is locked to 
 **The trade:** below zoom 14 there are no street names — roads, water and dots. That is close to what
 an overview of a city is for, and the threshold is one named constant to move in either direction.
 
-**Still available if that is still not enough**, in the order they would be reached for: a lighter
-basemap style, since 56 line layers is a lot of geometry at low zoom; disabling rotation, which is
-the interaction that forces label re-placement; and fetching a box larger than the viewport, so small
-pans need no request at all — that last one costs earlier truncation, which is the thing the opening
-view was shaped to avoid.
+That was not enough either, and the third round is where the actual cause turned up. Two hypotheses
+had already been killed by measurement — the pin count is identical either side of the boundary, and
+the *number* of basemap layers is higher in the smooth zone than the jittery one (80 active at zoom
+15 against 46 at zoom 12). What was left was the tiles themselves, measured against CARTO over
+Manhattan:
+
+| zoom | vector `.mvt` | raster `.png` @2x |
+|---|---|---|
+| 12 | 98KB | 30KB |
+| 13 | 89KB | — |
+| 14 | **389KB** | 26KB |
+| 15+ | **HTTP 400 — does not exist** | — |
+
+**CARTO's vector tiles stop at zoom 14.** Every zoom above it *overzooms*: MapLibre scales tiles it
+has already parsed and parses nothing new. Below 14 it parses a few hundred kilobytes of fresh
+geometry for every new area moved into, and the further out the camera is, the more new area each
+gesture exposes. The reported boundary between smooth and jittery was exactly the boundary where
+parsing stops — which is why no amount of removing layers helped.
+
+So the basemap is now a hybrid, and the arrangement is the interesting part:
+
+- **Geometry comes from raster tiles.** An image is decoded off the main thread and drawn as a
+  texture; there is nothing to parse at any zoom. Positron's fills, lines and circles are removed at
+  style load and one raster layer put underneath the labels.
+- **Labels stay vector.** A raster basemap normally has its lettering baked into the picture, which
+  rotates with the map and never rotates back — rotation was explicitly not up for sacrificing. Kept
+  as symbol layers, MapLibre places them dynamically and they stay upright at any bearing.
+- **And because MapLibre asks a source for tiles only when a visible layer needs them**, restricting
+  those symbol layers to zoom 14 and up means no vector tile is fetched below 14 at all. The zooms
+  that were jittery became pure raster; the zooms where labels appear were already the smooth ones.
+
+Verified in a browser rather than reasoned about: at zoom 12, **0 visible vector layers**; at zoom
+15, **12**. A first attempt at that measurement counted a hidden layer as active and had to be
+redone — and an attempt to count tile requests through the Performance API was thrown out entirely,
+because MapLibre fetches vector tiles inside its worker and worker requests never appear in
+main-thread resource timing.
+
+The cost, stated: two third-party endpoints instead of one, and a style assembled in this repository
+rather than handed to MapLibre as a URL.
+
+**Still available if it is still not enough:** fetching a box larger than the viewport, so small pans
+need no request at all — that costs earlier truncation, which is the thing the opening view was
+shaped to avoid.
 
 #### The camera cannot leave New York
 
