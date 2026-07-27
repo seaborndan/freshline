@@ -234,4 +234,41 @@ describe('DetailPanel', () => {
 
     expect(screen.getByRole('heading', { name: 'POPEYES' })).toBeInTheDocument()
   })
+
+  // A keyboard user who activates a row from the list would otherwise stay where they were: the
+  // panel appears somewhere they cannot see, and the next Tab carries on down the list as if
+  // nothing had happened. Moving focus is also what makes a screen reader read the record.
+  it('takes focus when it opens', () => {
+    render(
+      <DetailPanel
+        candidates={[pin(21, 'POPEYES', 'Good')]}
+        view={{ detail: loaded, isLoading: false, failure: null }}
+        selectedId={21}
+        onSelect={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+
+    // The container, not the close button, so what gets announced is the name rather than "Close".
+    expect(screen.getByRole('heading', { name: 'POPEYES' }).closest('section')).toHaveFocus()
+  })
+
+  it('closes on Escape', async () => {
+    const onClose = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <DetailPanel
+        candidates={[pin(21, 'POPEYES', 'Good')]}
+        view={{ detail: loaded, isLoading: false, failure: null }}
+        selectedId={21}
+        onSelect={vi.fn()}
+        onClose={onClose}
+      />,
+    )
+
+    await user.keyboard('{Escape}')
+
+    expect(onClose).toHaveBeenCalled()
+  })
 })

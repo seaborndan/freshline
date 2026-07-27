@@ -384,7 +384,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | 3 | Viewport-driven fetching, debounced, with truncation handling | **done** |
 | 4 | Filter panel | **done** |
 | 5 | Detail panel with inspection history | **done** |
-| 6 | Loading, error, empty states and keyboard navigation | not started |
+| 6 | Loading, error, empty states and keyboard navigation | **done** |
 | 7 | Deployment, and the URL | not started |
 | 8 | Consolidation — ADR, README, roadmap, log | not started |
 
@@ -767,6 +767,83 @@ a `?id=` link naming an establishment outside the current view, which is most of
 Staten Island and the opening view is Times Square. Now the record renders whether or not its pin is
 on screen.
 
+### Slice 6, as built
+
+`list/ResultsList.tsx`, focus and Escape handling in the detail panel, and a camera instruction the
+map will accept.
+
+#### The list is the map, for anyone who cannot use the map
+
+**Pins are pixels on a WebGL canvas.** They take no focus, they appear in no accessibility tree, and
+until this slice a keyboard user could reach every filter and never reach a single restaurant.
+Nothing about a `<canvas>` can be made to fix that, so the fix is not on the canvas.
+
+It is also the panel the milestone's **first decision** committed to and that nothing had yet built:
+the side list is the same data as the pins, held once and rendered twice, so a row is present exactly
+when its dot is and either one opens the same record.
+
+Two things it deliberately does not do. It **does not page** — the viewport response has no cursor,
+it is the answer to "what is on screen", and paging through a viewport that stopped existing is not
+a thing to offer. And it **does not render everything**: a viewport can hold a thousand
+establishments and re-renders on every pan, so it shows fifty and says so. That is the smoothness
+lesson applied to the DOM rather than to the map.
+
+Every row carries its state **in words**, because the swatch beside it is decoration to a screen
+reader and colour alone to everyone else, and the selected row is marked with `aria-current` rather
+than only with a highlight.
+
+#### The rest of the keyboard story
+
+- **Focus moves into the detail panel when it opens**, onto the container rather than the close
+  button, so a screen reader announces the establishment's name instead of the word "Close".
+  Without it, activating a row leaves a keyboard user where they were while a panel they cannot see
+  appears somewhere else.
+- **Escape closes it.**
+- **One visible focus style** across every control on the page. A keyboard user who cannot see where
+  they are has no way to use any of this.
+
+#### The camera instruction
+
+The open item from slice 5, closed. A `?id=` link names an establishment that is usually nowhere near
+the opening view, so the record used to open while the map showed a different part of the city. The
+map now accepts a point to move to, and the caller sends one **only when the establishment is outside
+the current viewport** — moving it for every selection would yank the camera out from under somebody
+who clicked a pin they were already looking at.
+
+**Verified.** 170 web tests, `tsc -b`, build and lint clean. The camera rule and the focus move were
+both mutation-tested — each broken deliberately fails exactly the tests naming it. The list was
+confirmed against the running API: "Showing 50 of 424", fifty rows, each with its state spelled out.
+
+**Not verifiable here:** that the camera actually arrives. `easeTo` animates through a render loop
+headless Chromium never runs, so the call can be asserted and the movement cannot. Confirmed from a
+browser instead — along with a bug that only a browser could have found.
+
+#### The camera snapped back, once
+
+Reported: after being taken to an establishment, dragging away pulled the map straight back to it —
+once, and then it behaved.
+
+The cause was making the camera target a **derived** value. It read "is the chosen establishment off
+screen?", which is true when the record arrives, false once the map gets there, and **true again the
+moment the user drags away** — so it re-armed and fired. It happened exactly once because the second
+drag left the answer unchanged, so nothing re-ran. That "once, then fine" shape is what identified
+it.
+
+A camera move belongs to the act of choosing something, not to where the map happens to be, so it is
+now computed once per record that arrives and never recomputed; the viewport is read through a ref
+so it cannot re-arm anything. The regression test walks the reported sequence — arrive, drag away,
+drag away again — and was checked against the original code, which moves the camera twice.
+
+#### Two smaller things from the same session
+
+The page **flashed white** when following a link into the app. A full navigation paints before the
+stylesheet is fetched, so the first frame was the browser default; the background is now declared
+inline in `index.html`, which is the only inline style in the project and is there because it has to
+be true before anything else loads.
+
+And the tab said **"web"** — the Vite starter's title, on the page whose whole purpose is to be
+opened by a stranger.
+
 ## Standing requirements
 
 Not specific to M5. Repeated because a milestone brief that omits them reads as if they were optional.
@@ -787,11 +864,9 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
 - ~~**Establishments stacked on one coordinate have no way to be told apart**~~ — answered in slice
   5: a click resolving to more than one establishment opens the list, and the user chooses. See
   below.
-- **A shared `?id=` link does not move the map to the establishment it names.** The record opens and
-  is readable, and the map stays wherever the link's viewport put it — which for a link carrying only
-  an id is the opening view, usually nowhere near. Found by loading `?id=21`, which is in Staten
-  Island. Fixing it means the map taking a camera instruction from outside, which is a small piece of
-  design rather than a line of code.
+- ~~**A shared `?id=` link does not move the map to the establishment it names**~~ — fixed in slice
+  6. The map now takes a camera instruction, and the caller sends one only when the chosen
+  establishment is outside the current view.
 
 - **The rate limiter partitions on `RemoteIpAddress`, which becomes the proxy's address behind any
   ingress.** Every caller then shares one bucket and a per-client limit becomes a global one that

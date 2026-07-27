@@ -8,12 +8,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EstablishmentFilter } from './api/contract'
-import type { Viewport } from './api/viewport'
+import { containsPoint, type Viewport } from './api/viewport'
 import { DetailPanel } from './detail/DetailPanel'
 import { useEstablishmentDetail } from './detail/useEstablishmentDetail'
 import { FilterPanel } from './filters/FilterPanel'
 import { hasAnyFilter } from './filters/filterState'
 import { useFilterOptions } from './filters/useFilterOptions'
+import { ResultsList } from './list/ResultsList'
 import { initialViewport } from './map/initialView'
 import { distinctPointCount } from './map/geoJson'
 import { Legend } from './map/Legend'
@@ -58,6 +59,12 @@ function App() {
     setSelectedId(ids.length === 1 ? ids[0] : null)
   }, [])
 
+  /** A row in the list names exactly one establishment, so it selects rather than offering a choice. */
+  const handleSelectOne = useCallback((id: number) => {
+    setCandidateIds([id])
+    setSelectedId(id)
+  }, [])
+
   const handleClose = useCallback(() => {
     setCandidateIds([])
     setSelectedId(null)
@@ -82,6 +89,41 @@ function App() {
       .map((id) => items.find((item) => item.id === id))
       .filter((item) => item !== undefined)
   }, [candidateIds, establishments.result])
+
+  /**
+   * Where to move the camera, or null to leave it alone.
+   *
+   * **Set once per record that arrives, not derived from where the map is.** The difference is the
+   * whole bug this shape exists to avoid, and it was reported from a browser: as a derived value it
+   * read "is the chosen establishment off screen?", which is true again the moment the user drags
+   * away from the place they were just taken to — so the map snapped back, once, and then behaved.
+   * (Only once, because the second drag left the answer unchanged and the effect never re-ran.)
+   *
+   * A camera move belongs to the act of choosing something, so it is computed when the record loads
+   * and never recomputed. The viewport is read through a ref for the same reason: as a dependency it
+   * would re-arm this on every pan.
+   */
+  const [focusOn, setFocusOn] = useState<{ latitude: number; longitude: number } | null>(null)
+
+  const viewportRef = useRef(viewport)
+  viewportRef.current = viewport
+
+  useEffect(() => {
+    const record = detail.detail
+
+    if (record === null || record.latitude === null || record.longitude === null) {
+      return
+    }
+
+    // Already on screen — which is every click on a pin, and some `?id=` links. Moving the camera
+    // there would yank it out from under somebody who was already looking at the thing they clicked.
+    const current = viewportRef.current
+    if (current !== null && containsPoint(current, record.latitude, record.longitude)) {
+      return
+    }
+
+    setFocusOn({ latitude: record.latitude, longitude: record.longitude })
+  }, [detail.detail])
 
   // The address bar follows the state, at the point the state settles. replaceState rather than
   // pushState: a history entry per pan turns the back button into an undo-my-panning key.
@@ -109,6 +151,7 @@ function App() {
           initialViewport={initial.viewport ?? initialViewport}
           onViewportChange={handleViewportChange}
           onSelect={handleSelect}
+          focusOn={focusOn}
         />
 
         {establishments.failure === null ? null : (
@@ -122,6 +165,16 @@ function App() {
 
         <div className="panels">
           <FilterPanel filters={filters} options={options} onChange={setFilters} />
+
+          {/* The map, as text. Pins are pixels on a canvas and take no focus, so without this a
+              keyboard user can reach every filter and never reach a restaurant. */}
+          <ResultsList
+            establishments={establishments.result?.items ?? []}
+            isTruncated={establishments.result?.isTruncated ?? false}
+            selectedId={selectedId}
+            onSelect={handleSelectOne}
+          />
+
           <Legend />
         </div>
 
