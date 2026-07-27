@@ -615,10 +615,30 @@ the filter panel are memoised — the panel renders 102 `<option>` elements and 
 on every pan — and the distinct-point count is recomputed only when the pins change rather than on
 every loading flip.
 
-**Still available if it is not enough:** fetching a box larger than the viewport, so that small pans
-need no request and no re-tiling at all. Not done here because it has a real cost — a padded box
-holds more establishments, so it truncates sooner, and truncation is the thing the opening view was
-shaped to avoid.
+It was not enough on its own. A second report: smooth at a viewport of 0.0376° by 0.0503°, jittery
+any further out.
+
+**The pins are not what changes.** That box and one three times its size both return exactly 1,000
+establishments, because both truncate — measured, not assumed. What changes is the basemap. CARTO
+Positron is 95 layers: 56 line layers and **27 symbol layers**. Symbol layers are the expensive ones
+to move, because MapLibre recomputes label placement and collision on the main thread and re-runs it
+on every rotation — and zoomed out over New York there are far more labels competing for space.
+
+So the basemap's labels are restricted to zoom 14 and above, declaratively, by narrowing each symbol
+layer's own zoom range at style load. Nothing runs per frame or per gesture: the alternative of
+toggling visibility on `movestart` and `moveend` keeps labels everywhere but pays a re-layout of 27
+layers twice per gesture, which is the same cost moved rather than removed. Symbol fading is off for
+the same reason — a fade is an animation, so the map keeps re-rendering and re-placing labels after
+the camera has stopped. World copies are off too, since the camera is locked to one city.
+
+**The trade:** below zoom 14 there are no street names — roads, water and dots. That is close to what
+an overview of a city is for, and the threshold is one named constant to move in either direction.
+
+**Still available if that is still not enough**, in the order they would be reached for: a lighter
+basemap style, since 56 line layers is a lot of geometry at low zoom; disabling rotation, which is
+the interaction that forces label re-placement; and fetching a box larger than the viewport, so small
+pans need no request at all — that last one costs earlier truncation, which is the thing the opening
+view was shaped to avoid.
 
 #### The camera cannot leave New York
 

@@ -28,6 +28,12 @@ vi.mock('maplibre-gl', () => ({
     addLayer = vi.fn()
     getSource = () => undefined
     remove = vi.fn()
+    isMoving = () => false
+    // Enough of a style for the label-quietening pass to walk; MapView.test.tsx is where that
+    // behaviour is actually asserted.
+    getStyle = () => ({ layers: [{ id: 'place-label', type: 'symbol' }] })
+    setLayerZoomRange = vi.fn()
+    setLayoutProperty = vi.fn()
     getBounds = () => ({
       getSouth: () => bounds.south,
       getNorth: () => bounds.north,

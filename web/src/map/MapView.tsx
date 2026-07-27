@@ -23,8 +23,36 @@ import {
   ordinaryFilter,
   priorityFilter,
 } from './layers'
-import { basemapStyleUrl, dataBounds, minimumZoom } from './initialView'
+import { basemapStyleUrl, dataBounds, labelMinimumZoom, minimumZoom } from './initialView'
 import { viewportOf } from './viewportOf'
+
+/**
+ * Stops the basemap drawing labels below `labelMinimumZoom`.
+ *
+ * Done declaratively, by narrowing each symbol layer's own zoom range, so MapLibre applies it as the
+ * camera moves and nothing has to run per frame or per gesture. The alternative — toggling layer
+ * visibility on `movestart` and `moveend` — would keep labels at every zoom but pay a re-layout of
+ * 27 layers twice per gesture, which is the cost this is trying to avoid, moved rather than removed.
+ */
+function quietenLabelsWhenZoomedOut(map: MapLibreMap): void {
+  for (const layer of map.getStyle().layers) {
+    if (layer.type !== 'symbol') {
+      continue
+    }
+
+    const maxzoom = layer.maxzoom ?? 24
+
+    // Some label layers exist only at low zoom and stop before this threshold begins. A zoom range
+    // whose floor is above its ceiling is invalid, so those are hidden outright — they are the
+    // labels that only ever appear where labels are being turned off.
+    if (labelMinimumZoom >= maxzoom) {
+      map.setLayoutProperty(layer.id, 'visibility', 'none')
+      continue
+    }
+
+    map.setLayerZoomRange(layer.id, Math.max(layer.minzoom ?? 0, labelMinimumZoom), maxzoom)
+  }
+}
 
 const sourceId = 'establishments'
 const ordinaryLayerId = 'establishments-ordinary'
@@ -151,6 +179,15 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
       ),
       minZoom: minimumZoom,
 
+      // Labels fade in and out by default, and a fade is an animation: the map keeps re-rendering
+      // after the camera has stopped, and keeps re-running symbol placement while it does. Popping
+      // is the cheaper honesty here.
+      fadeDuration: 0,
+
+      // One world, not three. With the camera locked to New York the repeated copies either side
+      // can never be looked at, and not drawing them is free.
+      renderWorldCopies: false,
+
       // The map is one input among several, not the whole page. Scroll-zoom that captures the wheel
       // as soon as the pointer crosses the canvas makes the page impossible to scroll past on a
       // laptop; the modifier key is the standard escape and MapLibre writes the instruction itself.
@@ -187,6 +224,8 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
       // announces it. Without this the map would sit on its initial viewport having told nobody what
       // it was, and the first request would be the one the user's first pan triggered.
       latestOnViewportChange.current?.(viewportOf(created))
+
+      quietenLabelsWhenZoomedOut(created)
 
       created.addSource(sourceId, {
         type: 'geojson',

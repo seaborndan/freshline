@@ -28,6 +28,17 @@ let sourceExists = false
 /** Whether the fake map says the camera is in motion. The test decides. */
 let moving = false
 
+/** A cut-down Positron: two symbol layers, one of which stops below the label threshold. */
+const styleLayers = [
+  { id: 'water', type: 'fill' },
+  { id: 'road', type: 'line' },
+  { id: 'place-label', type: 'symbol' },
+  { id: 'country-label', type: 'symbol', maxzoom: 8 },
+]
+
+const setLayerZoomRange = vi.fn()
+const setLayoutProperty = vi.fn()
+
 vi.mock('maplibre-gl', () => ({
   Map: class {
     addControl = vi.fn()
@@ -39,6 +50,9 @@ vi.mock('maplibre-gl', () => ({
     addLayer = addLayer
     getSource = () => (sourceExists ? { setData } : undefined)
     isMoving = () => moving
+    getStyle = () => ({ layers: styleLayers })
+    setLayerZoomRange = setLayerZoomRange
+    setLayoutProperty = setLayoutProperty
     on(event: string, handler: () => void) {
       handlers.set(event, handler)
     }
@@ -104,6 +118,8 @@ beforeEach(() => {
   setData.mockClear()
   sourceExists = false
   moving = false
+  setLayerZoomRange.mockClear()
+  setLayoutProperty.mockClear()
 })
 
 afterEach(() => {
@@ -214,5 +230,35 @@ describe('MapView', () => {
     endMovement()
 
     expect(setData).not.toHaveBeenCalled()
+  })
+
+  // Reported from a browser: smooth at a viewport of 0.0376 by 0.0503 degrees, jittery any further
+  // out. The pins are not the variable — that box and one three times larger both return exactly
+  // 1,000 establishments, because both truncate. The basemap is: 27 of its 95 layers are symbol
+  // layers, and MapLibre recomputes label placement on the main thread every time the map rotates.
+  it('stops the basemap drawing labels when zoomed out', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    expect(setLayerZoomRange).toHaveBeenCalledWith('place-label', 14, 24)
+  })
+
+  it('leaves the layers that are not labels alone', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    const touched = setLayerZoomRange.mock.calls.map((call) => call[0])
+    expect(touched).not.toContain('water')
+    expect(touched).not.toContain('road')
+  })
+
+  // A zoom range whose floor is above its ceiling is invalid. These are the labels that only ever
+  // appear where labels are being switched off, so they go entirely.
+  it('hides a label layer that stops below the threshold rather than inverting its range', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    expect(setLayoutProperty).toHaveBeenCalledWith('country-label', 'visibility', 'none')
+    expect(setLayerZoomRange.mock.calls.map((call) => call[0])).not.toContain('country-label')
   })
 })

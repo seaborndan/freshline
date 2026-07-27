@@ -98,6 +98,25 @@ export const dataBounds = {
 export const minimumZoom = 9.5
 
 /**
+ * The zoom below which the basemap's labels are not drawn.
+ *
+ * **Measured from a complaint, not from taste.** Panning and rotating were reported as smooth at a
+ * viewport of 0.0376° by 0.0503° and jittery any further out. The pins are not what changes: that
+ * box and one three times its size both return exactly 1,000 establishments, because both truncate.
+ * What changes is the basemap. CARTO Positron is 95 layers — 56 line layers and **27 symbol
+ * layers** — and symbol layers are the expensive ones to move: MapLibre recomputes label placement
+ * and collision on the main thread, and re-runs it on every rotation. Zoomed out over New York there
+ * are far more labels competing for space.
+ *
+ * So labels are restricted to the zooms where they are worth their cost. Below this, the map is
+ * roads and water and dots, which is what an overview of a city is for; above it, street names
+ * appear, which is when they start telling you where you are.
+ *
+ * This is the single number to change if the trade needs adjusting in either direction.
+ */
+export const labelMinimumZoom = 14
+
+/**
  * The basemap.
  *
  * **CARTO Positron**, served from `basemaps.cartocdn.com` with no API key. This is a runtime
