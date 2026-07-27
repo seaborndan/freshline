@@ -133,20 +133,150 @@ exhaust the rate-limit bucket in seconds — see the numbers below.
 Not by test id, not by class name. Inherited from CLAUDE.md and repeated because a map is the most
 tempting place in this project to reach for a test id.
 
-### Decisions still to take, at the start of the session
+### The list is a second rendering of the map response, not a second query
 
-Take these before code, the way M4 took the public-map decision before code, rather than letting an
-implementation imply them:
+Taken at the start of the session, with the other three below.
 
-- **How the list and the map relate.** Is the side panel the same data as the pins, a paged list of
-  the same viewport, or an independent search? They are different endpoints with different semantics
-  and the choice changes the whole component tree.
-- **What happens on `isTruncated`.** A banner, a disabled state, or a forced zoom.
-- **Whether filters live in the URL.** A shareable link to a filtered viewport is worth a lot for a
-  résumé URL and costs a router or hand-rolled query-string sync. A router is a dependency decision.
-- **What "understand what they are looking at without being told" means concretely**, since it is the
-  acceptance criterion. Probably: the legend explains every colour on screen, including the two that
-  are not grades.
+**`GET /establishments` takes no bounding box.** Read from `EstablishmentEndpoints.ListAsync`, not
+recalled: its parameters are the five filters plus `cursor` and `pageSize`. "A paged list of the same
+viewport" is therefore not one of the available options — it needs a new endpoint, which the contract
+section above already names as a decision rather than an implementation detail. That is not being
+taken for a side panel.
+
+So the side panel renders **the same `items` the pins are drawn from**, held once and displayed
+twice. One request per viewport change, one source of truth, and selection state that cannot
+disagree between the two halves.
+
+The alternative that was live: the panel as an **independent name search** over the list endpoint,
+city-wide and cursor-paged. Rejected because it makes the panel a different question from the map —
+a row could refer to an establishment nowhere near the screen, and clicking it either teleports the
+map or does nothing, both of which have to be explained to a user. It also spends a second
+rate-limit budget on every keystroke.
+
+Consequences, stated rather than discovered later:
+
+- **The 511 establishments with no coordinates are unreachable in this UI.** They are excluded from
+  the map endpoint because they cannot be drawn, and nothing else queries. They stay reachable
+  through the API. This is the honest cost of the decision and it belongs in the README, not in a
+  silent gap.
+- **The panel inherits the map's truncation**, which is what makes the banner below coherent: one
+  response, one caveat, shown in both places.
+- **The panel does not render a thousand rows.** The viewport response can hold up to `limit` items
+  and re-renders on every pan. It renders a bounded window of them in name order — the list
+  endpoint's ordering, so the two agree — above a line saying how many are in view. Virtualising a
+  list nobody has scrolled is a dependency and a complication bought before it is needed.
+- **Sorting happens on the client**, over at most `limit` items already in memory. The map endpoint
+  returns primary-key order, which the response's own documentation calls arbitrary.
+
+### `isTruncated` is a banner, and it disables aggregates
+
+Not a forced zoom: moving a user's map for them is hostile, and a zoom that re-queries and truncates
+again is a loop. Not a disabled state either — the pins that came back are real, correctly placed,
+and worth drawing.
+
+A persistent, non-blocking banner above the list and the map: this viewport holds more than can be
+shown, zoom in or filter to narrow it. Both halves are already fed by one response, so it is one
+message in one place.
+
+**The part that is not cosmetic:** while `isTruncated` is true, nothing on screen may state a number
+derived from the response. Which rows were dropped is arbitrary — primary-key order, correlating with
+nothing — so "12 Poor in this area" would be a fabricated statistic wearing the clothes of a measured
+one, which is exactly what the no-invented-numbers rule exists to stop. Counts render as "at least
+N", or not at all.
+
+**This makes the initial viewport a real decision, not a default.** 23,017 drawable establishments
+against a limit of 1,000 means a whole-city first paint is truncated, so the first thing a stranger
+sees is a caveat. The initial viewport is therefore a committed constant, chosen in slice 3 by
+querying the API for a candidate box and checking `isTruncated` — not picked by eye and not left to
+whatever MapLibre defaults to. The requested `limit` is likewise sent explicitly and chosen by
+measurement, not inherited from the server default.
+
+### Filters and viewport live in the URL, synced by hand — no router
+
+A shareable link is most of what makes this a résumé URL rather than a demo: a filtered viewport that
+survives being pasted into an email is the difference between showing the map and describing it.
+
+**No router.** React Router would be added for zero routes — there is one page, no route matching, no
+nested layouts, no data loaders wanted — and it brings its own history abstraction to wrap the one
+browser API actually being used. `URLSearchParams` and `history.replaceState` are that API, they are
+in every browser this targets, and they are two lines each.
+
+`replaceState`, never `pushState`: a map that pushes a history entry per pan turns the back button
+into an undo-my-panning key and traps the user on the page. Sharing needs the address bar to be
+correct, which `replaceState` gives; it does not need every intermediate viewport to be a document in
+the session history.
+
+What is in the query string: the five filters, plus centre and zoom rounded to fixed precision.
+Centre and zoom rather than the bounding box, because the box is a function of the browser window —
+the same box on a phone and a laptop frames different amounts of city, while a centre and a zoom
+reopen the same place. The map's *query* is still the box it reads off itself after restoring.
+
+**This is the part that changes the component tree**, which is why it is decided here. The URL is the
+single source of truth for filter and viewport state. The filter panel therefore holds no state of
+its own — it reads the current values and requests changes, and one owner above both panel and map
+reconciles, writes the URL, and drives the fetch. A panel with its own `useState` mirrored into the
+URL is two sources of truth that will disagree on the first shared link opened.
+
+**Values arriving from the URL are validated, not trusted.** `?outcome=Banana` is a user-editable
+string on its way to an API that answers a bad enum with a `400`. Unknown filter values are dropped
+on read and the rest of the URL is still honoured; a viewport that fails the API's own rules — larger
+than one degree, inverted, off the world — falls back to the committed initial viewport rather than
+rendering an error page to someone who followed a link.
+
+### "Understand without being told" means these seven things
+
+The acceptance criterion is prose, so it is written down as checks that can fail. All are testable by
+role and visible text.
+
+1. **The legend carries all five outcomes, plus never-inspected**, and is static rather than derived
+   from what happens to be on screen. Deriving it would drop `Poor` — 0.4% of the data — out of the
+   legend at most viewports, and would leave `PendingReinspection` as an unexplained colour the day
+   one appears. A legend that changes while panning also stops being a key and becomes a readout.
+2. **Every legend entry is a phrase, not a label.** "Ungraded — inspected, no grade published" and
+   "Never inspected — holds a permit, not yet visited" are the two that carry 42% of the map, and the
+   word alone does not distinguish them from each other or from missing data.
+3. **`closedByAuthority` is a visual modifier, not a colour** — an outline or ring on the pin, listed
+   in the legend as a modifier. It is orthogonal to outcome: 62 establishments, any grade.
+4. **`rawGrade` is shown where it is recognisable and never used to colour anything.** The letter in
+   the window is what a user recognises; the outcome is what the scale means. The detail panel shows
+   both, and the two never contradict because only one of them drives pixels.
+5. **Dates are rendered from the string, not through `new Date()`.** `"2026-06-01"` parsed as a
+   Date is UTC midnight and renders as 31 May in New York.
+6. **No number on screen comes from a truncated response**, per the decision above.
+7. **Empty is not error.** A valid viewport with no matches says so in words, distinct from a failed
+   request and distinct from a load in progress. Filter combinations make this reachable on purpose:
+   an `outcome` filter excludes never-inspected establishments by definition, so combining it with
+   "awaiting first inspection" is a guaranteed empty result and the panel must not offer it as though
+   it might return something.
+
+### No new dependencies, and what was turned down
+
+The verdict for the whole milestone, taken here so it is not re-litigated per slice. Every candidate
+below is the kind of package that gets added reflexively at the start of a front end.
+
+- **A router** — rejected above. Zero routes.
+- **A data-fetching library** (TanStack Query). Buys caching, deduplication and retry across many
+  endpoints; this milestone has one request in flight at a time, whose correct behaviour on a new
+  viewport is *cancel the old one*, which is an `AbortController` in an effect. Retry is wrong here
+  anyway: the failure to design for is the `429`, and retrying it is how a client turns a throttle
+  into an outage.
+- **A state manager** (Zustand, Redux). The URL is the source of truth and there is one owner
+  reconciling it. A store would be a second place for the same state to live.
+- **A CSS framework or component library** (Tailwind, MUI). Changes the build and the review surface,
+  ships a design system nobody asked for, and none of it is explainable as the author's own work.
+- **A virtualised list** (TanStack Virtual, react-window). Bought before the bounded window above is
+  measured to be insufficient.
+- **OpenAPI codegen** (`openapi-typescript`) — the closest call, and the reason slice 1 is worded
+  "generated types". Buys types that cannot drift from the shipped contract. Turned down because the
+  surface is four response shapes and roughly twenty fields; the generated file would describe
+  endpoints this UI never calls, would be committed code the author did not write, and codegen run by
+  hand drifts the moment nobody runs it. **What replaces it is stronger than types:** the client
+  parses and validates at the boundary, so an `outcome` outside the known set, or a pin missing a
+  coordinate, fails loudly at the point of arrival. TypeScript types are erased at runtime and would
+  not have caught either.
+
+Anything reconsidered later is a decision recorded here, not a line added to `package.json` in the
+middle of a slice.
 
 ---
 
