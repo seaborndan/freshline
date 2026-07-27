@@ -814,10 +814,35 @@ who clicked a pin they were already looking at.
 both mutation-tested — each broken deliberately fails exactly the tests naming it. The list was
 confirmed against the running API: "Showing 50 of 424", fifty rows, each with its state spelled out.
 
-**Not verified here:** that the camera actually arrives. The call is asserted with the right centre,
-but `easeTo` animates through a render loop that headless Chromium never runs, so the map does not
-move in any check this environment can perform. It needs one look at `?id=21`, which is in Staten
-Island.
+**Not verifiable here:** that the camera actually arrives. `easeTo` animates through a render loop
+headless Chromium never runs, so the call can be asserted and the movement cannot. Confirmed from a
+browser instead — along with a bug that only a browser could have found.
+
+#### The camera snapped back, once
+
+Reported: after being taken to an establishment, dragging away pulled the map straight back to it —
+once, and then it behaved.
+
+The cause was making the camera target a **derived** value. It read "is the chosen establishment off
+screen?", which is true when the record arrives, false once the map gets there, and **true again the
+moment the user drags away** — so it re-armed and fired. It happened exactly once because the second
+drag left the answer unchanged, so nothing re-ran. That "once, then fine" shape is what identified
+it.
+
+A camera move belongs to the act of choosing something, not to where the map happens to be, so it is
+now computed once per record that arrives and never recomputed; the viewport is read through a ref
+so it cannot re-arm anything. The regression test walks the reported sequence — arrive, drag away,
+drag away again — and was checked against the original code, which moves the camera twice.
+
+#### Two smaller things from the same session
+
+The page **flashed white** when following a link into the app. A full navigation paints before the
+stylesheet is fetched, so the first frame was the browser default; the background is now declared
+inline in `index.html`, which is the only inline style in the project and is there because it has to
+be true before anything else loads.
+
+And the tab said **"web"** — the Vite starter's title, on the page whose whole purpose is to be
+opened by a stranger.
 
 ## Standing requirements
 

@@ -4,7 +4,27 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>web</title>
+
+    <title>Freshline — New York City restaurant inspections on a map</title>
+    <meta
+      name="description"
+      content="Health-inspection results for New York City restaurants, drawn on a map and filterable by cuisine, borough and result."
+    />
+
+    <!--
+      Inline, and the only inline style in the project.
+
+      Everything else arrives in a stylesheet, which the browser fetches after it has parsed this
+      file — so the first paint of a cold load is the default white, and the page visibly flashes
+      before its own colours apply. That was reported from a browser when following a link into the
+      app. These two declarations are the ones that have to be true before anything else loads.
+    -->
+    <style>
+      html {
+        background: #f9f9f7;
+        color-scheme: light;
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

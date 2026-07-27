@@ -437,4 +437,54 @@ describe('App', () => {
 
     expect(easeTo).not.toHaveBeenCalled()
   })
+
+  // Reported from a browser: after being taken to an establishment, dragging away snapped the map
+  // straight back to it — once, and then it behaved.
+  //
+  // The cause was making the camera target a *derived* value: "is the chosen establishment off
+  // screen?" is true again the moment you drag away from the place you were just taken to, so it
+  // re-armed and fired. The second drag left the answer unchanged, so nothing re-ran, which is
+  // exactly why it happened once. A camera move belongs to the act of choosing, so it happens once
+  // per record and never again.
+  it('does not drag the camera back after the user moves away from it', async () => {
+    fetchEstablishment.mockResolvedValue({
+      id: 21,
+      name: 'POPEYES',
+      cuisine: 'Chicken',
+      phone: null,
+      addressLine: '1351 FOREST AVENUE',
+      locality: 'Staten Island',
+      postalCode: '10302',
+      latitude: 40.6259,
+      longitude: -74.1344,
+      isAwaitingFirstInspection: false,
+      inspections: [],
+    })
+    window.history.replaceState(null, '', '/?id=21')
+
+    render(<App />)
+    await showMap()
+    expect(easeTo).toHaveBeenCalledTimes(1)
+
+    // The map arrives: the establishment is now inside the viewport.
+    bounds = { south: 40.62, north: 40.63, west: -74.14, east: -74.13 }
+    await act(async () => {
+      handlers.get('moveend')?.()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(debounceMilliseconds)
+    })
+
+    // The user drags away. The establishment is off screen again — which is precisely the condition
+    // that used to re-fire the move.
+    bounds = { south: 40.72, north: 40.73, west: -73.99, east: -73.98 }
+    await act(async () => {
+      handlers.get('moveend')?.()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(debounceMilliseconds)
+    })
+
+    expect(easeTo).toHaveBeenCalledTimes(1)
+  })
 })

@@ -93,23 +93,37 @@ function App() {
   /**
    * Where to move the camera, or null to leave it alone.
    *
-   * Only when the chosen establishment is somewhere the map is not already looking — which is the
-   * case a `?id=` link creates and a click never can. Moving the map for every selection would yank
-   * it out from under someone who clicked a pin they were already looking at.
+   * **Set once per record that arrives, not derived from where the map is.** The difference is the
+   * whole bug this shape exists to avoid, and it was reported from a browser: as a derived value it
+   * read "is the chosen establishment off screen?", which is true again the moment the user drags
+   * away from the place they were just taken to — so the map snapped back, once, and then behaved.
+   * (Only once, because the second drag left the answer unchanged and the effect never re-ran.)
+   *
+   * A camera move belongs to the act of choosing something, so it is computed when the record loads
+   * and never recomputed. The viewport is read through a ref for the same reason: as a dependency it
+   * would re-arm this on every pan.
    */
-  const focusOn = useMemo(() => {
+  const [focusOn, setFocusOn] = useState<{ latitude: number; longitude: number } | null>(null)
+
+  const viewportRef = useRef(viewport)
+  viewportRef.current = viewport
+
+  useEffect(() => {
     const record = detail.detail
 
     if (record === null || record.latitude === null || record.longitude === null) {
-      return null
+      return
     }
 
-    if (viewport !== null && containsPoint(viewport, record.latitude, record.longitude)) {
-      return null
+    // Already on screen — which is every click on a pin, and some `?id=` links. Moving the camera
+    // there would yank it out from under somebody who was already looking at the thing they clicked.
+    const current = viewportRef.current
+    if (current !== null && containsPoint(current, record.latitude, record.longitude)) {
+      return
     }
 
-    return { latitude: record.latitude, longitude: record.longitude }
-  }, [detail.detail, viewport])
+    setFocusOn({ latitude: record.latitude, longitude: record.longitude })
+  }, [detail.detail])
 
   // The address bar follows the state, at the point the state settles. replaceState rather than
   // pushState: a history entry per pan turns the back button into an undo-my-panning key.
