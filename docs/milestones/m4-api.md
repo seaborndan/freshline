@@ -158,6 +158,83 @@ per-second rate and told callers the API allows "roughly 0 requests per second".
 configured numbers verbatim. The Development CORS fallback was verified the same way and for the same
 reason — the test host runs as `Testing` and deliberately never as `Development`.
 
+### Slice 6 — the JWT surface
+
+> **This slice needs line-by-line human review before it merges.** It is auth logic, which CLAUDE.md
+> names explicitly. The specific things to look at are listed at the end of this section.
+
+**The key is asymmetric, and that follows from the decision already taken above.** The brief says this
+API validates tokens and does not issue them. A shared symmetric secret contradicts that in the only
+way that matters: with HMAC, the power to verify a signature *is* the power to forge one, so every
+service holding the key is an issuer whether it means to be or not. With RSA the API holds the public
+half — it can check a signature and cannot produce one. The split stops being a promise about how a
+key is used and becomes a property of the cryptography.
+
+It also settles the security rule cleanly rather than by exception: **the API's auth configuration
+contains nothing confidential at all.** A public key is not a secret. There is no Key Vault entry to
+provision for M4 and nothing to leak.
+
+**One package added**, which CLAUDE.md makes a decision rather than a detail:
+`Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.10. What it buys is the handler that reads the
+header, verifies the signature and materialises claims — code where a subtle mistake is silent and
+total. What it drags in is seven transitive packages, all `Microsoft.IdentityModel.*` at 8.19.2,
+listed in the `.csproj` and checked with `dotnet list package` rather than assumed.
+
+**`GET /api/v1/me` exists so that auth is exercised rather than merely configured.** The standing rule
+is that an endpoint triggering or controlling ingestion is authenticated — and M4 has none, because
+ingestion is the worker's job and adding a trigger would widen the fence this milestone set. That
+would have left auth wired up with nothing using it, which is the state in which it is broken and
+nobody finds out until M6 depends on it. `/me` returns the validated principal and invents no
+business rule.
+
+**The read endpoints stay anonymous, defended by tests rather than by intent.** A global authorization
+fallback policy is the natural thing to reach for once auth exists and would silently close the public
+map. There is a test per endpoint.
+
+#### Two things found by verifying rather than by testing
+
+**The algorithm pin does not do what the obvious summary says.** The comment first written on
+`ValidAlgorithms` claimed it defeats the algorithm-confusion attack — sign an HS256 token using the
+published RSA public key as the HMAC secret. The test minting exactly that token was then run with
+the pin deleted and **still passed**: what refuses it is the key set, since an `RsaSecurityKey` cannot
+serve as an HMAC key so nothing resolves for HS256. The pin is a real but narrower second barrier —
+it refuses RS512 signed by the correct private key, which is now its own test and does fail without
+the line. Both are kept. The point is that a comment naming the wrong cause is what someone reads
+before deciding a security line is redundant.
+
+**The OpenAPI document described none of this.** `AddOpenApi` does not infer a security scheme from
+registered authentication: the generated document had no `securitySchemes` and no `security` on
+`/me`, so the endpoint appeared callable by anyone, returned 401 to everyone, and offered nowhere in
+Scalar to put a token. A milestone finished when *a stranger can explore live documentation* is not
+finished with an invisible entry requirement. The first fix then produced `"security": [{}]` — a
+valid, well-rendering, entirely empty requirement, because the scheme reference cannot serialise its
+own name without a host document. Both were found by reading the generated JSON, and both are now
+asserted, including that the public endpoints are **not** marked as needing a token — documentation
+that overstates a requirement costs exactly what the public-map decision was made to protect.
+
+#### Verified end to end outside the codebase
+
+A keypair generated with `openssl`, a token hand-assembled from base64url segments and signed with
+`openssl dgst -sha256 -sign`, sent to the running API over a real socket on 2026-07-26: `200` with the
+subject and roles from the token, `401` when one payload character is flipped, and `200` on the
+anonymous list endpoint throughout. Nothing in this repository produced that token, which is the
+strongest available form of the claim that this API validates rather than issues. The private key was
+deleted afterwards and never left a temporary directory.
+
+#### What a reviewer should look at
+
+- `TokenValidationParameters` line by line — issuer, audience, signing key, lifetime, the 30-second
+  `ClockSkew` against the framework's 5-minute default, `RequireSignedTokens`, `RequireExpirationTime`
+  and `ValidAlgorithms`.
+- `MapInboundClaims = false` together with `NameClaimType`/`RoleClaimType`. These three agree with
+  each other and with what `/me` reads; changing one alone breaks the endpoint quietly.
+- That an unconfigured key starts the API and refuses every token, while a *malformed* key fails
+  startup. The asymmetry is deliberate and argued in `ReadPublicKey`.
+- The absence of `RequireHttpsMetadata`, which would read like a transport control and enforce
+  nothing without an `Authority`. It becomes a real setting at M6.
+- **Revocation does not exist.** Stateless bearer tokens cannot be withdrawn before they expire;
+  short lifetimes are the mitigation and they are the issuer's setting, not this API's.
+
 ---
 
 ## Correctness traps
@@ -186,7 +263,7 @@ still on screen and nothing gets written from recollection.
 | 3 | Detail with inspection history — query-count assertion | ✅ |
 | 4 | Map viewport query — bounding box, left join | ✅ |
 | 5 | Rate limiting and CORS | ✅ |
-| 6 | JWT auth surface | not started |
+| 6 | JWT auth surface | ✅ — **awaiting line-by-line review** |
 | 7 | Consolidation — ADR-0005, README, roadmap, log | not started |
 
 **Needs line-by-line human review before merge:** the slice 2 index migration, and all of slice 6.
@@ -295,6 +372,14 @@ optional.
   reads the configured number as a system-wide guarantee.
 - **The rate limits have never been load tested.** They bound one caller against a number nobody
   measured. See the slice 5 notes above.
+- **Nothing issues tokens.** Deliberate and stated in the brief, but it means the auth surface has no
+  production user until M6 builds or adopts an issuer. Until then `/me` is provably correct and
+  reachable by nobody.
+- **No revocation, and none is possible with stateless bearer tokens.** Short lifetimes are the whole
+  mitigation, and they are set by an issuer that does not exist yet. Anything wanting "sign out
+  everywhere" at M6 needs a different design, not an addition to this one.
+- **Key rotation is unhandled.** A single configured public key means rotating the issuer's keypair
+  is a coordinated restart. A JWKS endpoint with a key id is the standard answer and is M6 work.
 
 ## Open items carried into M4
 

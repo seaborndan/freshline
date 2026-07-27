@@ -1,7 +1,9 @@
 using System.Text.Json.Serialization;
+using Freshline.Api.Authentication;
 using Freshline.Api.Cors;
 using Freshline.Api.Endpoints;
 using Freshline.Api.Health;
+using Freshline.Api.OpenApi;
 using Freshline.Api.RateLimiting;
 using Freshline.Infrastructure.DependencyInjection;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -34,8 +36,9 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 builder.Services.AddFreshlineCors(builder.Configuration, builder.Environment);
 builder.Services.AddPublicApiRateLimiting(builder.Configuration);
+builder.Services.AddFreshlineJwtAuthentication(builder.Configuration);
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddBearerSecurityScheme());
 
 builder.Services
     .AddHealthChecks()
@@ -67,7 +70,16 @@ app.UseHttpsRedirection();
 // short-circuits, so a cross-origin GET costs one token rather than two.
 app.UseCors(CrossOriginPolicy.PolicyName);
 
+// Before authentication, and that ordering is a choice worth defending.
+//
+// The usual guidance puts the rate limiter after authentication, so a policy can partition by user.
+// This one partitions by IP and has no interest in who the caller is, which frees the cheaper check
+// to run first — and RSA signature verification is not cheap. Validating a flood of forged tokens
+// before deciding to refuse them would be paying an attacker's bill for them.
 app.UseRateLimiter();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 // The OpenAPI document and its UI are served in every environment, not just development.
 //
@@ -106,9 +118,16 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 // loads.
 RouteGroupBuilder api = app
     .MapGroup("/api/v1")
-    .RequireRateLimiting(PublicApiRateLimiting.PolicyName);
+    .RequireRateLimiting(PublicApiRateLimiting.PolicyName)
+
+    // Declared on the same group that applies the policy, so the documentation cannot describe a
+    // different set of endpoints from the one being throttled. A 429 only appears under load, which
+    // makes it exactly the response a client author will not have handled unless the document said
+    // it was possible.
+    .ProducesProblem(StatusCodes.Status429TooManyRequests);
 
 api.MapEstablishmentEndpoints();
+api.MapIdentityEndpoints();
 
 app.Run();
 

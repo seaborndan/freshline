@@ -7,6 +7,26 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      JWT bearer validation. A dependency addition is a decision under CLAUDE.md, so: what it buys is
+      the authentication handler that reads the Authorization header, validates the token and turns
+      it into a ClaimsPrincipal. Writing that by hand would mean implementing JWS signature
+      verification and claim validation, which is the category of code where a subtle mistake is
+      silent and total.
+
+      What it drags in, listed rather than waved at: seven transitive packages, all at 8.19.2 —
+      Microsoft.IdentityModel.Abstractions, .JsonWebTokens, .Logging, .Protocols,
+      .Protocols.OpenIdConnect, .Tokens and System.IdentityModel.Tokens.Jwt. Checked with
+      `dotnet list package` and its include-transitive switch, not assumed. That is a real surface,
+      and it is
+      accepted because it is the same surface every ASP.NET Core deployment already validates tokens
+      with: first-party, versioned with the framework, and covered by the NuGet audit that
+      Directory.Build.props promotes to a build error.
+
+      Pinned to the same 10.0.10 band as the rest of the framework packages so a mismatched
+      IdentityModel version cannot arrive by way of a floating transitive reference.
+    -->
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.10" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.10" />
     <!--
       Pinned to patch GHSA-v5pm-xwqc-g5wc (stack overflow on circular schema references).
