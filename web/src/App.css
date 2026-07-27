@@ -1,15 +1,139 @@
+/* Layout and chrome. Colour that carries meaning lives in src/map/pinStyle.ts, not here. */
+
 .app-shell {
-  max-width: 48rem;
-  margin: 0 auto;
-  padding: 3rem 1.5rem;
-  text-align: left;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  color: #0b0b0b;
+  background: #f9f9f7;
+}
+
+.app-shell > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e1e0d9;
+  background: #fcfcfb;
 }
 
 .app-shell h1 {
-  margin-bottom: 0.25rem;
+  margin: 0;
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
 }
 
 .tagline {
-  margin-top: 0;
-  opacity: 0.75;
+  margin: 0.125rem 0 0;
+  font-size: 0.8125rem;
+  color: #52514e;
+}
+
+header p[role='status'] {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #52514e;
+}
+
+main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.map-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.failure {
+  margin: 0;
+  padding: 1.5rem;
+  max-width: 46ch;
+}
+
+/* The legend sits over the map rather than beside it, so the map keeps the whole viewport. It is
+   still a normal document element in the flow of the page for anything reading the markup. */
+.legend {
+  position: absolute;
+  left: 1rem;
+  bottom: 1rem;
+  z-index: 1;
+  max-width: 21rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid #e1e0d9;
+  border-radius: 8px;
+  background: rgb(252 252 251 / 94%);
+  box-shadow: 0 1px 3px rgb(11 11 11 / 8%);
+}
+
+.legend h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #52514e;
+}
+
+.legend ul {
+  display: grid;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.legend li {
+  display: grid;
+  grid-template-columns: 0.875rem 1fr;
+  gap: 0.125rem 0.5rem;
+  align-items: baseline;
+}
+
+.legend-swatch {
+  width: 0.75rem;
+  height: 0.75rem;
+  border: 1.5px solid;
+  border-radius: 50%;
+  transform: translateY(0.125em);
+}
+
+/* The closure ring, shown as what it is: an outline around whatever colour the pin already had. */
+.legend-swatch-closed {
+  border-width: 2.5px;
+  background: #ffffff;
+}
+
+.legend-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.legend-description {
+  grid-column: 2;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: #52514e;
+}
+
+/* MapLibre's own attribution, toned down to sit under the data rather than beside it. */
+.maplibregl-ctrl-attrib {
+  font-size: 0.6875rem;
+}
+
+/* Said out loud rather than left as a blank rectangle: a missing WebGL context or a basemap that
+   failed to load both look exactly like an area with no restaurants in it. */
+.map-failure {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  max-width: 32ch;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e1e0d9;
+  border-radius: 8px;
+  background: #fcfcfb;
+  text-align: center;
 }

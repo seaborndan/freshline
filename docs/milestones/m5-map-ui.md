@@ -380,7 +380,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | # | Slice | Status |
 |---|---|---|
 | 1 | API client and types, error and 429 handling | **done** |
-| 2 | Map with pins, coloured by outcome, with a legend | not started |
+| 2 | Map with pins, coloured by outcome, with a legend | **done** |
 | 3 | Viewport-driven fetching, debounced, with truncation handling | not started |
 | 4 | Filter panel | not started |
 | 5 | Detail panel with inspection history | not started |
@@ -425,6 +425,80 @@ detail request returned its history, and a 404 surfaced the API's own sentence.
 That truncated whole-city response is the measurement behind the initial-viewport decision: at the
 maximum limit the API allows, the city does not fit.
 
+### Slice 2, as built
+
+`web/src/map/` — `pinStyle.ts` (the one table the layer and the legend are both generated from),
+`geoJson.ts`, `layers.ts`, `initialView.ts`, `MapView.tsx`, `Legend.tsx`. No new npm dependencies.
+
+**The good end of the scale is blue, not green, and that was measured.** Green-amber-red was tried
+first. Status green against status red measures **ΔE 4.1 under deuteranopia** — so the two colours
+carrying "best restaurant here" and "worst restaurant here" are the pair the most common
+colour-vision deficiency cannot separate, on a map where colour is the entire message. The shipped
+scale measures **ΔE 9.1 at its worst pair under deuteranopia and 16.3 under normal vision**, checked
+across all pairs rather than adjacent ones because any two pins can end up beside each other.
+Severity is additionally carried by **size** — worse is bigger — which doubles as the fix for `Poor`
+being 0.4% of the data and nearly invisible at city zoom.
+
+Two validator checks are deliberately not met, recorded rather than worked around: the grey for
+`Ungraded` fails a chroma floor because it "reads gray", which is the intended meaning of *no grade
+was published*; and the amber for `Fair` sits below 3:1 contrast, which is documented as by-design
+for a warning step and is mitigated by the visible label the legend always shows.
+
+**Closure is a ring, never a colour**, because an establishment can be closed at any grade — giving
+it a hue would overwrite the grade it actually has. **Never-inspected is hollow**, so it differs from
+`Ungraded` by shape as well as fill; they are the two largest non-grades and the pair most likely to
+be collapsed into "no data".
+
+**The basemap is CARTO Positron**, from `basemaps.cartocdn.com`, with no API key. Named as a runtime
+dependency on a third party: if that CDN is down the pins draw on a blank background and the page
+still works. Greyscale by design, so the data on top of it can have the colour. Rejected: MapTiler
+and Stadia, which are better and need a key — a key in a client bundle is a key in the repository;
+and raster OpenStreetMap tiles, whose usage policy asks applications not to use them.
+
+**Three bugs were found by running the app. The first two could not have been found by a test;
+the third was actively hidden by one.**
+
+1. **Vite's dependency pre-bundler broke MapLibre's worker.** It rewrites the `new Worker(new URL(…))`
+   call to a file it then does not emit, so on the dev server the worker never starts and the map
+   never finishes loading — silently, with the rest of the page working normally. Fixed with
+   `optimizeDeps: { exclude: ['maplibre-gl'] }`.
+2. **The radius expression was invalid and took the whole pin layer down with it.** Writing it as
+   `['*', interpolateOnZoom, matchOnState]` reads naturally and is illegal: MapLibre allows `['zoom']`
+   only at the top level of a paint property. `addLayer` was rejected, and the result was a basemap
+   with no pins on it. Found because the map surfaces its own errors on screen — an error handler
+   added while chasing the first bug, and worth keeping: a blank canvas is otherwise
+   indistinguishable from an area with no restaurants in it.
+
+3. **The pins were added from an empty array, and the test suite said otherwise.** The map is built
+   once, so its handlers close over the props of the first render — where there are no pins yet,
+   because the request has not returned. Whether that matters is a race between a style download of
+   several hundred kilobytes and an API that answers in tens of milliseconds, and the data wins every
+   time: the source was created empty and stayed empty. **The test double fired `style.load`
+   synchronously inside `render`** — the one ordering a browser cannot produce — so the suite was
+   green while the map was blank. Fixed by reading the pins from a ref; `MapView.test.tsx` now
+   drives both orderings explicitly and never fires an event by itself.
+
+**Verified.** 81 web tests pass, `tsc -b`, `vite build` and lint clean. The race fix was
+mutation-tested: reverting it fails exactly the test written for it. The initial viewport and its
+outcome mix were re-measured against the committed bounds rather than the ones the sweep used — 518
+establishments, not the 517 first written down.
+
+**Confirmed by eye, in a browser, because nothing here could confirm it otherwise.** Headless
+Chromium on this machine will not rasterise a WebGL canvas — screenshots come back blank, the drawing
+buffer reads all black, and because the render loop never runs the map never requests tiles, which
+makes `queryRenderedFeatures` return zero no matter what is correct. Probes through that path
+produced a reading of "223 pins painted" that was not measuring what it appeared to measure, and it
+has been removed rather than left in as a plausible number. What is verified: the GeoJSON source
+holds 518 features, both layers are added, and a person looking at the running app sees a few hundred
+dots over the streets.
+
+**The dot count is not the establishment count, and the caption used to imply it was.** 518
+establishments in the opening viewport occupy **306 distinct points**; 75 points carry more than one
+and a single address on Broadway carries **49**. They draw exactly on top of each other, so 212 pins
+are invisible. The page said "518 places" over about three hundred dots, which invites a reader to
+count them and conclude the map is broken — found by a reader doing exactly that. Both numbers are
+now stated.
+
 ---
 
 ## Standing requirements
@@ -443,6 +517,12 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
 ---
 
 ## Open items carried into M5
+
+- **Establishments stacked on one coordinate have no way to be told apart, and slice 5 needs an
+  answer.** 49 of them share one address in the opening viewport alone. A click at that point is
+  ambiguous today — whichever feature MapLibre returns first wins, arbitrarily — and the honest
+  options are a cluster count, a spiderfier, or a detail panel that opens on a list rather than on an
+  establishment. Recorded here rather than decided in passing.
 
 - **The rate limiter partitions on `RemoteIpAddress`, which becomes the proxy's address behind any
   ingress.** Every caller then shares one bucket and a per-client limit becomes a global one that
