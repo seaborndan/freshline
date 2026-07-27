@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { ApiProblemError, ApiUnreachableError } from './api/errors'
@@ -17,6 +17,9 @@ import mapFixture from './api/__fixtures__/map-viewport.json'
  * synchronous double hid a real bug.
  */
 const handlers = new Map<string, () => void>()
+
+/** Camera moves the map was asked to make. */
+const easeTo = vi.hoisted(() => vi.fn())
 
 /** The box the fake map claims to be showing. Times Square, wider than the committed constant. */
 let bounds = { south: 40.7515, north: 40.7605, west: -73.9925, east: -73.9785 }
@@ -38,6 +41,8 @@ vi.mock('maplibre-gl', () => ({
     setLayerZoomRange = vi.fn()
     setLayoutProperty = vi.fn()
     getCanvas = () => ({ style: {} })
+    getZoom = () => 15
+    easeTo = easeTo
     queryRenderedFeatures = () => clicked
     getBounds = () => ({
       getSouth: () => bounds.south,
@@ -76,6 +81,7 @@ beforeEach(() => {
   handlers.clear()
   bounds = { south: 40.7515, north: 40.7605, west: -73.9925, east: -73.9785 }
   clicked = []
+  easeTo.mockClear()
   fetchMap.mockReset()
   fetchMap.mockResolvedValue(loaded)
   fetchEstablishment.mockReset()
@@ -373,5 +379,62 @@ describe('App', () => {
     await clickMap()
 
     expect(screen.queryByRole('heading', { name: 'RAISING CANES #888' })).not.toBeInTheDocument()
+  })
+
+  // Pins are pixels on a WebGL canvas: they take no focus and are in no accessibility tree. Without
+  // the list, a keyboard user can reach every filter and never reach a restaurant.
+  it('offers the establishments in view as text, reachable without a mouse', async () => {
+    render(<App />)
+    await showMap()
+
+    const list = screen.getByRole('region', { name: 'Places in view' })
+    expect(within(list).getByRole('button', { name: /RAISING CANES/ })).toBeInTheDocument()
+  })
+
+  it('opens the record from the list, the same one a click opens', async () => {
+    render(<App />)
+    await showMap()
+
+    const list = screen.getByRole('region', { name: 'Places in view' })
+    await act(async () => {
+      fireEvent.click(within(list).getByRole('button', { name: /RAISING CANES/ }))
+    })
+
+    expect(fetchEstablishment).toHaveBeenCalledWith(1328, expect.anything())
+  })
+
+  // A link carrying ?id= names an establishment that is usually nowhere near the opening view, so
+  // the record would open while the map showed a different part of the city.
+  it('moves the map to an establishment that is not on screen', async () => {
+    fetchEstablishment.mockResolvedValue({
+      id: 21,
+      name: 'POPEYES',
+      cuisine: 'Chicken',
+      phone: null,
+      addressLine: '1351 FOREST AVENUE',
+      locality: 'Staten Island',
+      postalCode: '10302',
+      latitude: 40.6259,
+      longitude: -74.1344,
+      isAwaitingFirstInspection: false,
+      inspections: [],
+    })
+    window.history.replaceState(null, '', '/?id=21')
+
+    render(<App />)
+    await showMap()
+
+    expect(easeTo).toHaveBeenCalledWith(expect.objectContaining({ center: [-74.1344, 40.6259] }))
+  })
+
+  // Clicking a pin you are already looking at must not yank the camera out from under you.
+  it('leaves the camera alone for an establishment already in view', async () => {
+    render(<App />)
+    await showMap()
+
+    clicked = [{ properties: { id: 1328 } }]
+    await clickMap()
+
+    expect(easeTo).not.toHaveBeenCalled()
   })
 })

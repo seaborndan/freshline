@@ -127,6 +127,15 @@ export interface MapViewProps {
    * also become the place that decides what a click *means*.
    */
   onSelect?: (ids: number[]) => void
+
+  /**
+   * A point the map should move to, or null to leave the camera alone.
+   *
+   * Exists for one case: a link carrying `?id=` names an establishment that is usually nowhere near
+   * the opening view, so the record would open while the map showed a different part of the city.
+   * The caller decides when that is worth a camera move; this only carries it out.
+   */
+  focusOn?: { latitude: number; longitude: number } | null
 }
 
 export function MapView({
@@ -134,6 +143,7 @@ export function MapView({
   initialViewport,
   onViewportChange,
   onSelect,
+  focusOn,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | null>(null)
@@ -374,6 +384,25 @@ export function MapView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- constructed once; see above.
   }, [])
+
+  // Moves the camera when the caller asks, and only then. Keyed on the coordinates rather than on
+  // an object identity so that re-rendering with the same point does not re-fly to it.
+  const focusLatitude = focusOn?.latitude ?? null
+  const focusLongitude = focusOn?.longitude ?? null
+
+  useEffect(() => {
+    if (focusLatitude === null || focusLongitude === null || map.current === null) {
+      return
+    }
+
+    map.current.easeTo({
+      center: [focusLongitude, focusLatitude],
+      // Close enough to see which building it is, and inside the zoom band where the basemap has
+      // labels — the point of moving here is to show somebody where a place is.
+      zoom: Math.max(map.current.getZoom(), 16),
+      duration: 600,
+    })
+  }, [focusLatitude, focusLongitude])
 
   // Pushes new pins into the existing source, unless the user is mid-gesture — see `setOrDefer`.
   // Guarded because the pins usually arrive *before* the style has loaded, in which case there is no

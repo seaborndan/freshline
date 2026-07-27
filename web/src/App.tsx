@@ -8,12 +8,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EstablishmentFilter } from './api/contract'
-import type { Viewport } from './api/viewport'
+import { containsPoint, type Viewport } from './api/viewport'
 import { DetailPanel } from './detail/DetailPanel'
 import { useEstablishmentDetail } from './detail/useEstablishmentDetail'
 import { FilterPanel } from './filters/FilterPanel'
 import { hasAnyFilter } from './filters/filterState'
 import { useFilterOptions } from './filters/useFilterOptions'
+import { ResultsList } from './list/ResultsList'
 import { initialViewport } from './map/initialView'
 import { distinctPointCount } from './map/geoJson'
 import { Legend } from './map/Legend'
@@ -58,6 +59,12 @@ function App() {
     setSelectedId(ids.length === 1 ? ids[0] : null)
   }, [])
 
+  /** A row in the list names exactly one establishment, so it selects rather than offering a choice. */
+  const handleSelectOne = useCallback((id: number) => {
+    setCandidateIds([id])
+    setSelectedId(id)
+  }, [])
+
   const handleClose = useCallback(() => {
     setCandidateIds([])
     setSelectedId(null)
@@ -82,6 +89,27 @@ function App() {
       .map((id) => items.find((item) => item.id === id))
       .filter((item) => item !== undefined)
   }, [candidateIds, establishments.result])
+
+  /**
+   * Where to move the camera, or null to leave it alone.
+   *
+   * Only when the chosen establishment is somewhere the map is not already looking — which is the
+   * case a `?id=` link creates and a click never can. Moving the map for every selection would yank
+   * it out from under someone who clicked a pin they were already looking at.
+   */
+  const focusOn = useMemo(() => {
+    const record = detail.detail
+
+    if (record === null || record.latitude === null || record.longitude === null) {
+      return null
+    }
+
+    if (viewport !== null && containsPoint(viewport, record.latitude, record.longitude)) {
+      return null
+    }
+
+    return { latitude: record.latitude, longitude: record.longitude }
+  }, [detail.detail, viewport])
 
   // The address bar follows the state, at the point the state settles. replaceState rather than
   // pushState: a history entry per pan turns the back button into an undo-my-panning key.
@@ -109,6 +137,7 @@ function App() {
           initialViewport={initial.viewport ?? initialViewport}
           onViewportChange={handleViewportChange}
           onSelect={handleSelect}
+          focusOn={focusOn}
         />
 
         {establishments.failure === null ? null : (
@@ -122,6 +151,16 @@ function App() {
 
         <div className="panels">
           <FilterPanel filters={filters} options={options} onChange={setFilters} />
+
+          {/* The map, as text. Pins are pixels on a canvas and take no focus, so without this a
+              keyboard user can reach every filter and never reach a restaurant. */}
+          <ResultsList
+            establishments={establishments.result?.items ?? []}
+            isTruncated={establishments.result?.isTruncated ?? false}
+            selectedId={selectedId}
+            onSelect={handleSelectOne}
+          />
+
           <Legend />
         </div>
 

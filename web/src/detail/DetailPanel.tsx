@@ -16,6 +16,7 @@
  * places they are not; and a cluster count, which answers "how many" when the question is "which".
  */
 
+import { useEffect, useRef } from 'react'
 import type { MapEstablishment } from '../api/contract'
 import { formatPlainDate } from '../api/plainDate'
 import { pinStateOf, pinStyles } from '../map/pinStyle'
@@ -40,12 +41,44 @@ export function DetailPanel({ candidates, view, selectedId, onSelect, onClose }:
   // `?id=` names an establishment that is very often nowhere near the opening view — its pin is not
   // on screen and never was — and gating on candidates hid the panel entirely for exactly the case
   // the parameter exists to serve. Found by loading `?id=21`, which is in Staten Island.
-  if (selectedId === null && candidates.length === 0) {
+  const heading = useRef<HTMLDivElement>(null)
+  const isOpen = selectedId !== null || candidates.length > 0
+
+  /**
+   * Focus moves into the panel when it opens.
+   *
+   * Without this, a keyboard user who activates a row from the list stays where they were: the panel
+   * appears somewhere they cannot see, and the next Tab continues down the list as if nothing had
+   * happened. Moving focus is also what makes a screen reader read the record out.
+   *
+   * The container takes the focus rather than the close button, so what gets announced is the
+   * establishment's name rather than the word "Close".
+   */
+  useEffect(() => {
+    if (isOpen) {
+      heading.current?.focus()
+    }
+  }, [isOpen, selectedId])
+
+  if (!isOpen) {
     return null
   }
 
   return (
-    <section className="detail" aria-labelledby="detail-heading">
+    <section
+      className="detail"
+      aria-labelledby="detail-heading"
+      ref={heading}
+      // -1 so it can be focused programmatically without joining the tab order, which would put an
+      // extra stop in front of the content every time somebody tabbed past.
+      tabIndex={-1}
+      // Escape closes what opened, which is the one keyboard convention a panel like this owes.
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          onClose()
+        }
+      }}
+    >
       <button type="button" className="detail-close" onClick={onClose} aria-label="Close">
         ×
       </button>
