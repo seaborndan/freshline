@@ -23,8 +23,81 @@ import {
   ordinaryFilter,
   priorityFilter,
 } from './layers'
-import { basemapStyleUrl } from './initialView'
+import {
+  basemapAttribution,
+  basemapRasterTiles,
+  basemapStyleUrl,
+  dataBounds,
+  labelMinimumZoom,
+  minimumZoom,
+} from './initialView'
 import { viewportOf } from './viewportOf'
+
+const rasterSourceId = 'basemap-geometry'
+const rasterLayerId = 'basemap-geometry'
+
+/**
+ * Replaces the basemap's geometry with pictures, keeping its lettering.
+ *
+ * Positron arrives as 95 layers: a background, 9 fills, 56 lines, 2 circles and 27 symbol layers.
+ * Everything but the background and the symbols is removed and a single raster layer put in its
+ * place, underneath the labels. See `basemapRasterTiles` for the measurements behind this — the
+ * short version is that a vector tile has to be parsed before it can be drawn and an image does not,
+ * and parsing is what makes the map stutter when it moves somewhere new.
+ *
+ * The labels stay vector so they stay upright when the map is rotated. Baked into a picture they
+ * would turn with it and never turn back.
+ */
+function drawGeometryFromRasterTiles(map: MapLibreMap): void {
+  const layers = map.getStyle().layers
+  const firstSymbolLayer = layers.find((layer) => layer.type === 'symbol')?.id
+
+  map.addSource(rasterSourceId, {
+    type: 'raster',
+    tiles: [basemapRasterTiles],
+    // 256 with an @2x URL: the images are 512 pixels drawn into 256 of layout, which is how a raster
+    // basemap stays sharp on a high-density display.
+    tileSize: 256,
+    attribution: basemapAttribution,
+  })
+
+  // Beneath the labels, above the background.
+  map.addLayer({ id: rasterLayerId, type: 'raster', source: rasterSourceId }, firstSymbolLayer)
+
+  for (const layer of layers) {
+    if (layer.type === 'fill' || layer.type === 'line' || layer.type === 'circle') {
+      map.removeLayer(layer.id)
+    }
+  }
+}
+
+/**
+ * Stops the basemap drawing labels below `labelMinimumZoom`.
+ *
+ * Done declaratively, by narrowing each symbol layer's own zoom range, so MapLibre applies it as the
+ * camera moves and nothing has to run per frame or per gesture. The alternative — toggling layer
+ * visibility on `movestart` and `moveend` — would keep labels at every zoom but pay a re-layout of
+ * 27 layers twice per gesture, which is the cost this is trying to avoid, moved rather than removed.
+ */
+function quietenLabelsWhenZoomedOut(map: MapLibreMap): void {
+  for (const layer of map.getStyle().layers) {
+    if (layer.type !== 'symbol') {
+      continue
+    }
+
+    const maxzoom = layer.maxzoom ?? 24
+
+    // Some label layers exist only at low zoom and stop before this threshold begins. A zoom range
+    // whose floor is above its ceiling is invalid, so those are hidden outright — they are the
+    // labels that only ever appear where labels are being turned off.
+    if (labelMinimumZoom >= maxzoom) {
+      map.setLayoutProperty(layer.id, 'visibility', 'none')
+      continue
+    }
+
+    map.setLayerZoomRange(layer.id, Math.max(layer.minzoom ?? 0, labelMinimumZoom), maxzoom)
+  }
+}
 
 const sourceId = 'establishments'
 const ordinaryLayerId = 'establishments-ordinary'
@@ -78,6 +151,49 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
   const latestOnViewportChange = useRef(onViewportChange)
   latestOnViewportChange.current = onViewportChange
 
+  /**
+   * Pins that arrived while the user was still moving the map, held until they stop.
+   *
+   * **Why this exists.** `setData` is the most expensive thing this component does, and almost none
+   * of that cost is JavaScript — the whole client-side pipeline, validating a thousand pins and
+   * turning them into GeoJSON, measures about 2ms. What costs is what MapLibre does next: the source
+   * is re-tiled, and that work shares a worker pool with parsing the basemap tiles for wherever the
+   * user is panning *into*. Doing it in the middle of a drag makes the drag stutter, which is a much
+   * worse thing to be than a second late with the dots.
+   *
+   * So new data waits for the gesture to finish. The pins are then always at most one `moveend`
+   * behind, and the map never does bookkeeping while somebody is holding it.
+   */
+  const pendingData = useRef<ReturnType<typeof toFeatureCollection> | null>(null)
+
+  function setOrDefer(target: MapLibreMap, data: ReturnType<typeof toFeatureCollection>) {
+    const source = target.getSource(sourceId) as GeoJSONSource | undefined
+
+    if (source === undefined) {
+      return
+    }
+
+    // `isMoving` covers panning, zooming, rotating and the inertial glide after a flick — every way
+    // the camera can be in motion, including ones no single event name would catch.
+    if (target.isMoving()) {
+      pendingData.current = data
+      return
+    }
+
+    source.setData(data)
+  }
+
+  function flushPendingData(target: MapLibreMap) {
+    const data = pendingData.current
+
+    if (data === null) {
+      return
+    }
+
+    pendingData.current = null
+    ;(target.getSource(sourceId) as GeoJSONSource | undefined)?.setData(data)
+  }
+
   // Created once and never recreated: the effect has no dependencies, so a change of pins re-runs
   // the second effect rather than tearing down a WebGL context and rebuilding the basemap.
   useEffect(() => {
@@ -98,6 +214,43 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
       ),
       fitBoundsOptions: { padding: 24 },
 
+      // The camera cannot leave the city, and cannot zoom out past it. This product has data about
+      // one city; letting someone drift to the Atlantic shows them an empty map that reads as
+      // broken rather than as out of scope. It also stops the basemap fetching and parsing tiles for
+      // places nothing here will ever describe, on the same worker that draws the pins.
+      maxBounds: new LngLatBounds(
+        [dataBounds.minLongitude, dataBounds.minLatitude],
+        [dataBounds.maxLongitude, dataBounds.maxLatitude],
+      ),
+      minZoom: minimumZoom,
+
+      // Labels fade in and out by default, and a fade is an animation: the map keeps re-rendering
+      // after the camera has stopped, and keeps re-running symbol placement while it does. Popping
+      // is the cheaper honesty here.
+      fadeDuration: 0,
+
+      // One world, not three. With the camera locked to New York the repeated copies either side
+      // can never be looked at, and not drawing them is free.
+      renderWorldCopies: false,
+
+      // Hold on to parsed tiles far longer than the default, which keeps roughly what fits on
+      // screen. Rotating in place is the case this is for: turning the map sweeps tiles through the
+      // corners of the viewport, out again, and back, and each eviction means parsing the same
+      // hundreds of kilobytes of geometry a second time. Measured from CARTO: a zoom-14 tile over
+      // Manhattan is 389KB, zoom 12 is 98KB.
+      //
+      // The cost is memory, and it is not free — a few hundred parsed tiles is tens of megabytes.
+      // Bounded deliberately rather than left to grow.
+      maxTileCacheSize: 150,
+
+      // Keep tiles from more zoom levels than the default of five, so zooming out and back in
+      // re-uses what was already parsed instead of re-fetching each level on the way.
+      maxTileCacheZoomLevels: 8,
+
+      // The basemap of a city does not change while somebody is looking at it. Re-requesting tiles
+      // because a cache header expired mid-session buys nothing here and costs a parse.
+      refreshExpiredTiles: false,
+
       // The map is one input among several, not the whole page. Scroll-zoom that captures the wheel
       // as soon as the pointer crosses the canvas makes the page impossible to scroll past on a
       // laptop; the modifier key is the standard escape and MapLibre writes the instruction itself.
@@ -117,6 +270,9 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
     // including at the end of MapLibre's inertial glide. The debounce downstream is for the case
     // this does not cover: several discrete gestures in quick succession, like wheel-zoom steps.
     created.on('moveend', () => {
+      // Anything that arrived mid-gesture has been waiting for exactly this moment.
+      flushPendingData(created)
+
       latestOnViewportChange.current?.(viewportOf(created))
     })
 
@@ -131,6 +287,13 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
       // announces it. Without this the map would sit on its initial viewport having told nobody what
       // it was, and the first request would be the one the user's first pan triggered.
       latestOnViewportChange.current?.(viewportOf(created))
+
+      drawGeometryFromRasterTiles(created)
+
+      // Applied after the geometry swap, so the only vector layers left are the ones this restricts.
+      // That is what stops the vector tiles being fetched at all below this zoom: MapLibre asks a
+      // source for tiles only when a visible layer needs them.
+      quietenLabelsWhenZoomedOut(created)
 
       created.addSource(sourceId, {
         type: 'geojson',
@@ -167,14 +330,17 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
     // eslint-disable-next-line react-hooks/exhaustive-deps -- constructed once; see above.
   }, [])
 
-  // Pushes new pins into the existing source. Guarded because the pins usually arrive *before* the
-  // style has loaded, in which case there is no source to push them into yet — and the handler above
-  // then picks them up from the ref. Those two paths together are what makes the ordering safe in
-  // both directions; neither one is sufficient alone.
+  // Pushes new pins into the existing source, unless the user is mid-gesture — see `setOrDefer`.
+  // Guarded because the pins usually arrive *before* the style has loaded, in which case there is no
+  // source to push them into yet, and the `style.load` handler picks them up from the ref instead.
+  // Those two paths together make the ordering safe in both directions; neither is sufficient alone.
   useEffect(() => {
-    const source = map.current?.getSource(sourceId) as GeoJSONSource | undefined
+    if (map.current === null) {
+      return
+    }
 
-    source?.setData(toFeatureCollection(establishments))
+    setOrDefer(map.current, toFeatureCollection(establishments))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setOrDefer reads only refs.
   }, [establishments])
 
   return (

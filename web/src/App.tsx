@@ -1,37 +1,53 @@
 /**
- * The page, and the one place that reconciles a moving map with a rate-limited API.
+ * The page, and the one place that reconciles everything.
  *
- * The map reports where it is; `useEstablishments` decides when that is worth asking about; this
- * component holds the answer and says something true about it. Filters and the URL join this owner
- * in slice 4 — the structure is already the one that decision needs, with no state living inside the
- * map itself.
+ * The map reports where it is, the panel reports what was chosen, `useEstablishments` decides when
+ * that combination is worth asking about, and the URL is written from it. Nothing below this holds
+ * state: that is what makes a shared link reproduce the view rather than approximate it.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { EstablishmentFilter } from './api/contract'
 import type { Viewport } from './api/viewport'
+import { FilterPanel } from './filters/FilterPanel'
+import { hasAnyFilter } from './filters/filterState'
+import { useFilterOptions } from './filters/useFilterOptions'
 import { initialViewport } from './map/initialView'
 import { distinctPointCount } from './map/geoJson'
 import { Legend } from './map/Legend'
 import { MapView } from './map/MapView'
 import { useEstablishments, type EstablishmentsView } from './map/useEstablishments'
+import { readUrlState, writeUrlState } from './state/urlState'
 import './App.css'
 
 function App() {
+  // Read once. After this the URL is an output — re-reading it on every render would fight the
+  // writes below, and nothing else in the application changes it.
+  const initial = useRef(readUrlState(window.location.search)).current
+
+  const [filters, setFilters] = useState<EstablishmentFilter>(initial.filters)
+
   /**
    * Null until the map says where it is.
    *
-   * The committed initial viewport is what the map *opens* on, not what gets fetched: `fitBounds`
-   * fits that box inside whatever window the browser has, so the box actually on screen is wider,
-   * and taller or shorter, than the constant. Fetching the constant would draw pins for a box that
-   * is not the one being looked at — noticeably, as empty margins on a wide monitor.
+   * The opening box — from the URL, or the committed constant — is what the map is *told*, not what
+   * it ends up showing: `fitBounds` fits that box inside the window, so the visible box is larger on
+   * whichever axis has room. It is the visible box that gets fetched and written back to the URL.
    */
   const [viewport, setViewport] = useState<Viewport | null>(null)
 
-  // Stable, so it is not a fresh function on every render — MapView keeps it in a ref and calls it
-  // from a handler registered once, but a changing prop would still churn that ref pointlessly.
   const handleViewportChange = useCallback((next: Viewport) => setViewport(next), [])
 
-  const establishments = useEstablishments(viewport)
+  const options = useFilterOptions()
+  const establishments = useEstablishments(viewport, filters)
+
+  // The address bar follows the state, at the point the state settles. replaceState rather than
+  // pushState: a history entry per pan turns the back button into an undo-my-panning key.
+  useEffect(() => {
+    const query = writeUrlState({ viewport, filters })
+
+    window.history.replaceState(null, '', `${window.location.pathname}${query}`)
+  }, [viewport, filters])
 
   return (
     <div className="app-shell">
@@ -42,13 +58,13 @@ function App() {
             Health-inspection results for New York City restaurants, on a map.
           </p>
         </div>
-        <Status view={establishments} />
+        <Status view={establishments} filters={filters} />
       </header>
 
       <main>
         <MapView
           establishments={establishments.result?.items ?? []}
-          initialViewport={initialViewport}
+          initialViewport={initial.viewport ?? initialViewport}
           onViewportChange={handleViewportChange}
         />
 
@@ -61,14 +77,22 @@ function App() {
           </p>
         )}
 
-        <Legend />
+        <div className="panels">
+          <FilterPanel filters={filters} options={options} onChange={setFilters} />
+          <Legend />
+        </div>
       </main>
     </div>
   )
 }
 
-function Status({ view }: { view: EstablishmentsView }) {
+function Status({ view, filters }: { view: EstablishmentsView; filters: EstablishmentFilter }) {
   const { result, isLoading, unaskable } = view
+
+  // Recomputed only when the pins change, not on every loading flip. It walks every establishment
+  // building a key per one; at a thousand pins that is nothing, but it is nothing that used to run
+  // twice per request for no reason.
+  const points = useMemo(() => (result === null ? 0 : distinctPointCount(result.items)), [result])
 
   // Zoomed out past what the API will answer. Said as an instruction rather than as an error,
   // because it is a place the user can get to with two scroll wheels and nothing has gone wrong.
@@ -84,8 +108,8 @@ function Status({ view }: { view: EstablishmentsView }) {
 
   // Nothing derived from a truncated response may be stated as a fact about the area: which rows
   // were dropped is arbitrary, so "1,000 places here" would be a number the data does not support.
-  // "At least" is the strongest true claim available, and the point count is withheld entirely —
-  // it would be a count of an arbitrary subset.
+  // "More than" is the strongest true claim available, and the point count is withheld entirely —
+  // it would describe an arbitrary subset.
   if (isTruncated) {
     return (
       <p role="status">
@@ -95,8 +119,16 @@ function Status({ view }: { view: EstablishmentsView }) {
     )
   }
 
+  // An empty result means something different once a filter is on, and saying which avoids a user
+  // concluding the area is empty when it is their choice that is.
   if (items.length === 0) {
-    return <p role="status">No establishments in this view.</p>
+    return (
+      <p role="status">
+        {hasAnyFilter(filters)
+          ? 'Nothing in this view matches these filters.'
+          : 'No establishments in this view.'}
+      </p>
+    )
   }
 
   // Both numbers, because they differ a lot and only one of them is countable on screen. Saying
@@ -104,8 +136,8 @@ function Status({ view }: { view: EstablishmentsView }) {
   // wrong — see distinctPointCount.
   return (
     <p role="status">
-      {items.length.toLocaleString('en-GB')} places at {distinctPointCount(items).toLocaleString('en-GB')}{' '}
-      points — some addresses hold dozens.
+      {items.length.toLocaleString('en-GB')} places at {points.toLocaleString('en-GB')} points —
+      some addresses hold dozens.
       {isLoading ? ' Updating…' : ''}
     </p>
   )

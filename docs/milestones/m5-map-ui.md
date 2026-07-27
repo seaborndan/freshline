@@ -382,7 +382,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | 1 | API client and types, error and 429 handling | **done** |
 | 2 | Map with pins, coloured by outcome, with a legend | **done** |
 | 3 | Viewport-driven fetching, debounced, with truncation handling | **done** |
-| 4 | Filter panel | not started |
+| 4 | Filter panel | **done** |
 | 5 | Detail panel with inspection history | not started |
 | 6 | Loading, error, empty states and keyboard navigation | not started |
 | 7 | Deployment, and the URL | not started |
@@ -557,6 +557,173 @@ mutation-tested — each was broken deliberately and failed exactly the tests na
 else. The opening view was confirmed end to end against the running API by reading the status line
 the app renders.
 
+### Slice 4, as built
+
+`filters/FilterPanel.tsx`, `filters/useFilterOptions.ts`, `state/urlState.ts`, and one new API
+endpoint. The panel holds no state of its own — every value comes from the URL through `App`, which
+is the structure decision 3 required.
+
+#### A new endpoint, taken as a decision
+
+**The cuisine filter could not be built without one.** A client cannot discover the 89 values: a map
+pin does not carry a cuisine, and the list endpoint returns one page's worth rather than the
+vocabulary. The three options were to ask, to hard-code, or to drop the filter. Hard-coding puts one
+city's source vocabulary in a front end and drifts silently the first time ingestion meets a new
+value — the same objection that makes the canonical field `Locality` rather than `Borough`.
+
+So `GET /api/v1/establishments/filter-options` returns the distinct cuisines and localities, ordered,
+with nulls excluded because they are not selectable. It goes through the same seam as everything
+else: a method on `IEstablishmentQueries` in Core, an EF implementation in Infrastructure, an
+endpoint in Api. Five endpoint tests, including one asserting it answers without a token, because
+ADR-0005 says the read surface must be defended against drift.
+
+#### The two filter combinations that can only return nothing
+
+- **`outcome` matches the latest inspection**, so an establishment with no inspections matches none.
+- **`cuisine` is null for exactly the never-inspected establishments.** Verified as an exact
+  correspondence in both directions against the live database — 3,605 rows, zero exceptions either
+  way. NYC publishes no cuisine until somebody has been.
+
+Nothing in the words "cuisine" and "never inspected" suggests they are mutually exclusive, so
+choosing both would return an empty map with no explanation. When never-inspected is on, both
+controls are disabled and the panel says why — disabled rather than hidden, because a control that
+vanishes leaves a user wondering what they did while a sentence teaches them something true about the
+data.
+
+#### Movement is never interrupted to draw pins
+
+Reported from a browser after slice 4: panning and rotating stutter while a request for the current
+view is resolving, and go smooth again once it lands.
+
+**The client's own work is not the cost.** Measured over synthetic payloads: validating a thousand
+pins takes 1.5ms, turning them into GeoJSON 0.1ms, counting distinct points 0.2ms — about 2ms for the
+whole pipeline, and 10ms even at the API's maximum of 5,000. The expense is what MapLibre does next:
+`setData` re-tiles the source, and that work shares a worker pool with parsing the basemap tiles for
+wherever the user is panning *into*.
+
+So `setData` is never called while the camera is in motion. New pins are held and applied on the next
+`moveend` — only the newest set, so three viewports resolving during one long drag do not become
+three re-tilings the moment the user lets go. `isMoving()` rather than any single event name, because
+it covers panning, zooming, rotating and the inertial glide after a flick.
+
+**The trade this makes, stated plainly:** pins can be up to one gesture late. That is the trade the
+map should make. A stutter while dragging is a much worse thing to be than a moment behind with the
+dots, and unlike the dots it cannot be waited out.
+
+Three smaller costs went with it, all of them work landing on frames a gesture needed: the legend and
+the filter panel are memoised — the panel renders 102 `<option>` elements and its parent re-renders
+on every pan — and the distinct-point count is recomputed only when the pins change rather than on
+every loading flip.
+
+It was not enough on its own. A second report: smooth at a viewport of 0.0376° by 0.0503°, jittery
+any further out.
+
+**The pins are not what changes.** That box and one three times its size both return exactly 1,000
+establishments, because both truncate — measured, not assumed. What changes is the basemap. CARTO
+Positron is 95 layers: 56 line layers and **27 symbol layers**. Symbol layers are the expensive ones
+to move, because MapLibre recomputes label placement and collision on the main thread and re-runs it
+on every rotation — and zoomed out over New York there are far more labels competing for space.
+
+So the basemap's labels are restricted to zoom 14 and above, declaratively, by narrowing each symbol
+layer's own zoom range at style load. Nothing runs per frame or per gesture: the alternative of
+toggling visibility on `movestart` and `moveend` keeps labels everywhere but pays a re-layout of 27
+layers twice per gesture, which is the same cost moved rather than removed. Symbol fading is off for
+the same reason — a fade is an animation, so the map keeps re-rendering and re-placing labels after
+the camera has stopped. World copies are off too, since the camera is locked to one city.
+
+**The trade:** below zoom 14 there are no street names — roads, water and dots. That is close to what
+an overview of a city is for, and the threshold is one named constant to move in either direction.
+
+That was not enough either, and the third round is where the actual cause turned up. Two hypotheses
+had already been killed by measurement — the pin count is identical either side of the boundary, and
+the *number* of basemap layers is higher in the smooth zone than the jittery one (80 active at zoom
+15 against 46 at zoom 12). What was left was the tiles themselves, measured against CARTO over
+Manhattan:
+
+| zoom | vector `.mvt` | raster `.png` @2x |
+|---|---|---|
+| 12 | 98KB | 30KB |
+| 13 | 89KB | — |
+| 14 | **389KB** | 26KB |
+| 15+ | **HTTP 400 — does not exist** | — |
+
+**CARTO's vector tiles stop at zoom 14.** Every zoom above it *overzooms*: MapLibre scales tiles it
+has already parsed and parses nothing new. Below 14 it parses a few hundred kilobytes of fresh
+geometry for every new area moved into, and the further out the camera is, the more new area each
+gesture exposes. The reported boundary between smooth and jittery was exactly the boundary where
+parsing stops — which is why no amount of removing layers helped.
+
+So the basemap is now a hybrid, and the arrangement is the interesting part:
+
+- **Geometry comes from raster tiles.** An image is decoded off the main thread and drawn as a
+  texture; there is nothing to parse at any zoom. Positron's fills, lines and circles are removed at
+  style load and one raster layer put underneath the labels.
+- **Labels stay vector.** A raster basemap normally has its lettering baked into the picture, which
+  rotates with the map and never rotates back — rotation was explicitly not up for sacrificing. Kept
+  as symbol layers, MapLibre places them dynamically and they stay upright at any bearing.
+- **And because MapLibre asks a source for tiles only when a visible layer needs them**, restricting
+  those symbol layers to zoom 14 and up means no vector tile is fetched below 14 at all. The zooms
+  that were jittery became pure raster; the zooms where labels appear were already the smooth ones.
+
+Verified in a browser rather than reasoned about: at zoom 12, **0 visible vector layers**; at zoom
+15, **12**. A first attempt at that measurement counted a hidden layer as active and had to be
+redone — and an attempt to count tile requests through the Performance API was thrown out entirely,
+because MapLibre fetches vector tiles inside its worker and worker requests never appear in
+main-thread resource timing.
+
+The cost, stated: two third-party endpoints instead of one, and a style assembled in this repository
+rather than handed to MapLibre as a URL.
+
+**Still available if it is still not enough:** fetching a box larger than the viewport, so small pans
+need no request at all — that costs earlier truncation, which is the thing the opening view was
+shaped to avoid.
+
+#### The camera cannot leave New York
+
+Raised from a browser: it is odd to be able to zoom out and see the whole world in a product scoped
+to one city. Asked as a performance question, and the honest answer is that performance is the
+weaker half of the argument.
+
+**Zooming out costs the API nothing** — past one degree the client already declines to ask, so a
+world view produces no requests at all. It is not free, though: the basemap keeps fetching and
+parsing tiles for places this product will never describe, on the same worker pool that competes with
+drawing the pins, which is the contention the smoothness fix above is about. The stronger reason is
+the one that was actually noticed: a map of the Atlantic with no dots on it reads as a broken
+product rather than as a product with a scope.
+
+`maxBounds` is the measured data extent — latitude 40.499563 to 40.912822, longitude -74.249101 to
+-73.701712 across 23,017 rows — plus 0.02° on each side so an establishment at the edge can be
+centred rather than pinned against the frame. `minZoom` is 9.5.
+
+Verified in a browser rather than assumed: jumping the camera to 0°, 0° at zoom 2 lands at
+**40.596, -73.975 at zoom 10.73** — still New York, both constraints holding.
+
+Zoomed fully out on a wide window the view still exceeds one degree and the page says "zoom in to
+load establishments". No single value fixes that, because the span depends on the window's width: a
+minimum zoom keeping an ultrawide monitor under a degree would stop a phone from seeing the city at
+all. The one-degree guard remains the real backstop.
+
+#### Decision 3, partly reversed
+
+The URL carries the filters and the viewport, synced with `URLSearchParams` and `replaceState`, no
+router — as decided. **The viewport is a bounding box rather than a centre and a zoom, which is the
+opposite of what was decided**, and the reason is worth keeping:
+
+The original argument was that a box is a function of the window, so the same box frames different
+amounts of city on a phone and a laptop, while a centre and a zoom reopen the same place. That holds
+for "look at this point" and is backwards for a product about areas. `fitBounds` guarantees a shared
+box is *entirely visible* on whatever screen opens it — a phone shows that area and more. Centre and
+zoom guarantee the opposite: the phone shows a fraction of what the sender saw, silently. The box
+also removes a second camera representation from an application that already speaks in boxes
+everywhere else.
+
+**Verified.** 141 backend tests and 127 web tests, `tsc -b`, build and lint clean. Checked end to
+end against the running API: a plain load reports 424 places at 282 points with 102 dropdown options
+rendered (89 cuisines, 5 boroughs, 5 outcomes, three "Any" rows), and a shared link carrying
+`outcome=Poor&locality=Manhattan` opens directly on 9 matching places. The API returns 8 for those
+exact bounds — the browser's fitted box is slightly wider, which is the same mechanism documented on
+`initialViewport` rather than a discrepancy.
+
 ## Standing requirements
 
 Not specific to M5. Repeated because a milestone brief that omits them reads as if they were optional.
@@ -590,8 +757,10 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
   anything server-side.
 - **The rate limits are chosen, not load tested.** A real client panning a map is the first thing that
   will exercise them.
-- **The `outcome` filter is unmeasured** and is the one most likely to be slow. M5 is the milestone
-  that will actually use it.
+- ~~**The `outcome` filter is unmeasured**~~ — measured in slice 4 against the live database, warm
+  cache, one workstation: **61–105 ms** against 26 ms unfiltered over a 0.2° × 0.15° box, so 2.5–4×
+  the cost of no filter and not a problem at this scale. Same caveats as everything in
+  `docs/performance.md`: warm, single machine, not a capacity claim.
 - **No cold-cache performance measurement exists**, and every figure in `docs/performance.md` is
   warm-cache from a single unconstrained workstation.
 - **Branch protection is not enabled server-side.** `.githooks/pre-push` is a local stand-in.

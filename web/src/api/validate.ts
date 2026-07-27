@@ -20,6 +20,7 @@
 import {
   inspectionOutcomes,
   type EstablishmentDetail,
+  type EstablishmentFilterOptions,
   type InspectionDetail,
   type InspectionOutcome,
   type LatestInspectionSummary,
@@ -303,5 +304,32 @@ export function readEstablishmentDetail(body: unknown): EstablishmentDetail {
     longitude,
     isAwaitingFirstInspection,
     inspections,
+  }
+}
+
+/**
+ * `GET /establishments/filter-options`.
+ *
+ * Every entry is checked to be a non-empty string, because an empty one would render as a blank row
+ * in a dropdown that selects nothing — `?cuisine=` matches the empty string, which nothing has. The
+ * endpoint excludes nulls at the database, and this is the assertion that it did.
+ */
+export function readFilterOptions(body: unknown): EstablishmentFilterOptions {
+  const source = readObject(body, 'response')
+
+  const readNames = (value: unknown, path: string): string[] =>
+    readArray(value, path).map((entry, index) => {
+      const name = readString(entry, `${path}[${index}]`)
+
+      if (name === '') {
+        fail(`${path}[${index}]`, 'expected a selectable value, got an empty string')
+      }
+
+      return name
+    })
+
+  return {
+    cuisines: readNames(source.cuisines, 'cuisines'),
+    localities: readNames(source.localities, 'localities'),
   }
 }

@@ -167,6 +167,23 @@ export interface EstablishmentDetail {
 }
 
 /**
+ * The values the cuisine and locality filters can actually match.
+ *
+ * A client cannot work these out for itself: a map pin does not carry a cuisine, and the list
+ * endpoint returns one page's values rather than the vocabulary. Hard-coding them was the
+ * alternative and was rejected — it puts one city's source vocabulary in a front end and drifts
+ * silently the first time ingestion meets a new value.
+ *
+ * Nulls are absent because they are not selectable. That is not a corner case: cuisine is null for
+ * exactly the establishments that have never been inspected — an exact correspondence in both
+ * directions, 3,605 of them — so choosing any cuisine excludes every one of them.
+ */
+export interface EstablishmentFilterOptions {
+  cuisines: string[]
+  localities: string[]
+}
+
+/**
  * The filters both the list and the map accept, spelled as the query string spells them.
  *
  * Undefined means "do not send this parameter". Note the trap for whoever builds the panel:

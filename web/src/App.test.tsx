@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { ApiProblemError, ApiUnreachableError } from './api/errors'
@@ -28,6 +28,12 @@ vi.mock('maplibre-gl', () => ({
     addLayer = vi.fn()
     getSource = () => undefined
     remove = vi.fn()
+    isMoving = () => false
+    // Enough of a style for the label-quietening pass to walk; MapView.test.tsx is where that
+    // behaviour is actually asserted.
+    getStyle = () => ({ layers: [{ id: 'place-label', type: 'symbol' }] })
+    setLayerZoomRange = vi.fn()
+    setLayoutProperty = vi.fn()
     getBounds = () => ({
       getSouth: () => bounds.south,
       getNorth: () => bounds.north,
@@ -43,7 +49,8 @@ vi.mock('maplibre-gl', () => ({
 }))
 
 const fetchMap = vi.hoisted(() => vi.fn())
-vi.mock('./api/client', () => ({ fetchMap }))
+const fetchFilterOptions = vi.hoisted(() => vi.fn())
+vi.mock('./api/client', () => ({ fetchMap, fetchFilterOptions }))
 
 const loaded = mapFixture as unknown as MapResult
 
@@ -64,6 +71,12 @@ beforeEach(() => {
   bounds = { south: 40.7515, north: 40.7605, west: -73.9925, east: -73.9785 }
   fetchMap.mockReset()
   fetchMap.mockResolvedValue(loaded)
+  fetchFilterOptions.mockReset()
+  fetchFilterOptions.mockResolvedValue({
+    cuisines: ['American', 'Chinese'],
+    localities: ['Brooklyn', 'Manhattan'],
+  })
+  window.history.replaceState(null, '', '/')
 })
 
 afterEach(() => {
@@ -208,5 +221,70 @@ describe('App', () => {
     await showMap()
 
     expect(screen.getByRole('heading', { name: 'What the colours mean' })).toBeInTheDocument()
+  })
+
+  // The address bar is the state. What is in it when a link is opened is what the map shows, and
+  // what the map shows ends up in it — that round trip is what makes the link worth sending.
+  it('writes the viewport and the filters into the address bar', async () => {
+    render(<App />)
+    await showMap()
+
+    const search = window.location.search
+    expect(search).toContain('minLat=40.751500')
+    expect(search).toContain('maxLon=-73.978500')
+  })
+
+  it('opens on the viewport in the address bar rather than the committed one', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/?minLat=40.720000&maxLat=40.730000&minLon=-73.990000&maxLon=-73.980000&locality=Brooklyn',
+    )
+
+    render(<App />)
+    await showMap()
+
+    // The filter from the URL is applied to the very first request, not to the second one after a
+    // render settles — otherwise a shared link flashes the unfiltered map first.
+    expect((fetchMap.mock.calls[0][0] as { filter: unknown }).filter).toEqual({
+      locality: 'Brooklyn',
+    })
+  })
+
+  // fireEvent rather than userEvent here, and only here: userEvent schedules its own delays between
+  // the events it synthesises, and those never resolve against the faked timers this file needs for
+  // the debounce. FilterPanel.test.tsx drives the same control with userEvent, where there are no
+  // fake timers to deadlock against.
+  it('re-asks when a filter changes', async () => {
+    render(<App />)
+    await showMap()
+    expect(fetchMap).toHaveBeenCalledTimes(1)
+
+    fireEvent.change(screen.getByLabelText('Borough'), { target: { value: 'Brooklyn' } })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(debounceMilliseconds)
+    })
+
+    expect(fetchMap).toHaveBeenCalledTimes(2)
+    expect((fetchMap.mock.calls[1][0] as { filter: unknown }).filter).toEqual({
+      locality: 'Brooklyn',
+    })
+    expect(window.location.search).toContain('locality=Brooklyn')
+  })
+
+  // Panning writes the URL constantly. pushState would make the back button an undo-my-panning key
+  // and trap the user on the page.
+  it('does not add a history entry for every movement', async () => {
+    const pushState = vi.spyOn(window.history, 'pushState')
+
+    render(<App />)
+    await showMap()
+
+    bounds = { south: 40.72, north: 40.73, west: -73.99, east: -73.98 }
+    await act(async () => {
+      handlers.get('moveend')?.()
+    })
+
+    expect(pushState).not.toHaveBeenCalled()
   })
 })

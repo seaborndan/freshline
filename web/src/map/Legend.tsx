@@ -11,9 +11,10 @@
  * them and both look like missing data until they are explained.
  */
 
+import { memo } from 'react'
 import { closedModifier, pinStates, pinStyles } from './pinStyle'
 
-export function Legend() {
+function LegendContent() {
   return (
     <section className="legend" aria-labelledby="legend-heading">
       <h2 id="legend-heading">What the colours mean</h2>
@@ -50,3 +51,10 @@ export function Legend() {
     </section>
   )
 }
+
+/**
+ * Memoised because it takes no props and never changes, while its parent re-renders on every pan and
+ * every loading flip. Seven rows is not expensive, but it is work landing on the same frames a
+ * gesture needs, and the cheapest work is the kind that does not happen.
+ */
+export const Legend = memo(LegendContent)

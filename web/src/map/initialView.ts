@@ -60,6 +60,63 @@ export const initialViewport: Viewport = {
 }
 
 /**
+ * How far the map lets anyone wander.
+ *
+ * **Measured from the data**, not drawn around a city on a map: every establishment with coordinates
+ * falls inside latitude 40.499563 to 40.912822 and longitude -74.249101 to -73.701712 — 23,017 rows
+ * on 2026-07-26. A margin of 0.02° (roughly two kilometres) is added on each side so an establishment
+ * at the edge can be centred rather than pinned against the frame.
+ *
+ * **Why constrain it at all.** Not for the API's sake: past one degree the client already declines
+ * to ask, so a world view costs zero requests. The costs are elsewhere and both are real. The
+ * basemap keeps fetching and parsing tiles for places this product will never have data about, on
+ * the same worker pool that competes with drawing the pins. And a map of the Atlantic with no dots
+ * on it looks like a broken product rather than a product scoped to one city — which is the same
+ * reasoning as the scope fence, applied to the camera.
+ */
+export const dataBounds = {
+  minLatitude: 40.4796,
+  maxLatitude: 40.9328,
+  minLongitude: -74.2691,
+  maxLongitude: -73.6817,
+}
+
+/**
+ * The furthest out the map will zoom.
+ *
+ * A compromise, and worth saying which way it errs. At zoom 9.5 a normal desktop window shows a
+ * little more than the whole city — enough to get your bearings. Lower would allow a view of the
+ * eastern seaboard; higher would stop a narrow phone window from ever seeing the city whole.
+ *
+ * **Zoomed fully out, a wide window shows no pins**, and that is worth being precise about rather
+ * than glossing: on a 1440px window this zoom spans about 1.4° of longitude, past the degree the API
+ * will answer, so the page says "zoom in to load establishments". No value fixes that for every
+ * screen — the span depends on the window's width, so a minimum zoom that keeps an ultrawide monitor
+ * under a degree would stop a phone from seeing the city at all. The one-degree guard is the real
+ * backstop; this constant just stops the map showing the Atlantic.
+ */
+export const minimumZoom = 9.5
+
+/**
+ * The zoom below which the basemap's labels are not drawn.
+ *
+ * **Measured from a complaint, not from taste.** Panning and rotating were reported as smooth at a
+ * viewport of 0.0376° by 0.0503° and jittery any further out. The pins are not what changes: that
+ * box and one three times its size both return exactly 1,000 establishments, because both truncate.
+ * What changes is the basemap. CARTO Positron is 95 layers — 56 line layers and **27 symbol
+ * layers** — and symbol layers are the expensive ones to move: MapLibre recomputes label placement
+ * and collision on the main thread, and re-runs it on every rotation. Zoomed out over New York there
+ * are far more labels competing for space.
+ *
+ * So labels are restricted to the zooms where they are worth their cost. Below this, the map is
+ * roads and water and dots, which is what an overview of a city is for; above it, street names
+ * appear, which is when they start telling you where you are.
+ *
+ * This is the single number to change if the trade needs adjusting in either direction.
+ */
+export const labelMinimumZoom = 14
+
+/**
  * The basemap.
  *
  * **CARTO Positron**, served from `basemaps.cartocdn.com` with no API key. This is a runtime
@@ -74,5 +131,55 @@ export const initialViewport: Viewport = {
  * Rejected: MapTiler and Stadia, which are better basemaps and need an API key — a key in a client
  * bundle is a key in the repository, and this milestone has no secret to protect and intends to keep
  * it that way. Raster OpenStreetMap tiles, whose usage policy asks applications not to use them.
+ *
+ * **Only its labels and its lettering are used.** See `basemapRasterTiles` for why, and for what
+ * replaces the rest of it.
  */
 export const basemapStyleUrl = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
+
+/**
+ * The basemap's geometry, as pictures rather than as data.
+ *
+ * **Why a second source exists at all.** Vector tiles have to be parsed before they can be drawn,
+ * and that parsing is what makes a map stutter when it moves into somewhere new. Measured against
+ * CARTO on 2026-07-26, over Manhattan:
+ *
+ * | | vector (.mvt) | raster (.png, @2x) |
+ * |---|---|---|
+ * | zoom 12 | 98KB | 30KB |
+ * | zoom 14 | **389KB** | 26KB |
+ * | zoom 15+ | *does not exist* | — |
+ *
+ * That last row is the whole explanation of a symptom reported from a browser: panning and rotating
+ * were smooth above zoom 14 and jittery below it. CARTO's vector tiles stop at 14, so every zoom
+ * above it **overzooms** — MapLibre scales tiles it has already parsed and parses nothing new.
+ * Below 14 it parses a fresh few hundred kilobytes of geometry for every new area moved into, and
+ * the further out the camera is, the more new area each gesture exposes. The boundary between smooth
+ * and jittery was exactly the boundary where parsing stops.
+ *
+ * A raster tile is an image. It is decoded off the main thread and drawn as a texture, so moving
+ * across it costs nothing to parse at any zoom.
+ *
+ * **The labels stay vector, and that is the point of the arrangement.** Raster basemaps normally
+ * come with their lettering baked into the picture, which rotates with the map — turn it far enough
+ * and the street names are upside down, permanently, because nothing is placing them. So this uses
+ * the *no-labels* raster for geometry and keeps Positron's own symbol layers over the top, where
+ * MapLibre places them dynamically and they stay upright at any bearing.
+ *
+ * And because MapLibre only fetches a source's tiles when a visible layer needs them, restricting
+ * those symbol layers to zoom 14 and up means **no vector tile is fetched or parsed below zoom 14 at
+ * all** — the zooms that were jittery become pure raster, and the zooms where labels appear are the
+ * ones already served by overzoomed tiles.
+ *
+ * The cost, stated: two third-party endpoints instead of one, and a style assembled here rather than
+ * handed to MapLibre as a URL.
+ */
+export const basemapRasterTiles = 'https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png'
+
+/**
+ * Shown for the raster source. The vector source carries its own from its TileJSON, but below zoom
+ * 14 nothing is using the vector source, and a basemap on screen with no credit under it would be
+ * wrong.
+ */
+export const basemapAttribution =
+  '<a href="https://carto.com/attributions">© CARTO</a>, © OpenStreetMap contributors'

@@ -25,16 +25,44 @@ const addLayer = vi.fn()
 const setData = vi.fn()
 let sourceExists = false
 
+/** Whether the fake map says the camera is in motion. The test decides. */
+let moving = false
+
+/** A cut-down Positron: two symbol layers, one of which stops below the label threshold. */
+const styleLayers = [
+  { id: 'water', type: 'fill' },
+  { id: 'road', type: 'line' },
+  { id: 'place-label', type: 'symbol' },
+  { id: 'country-label', type: 'symbol', maxzoom: 8 },
+]
+
+const setLayerZoomRange = vi.fn()
+const setLayoutProperty = vi.fn()
+const removeLayer = vi.fn()
+const addedSources: unknown[][] = []
+const addedLayers: unknown[][] = []
+
 vi.mock('maplibre-gl', () => ({
   Map: class {
     addControl = vi.fn()
     remove = vi.fn()
     addSource = (...args: unknown[]) => {
-      sourceExists = true
+      addedSources.push(args)
+      if (args[0] === 'establishments') {
+        sourceExists = true
+      }
       addSource(...args)
     }
-    addLayer = addLayer
+    addLayer = (...args: unknown[]) => {
+      addedLayers.push(args)
+      addLayer(...args)
+    }
+    removeLayer = removeLayer
     getSource = () => (sourceExists ? { setData } : undefined)
+    isMoving = () => moving
+    getStyle = () => ({ layers: styleLayers })
+    setLayerZoomRange = setLayerZoomRange
+    setLayoutProperty = setLayoutProperty
     on(event: string, handler: () => void) {
       handlers.set(event, handler)
     }
@@ -46,6 +74,13 @@ vi.mock('maplibre-gl', () => ({
 function loadStyle() {
   act(() => {
     handlers.get('style.load')?.()
+  })
+}
+
+function endMovement() {
+  moving = false
+  act(() => {
+    handlers.get('moveend')?.()
   })
 }
 
@@ -92,6 +127,12 @@ beforeEach(() => {
   addLayer.mockClear()
   setData.mockClear()
   sourceExists = false
+  moving = false
+  setLayerZoomRange.mockClear()
+  setLayoutProperty.mockClear()
+  removeLayer.mockClear()
+  addedSources.length = 0
+  addedLayers.length = 0
 })
 
 afterEach(() => {
@@ -128,8 +169,10 @@ describe('MapView', () => {
 
     loadStyle()
 
-    expect(addSource).toHaveBeenCalledTimes(1)
-    expect(addLayer).toHaveBeenCalledTimes(2)
+    const pinLayers = addedLayers.filter(
+      (call) => (call[0] as { source?: string }).source === 'establishments',
+    )
+    expect(pinLayers).toHaveLength(2)
   })
 
   it('says so when the map itself fails, rather than leaving a blank rectangle', () => {
@@ -142,5 +185,128 @@ describe('MapView', () => {
     })
 
     expect(getByRole('alert')).toHaveTextContent('WebGL is not supported')
+  })
+
+  // Reported from a browser: panning stutters while a request for the current view is resolving.
+  // The cost is not this client's — validating a thousand pins and turning them into GeoJSON is
+  // about 2ms — it is MapLibre re-tiling the source, which shares a worker pool with parsing the
+  // basemap tiles for wherever the user is panning into. So the expensive call waits for the
+  // gesture to end rather than landing in the middle of it.
+  it('does not touch the source while the map is moving', () => {
+    const { rerender } = render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+    setData.mockClear()
+
+    moving = true
+    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
+
+    expect(setData).not.toHaveBeenCalled()
+  })
+
+  it('applies the pins it held back as soon as the movement ends', () => {
+    const { rerender } = render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+    setData.mockClear()
+
+    moving = true
+    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
+    endMovement()
+
+    expect(setData).toHaveBeenCalledTimes(1)
+    expect((setData.mock.calls[0][0] as { features: unknown[] }).features).toHaveLength(2)
+  })
+
+  // Only the last one. Three viewports resolving during one long drag must not become three
+  // re-tilings the instant the user lets go.
+  it('applies only the newest pins when several arrived during one gesture', () => {
+    const { rerender } = render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+    setData.mockClear()
+
+    moving = true
+    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
+    rerender(
+      <MapView
+        establishments={[pin, { ...pin, id: 2 }, { ...pin, id: 3 }]}
+        initialViewport={viewport}
+      />,
+    )
+    endMovement()
+
+    expect(setData).toHaveBeenCalledTimes(1)
+    expect((setData.mock.calls[0][0] as { features: unknown[] }).features).toHaveLength(3)
+  })
+
+  it('does not re-apply anything on a movement that held nothing back', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+    setData.mockClear()
+
+    endMovement()
+
+    expect(setData).not.toHaveBeenCalled()
+  })
+
+  // Reported from a browser: smooth at a viewport of 0.0376 by 0.0503 degrees, jittery any further
+  // out. The pins are not the variable — that box and one three times larger both return exactly
+  // 1,000 establishments, because both truncate. The basemap is: 27 of its 95 layers are symbol
+  // layers, and MapLibre recomputes label placement on the main thread every time the map rotates.
+  it('stops the basemap drawing labels when zoomed out', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    expect(setLayerZoomRange).toHaveBeenCalledWith('place-label', 14, 24)
+  })
+
+  it('leaves the layers that are not labels alone', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    const touched = setLayerZoomRange.mock.calls.map((call) => call[0])
+    expect(touched).not.toContain('water')
+    expect(touched).not.toContain('road')
+  })
+
+  // A zoom range whose floor is above its ceiling is invalid. These are the labels that only ever
+  // appear where labels are being switched off, so they go entirely.
+  it('hides a label layer that stops below the threshold rather than inverting its range', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    expect(setLayoutProperty).toHaveBeenCalledWith('country-label', 'visibility', 'none')
+    expect(setLayerZoomRange.mock.calls.map((call) => call[0])).not.toContain('country-label')
+  })
+
+  // A vector tile must be parsed before it can be drawn; an image must not. Measured against CARTO
+  // over Manhattan, a zoom-14 vector tile is 389KB against 26KB of raster, and their vector tiles
+  // stop at 14 — which is exactly where the reported jitter stopped, because above it MapLibre
+  // overzooms tiles it has already parsed.
+  it('draws the basemap geometry from raster tiles', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    const raster = addedLayers.find((call) => (call[0] as { type?: string }).type === 'raster')
+    expect(raster).toBeDefined()
+    // Underneath the labels, so they draw over the picture rather than beneath it.
+    expect(raster?.[1]).toBe('place-label')
+  })
+
+  it('removes the vector geometry it replaced', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    const removed = removeLayer.mock.calls.map((call) => call[0])
+    expect(removed).toContain('water')
+    expect(removed).toContain('road')
+  })
+
+  // The labels stay vector so they stay upright when the map is rotated. Baked into a picture they
+  // would turn with it and never turn back, which is the reason this is a hybrid at all.
+  it('keeps the label layers rather than flattening them into the picture', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+
+    expect(removeLayer.mock.calls.map((call) => call[0])).not.toContain('place-label')
+    expect(setLayerZoomRange).toHaveBeenCalledWith('place-label', 14, 24)
   })
 })
