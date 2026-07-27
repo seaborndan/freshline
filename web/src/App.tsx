@@ -9,6 +9,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { EstablishmentFilter } from './api/contract'
 import type { Viewport } from './api/viewport'
+import { DetailPanel } from './detail/DetailPanel'
+import { useEstablishmentDetail } from './detail/useEstablishmentDetail'
 import { FilterPanel } from './filters/FilterPanel'
 import { hasAnyFilter } from './filters/filterState'
 import { useFilterOptions } from './filters/useFilterOptions'
@@ -36,18 +38,58 @@ function App() {
    */
   const [viewport, setViewport] = useState<Viewport | null>(null)
 
+  /**
+   * The ids under the last click, and the one chosen from them.
+   *
+   * Two pieces of state rather than one, because a click on a stacked point selects *several*
+   * establishments and none of them: the panel then shows a list to choose from. A click on a lone
+   * pin does both at once. See `DetailPanel` for why answering a crowded click arbitrarily was
+   * rejected.
+   */
+  const [candidateIds, setCandidateIds] = useState<number[]>(
+    initial.selectedId === null ? [] : [initial.selectedId],
+  )
+  const [selectedId, setSelectedId] = useState<number | null>(initial.selectedId)
+
   const handleViewportChange = useCallback((next: Viewport) => setViewport(next), [])
+
+  const handleSelect = useCallback((ids: number[]) => {
+    setCandidateIds(ids)
+    setSelectedId(ids.length === 1 ? ids[0] : null)
+  }, [])
+
+  const handleClose = useCallback(() => {
+    setCandidateIds([])
+    setSelectedId(null)
+  }, [])
 
   const options = useFilterOptions()
   const establishments = useEstablishments(viewport, filters)
+  const detail = useEstablishmentDetail(selectedId)
+
+  /**
+   * The clicked establishments, taken from the pins already on screen rather than fetched again.
+   *
+   * The chooser needs a name and a state for each candidate, and the map response already carried
+   * both — asking the API again would spend rate-limit tokens re-learning what is in memory. A link
+   * opened straight at `?id=` has no pins yet, which is why a single id goes directly to the detail
+   * request and never through the chooser.
+   */
+  const candidates = useMemo(() => {
+    const items = establishments.result?.items ?? []
+
+    return candidateIds
+      .map((id) => items.find((item) => item.id === id))
+      .filter((item) => item !== undefined)
+  }, [candidateIds, establishments.result])
 
   // The address bar follows the state, at the point the state settles. replaceState rather than
   // pushState: a history entry per pan turns the back button into an undo-my-panning key.
   useEffect(() => {
-    const query = writeUrlState({ viewport, filters })
+    const query = writeUrlState({ viewport, filters, selectedId })
 
     window.history.replaceState(null, '', `${window.location.pathname}${query}`)
-  }, [viewport, filters])
+  }, [viewport, filters, selectedId])
 
   return (
     <div className="app-shell">
@@ -66,6 +108,7 @@ function App() {
           establishments={establishments.result?.items ?? []}
           initialViewport={initial.viewport ?? initialViewport}
           onViewportChange={handleViewportChange}
+          onSelect={handleSelect}
         />
 
         {establishments.failure === null ? null : (
@@ -81,6 +124,14 @@ function App() {
           <FilterPanel filters={filters} options={options} onChange={setFilters} />
           <Legend />
         </div>
+
+        <DetailPanel
+          candidates={candidates}
+          view={detail}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onClose={handleClose}
+        />
       </main>
     </div>
   )
