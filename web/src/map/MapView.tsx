@@ -49,6 +49,20 @@ export function MapView({ establishments, initialViewport }: MapViewProps) {
    */
   const [mapFailure, setMapFailure] = useState<string | null>(null)
 
+  /**
+   * The pins as of the latest render, readable from inside a callback that outlives it.
+   *
+   * The map is constructed once, so everything registered on it closes over the props of the *first*
+   * render — where this array is still empty, because the request has not come back. Reading
+   * `establishments` directly inside the `style.load` handler therefore adds an empty source, and
+   * whether that matters is a race: the style takes seconds to fetch over the network while the API
+   * answers in tens of milliseconds, so in practice the data always loses and the map is always
+   * empty. It was a test that fired `style.load` synchronously — the ordering that cannot happen in
+   * a browser — which made this look fine.
+   */
+  const latestEstablishments = useRef(establishments)
+  latestEstablishments.current = establishments
+
   // Created once and never recreated: the effect has no dependencies, so a change of pins re-runs
   // the second effect rather than tearing down a WebGL context and rebuilding the basemap.
   useEffect(() => {
@@ -92,7 +106,7 @@ export function MapView({ establishments, initialViewport }: MapViewProps) {
     created.on('style.load', () => {
       created.addSource(sourceId, {
         type: 'geojson',
-        data: toFeatureCollection(establishments),
+        data: toFeatureCollection(latestEstablishments.current),
       })
 
       // Two layers over one source. The ordinary pins first, then the ones that must not be hidden
@@ -125,9 +139,10 @@ export function MapView({ establishments, initialViewport }: MapViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- constructed once; see above.
   }, [])
 
-  // Pushes new pins into the existing source. Guarded because the pins can arrive before the style
-  // has loaded, in which case the source does not exist yet and the load handler above will use the
-  // current value anyway.
+  // Pushes new pins into the existing source. Guarded because the pins usually arrive *before* the
+  // style has loaded, in which case there is no source to push them into yet — and the handler above
+  // then picks them up from the ref. Those two paths together are what makes the ordering safe in
+  // both directions; neither one is sufficient alone.
   useEffect(() => {
     const source = map.current?.getSource(sourceId) as GeoJSONSource | undefined
 

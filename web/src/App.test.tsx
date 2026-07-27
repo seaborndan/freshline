@@ -12,8 +12,9 @@ import mapFixture from './api/__fixtures__/map-viewport.json'
  * is left here is the page: what it says while loading, what it says when the API refuses, and
  * whether the legend is present.
  *
- * The stub still runs the real `style.load` handler, so the source and layers are genuinely added — a
- * mistake in that code path fails here rather than in a browser.
+ * The stub fires `style.load` synchronously, which is convenient and is NOT the ordering a browser
+ * produces — see MapView.test.tsx, which owns that question and was written after the synchronous
+ * double hid a real bug. What this stub is for is the page around the map.
  */
 const setData = vi.fn()
 const addLayer = vi.fn()

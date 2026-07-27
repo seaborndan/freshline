@@ -455,7 +455,8 @@ still works. Greyscale by design, so the data on top of it can have the colour. 
 and Stadia, which are better and need a key — a key in a client bundle is a key in the repository;
 and raster OpenStreetMap tiles, whose usage policy asks applications not to use them.
 
-**Two bugs were found by running the app, and neither could have been found by a test.**
+**Three bugs were found by running the app. The first two could not have been found by a test;
+the third was actively hidden by one.**
 
 1. **Vite's dependency pre-bundler broke MapLibre's worker.** It rewrites the `new Worker(new URL(…))`
    call to a file it then does not emit, so on the dev server the worker never starts and the map
@@ -468,14 +469,26 @@ and raster OpenStreetMap tiles, whose usage policy asks applications not to use 
    added while chasing the first bug, and worth keeping: a blank canvas is otherwise
    indistinguishable from an area with no restaurants in it.
 
-**Verified.** 77 web tests pass, `tsc -b`, `vite build` and lint clean. The initial viewport and its
+3. **The pins were added from an empty array, and the test suite said otherwise.** The map is built
+   once, so its handlers close over the props of the first render — where there are no pins yet,
+   because the request has not returned. Whether that matters is a race between a style download of
+   several hundred kilobytes and an API that answers in tens of milliseconds, and the data wins every
+   time: the source was created empty and stayed empty. **The test double fired `style.load`
+   synchronously inside `render`** — the one ordering a browser cannot produce — so the suite was
+   green while the map was blank. Fixed by reading the pins from a ref; `MapView.test.tsx` now
+   drives both orderings explicitly and never fires an event by itself.
+
+**Verified.** 81 web tests pass, `tsc -b`, `vite build` and lint clean. The race fix was
+mutation-tested: reverting it fails exactly the test written for it. The initial viewport and its
 outcome mix were re-measured against the committed bounds rather than the ones the sweep used — 518
 establishments, not the 517 first written down.
 
-**Not verified, and stated as such:** that the pins render correctly in a browser. Headless Chromium
-on this machine will not rasterise a WebGL canvas — screenshots come back blank and the drawing
-buffer reads all black — so the layout, the legend and the error path were confirmed visually and the
-painted map was not. It needs one look at `http://localhost:5173`.
+**Verified against the running app, not only in jsdom.** Headless Chromium here will not rasterise a
+WebGL canvas — screenshots come back blank and the drawing buffer reads all black — so the map was
+interrogated instead of photographed: the GeoJSON source holds **518 features** and
+`queryRenderedFeatures` reports **223 pins actually painted** in the visible viewport. Before the fix
+the same probe reported an empty source. The layout, the legend and the error path were confirmed
+from screenshots.
 
 ---
 
