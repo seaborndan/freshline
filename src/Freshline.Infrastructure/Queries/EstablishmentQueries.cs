@@ -64,48 +64,7 @@ internal sealed class EstablishmentQueries(FreshlineDbContext dbContext) : IEsta
         EstablishmentListQuery query,
         CancellationToken cancellationToken)
     {
-        IQueryable<Establishment> establishments = dbContext.Establishments;
-
-        // StartsWith translates to LIKE @prefix + '%', which an index on Name can seek on: the rows
-        // that match share a leading edge, so the engine can find the first and read forwards. A
-        // Contains search would translate to LIKE '%...%', which has no such edge and forces a scan
-        // no index can prevent. That is why this filter is a prefix and not a search box.
-        if (!string.IsNullOrWhiteSpace(query.NameStartsWith))
-        {
-            establishments = establishments.Where(
-                establishment => establishment.Name.StartsWith(query.NameStartsWith));
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Cuisine))
-        {
-            establishments = establishments.Where(
-                establishment => establishment.Cuisine == query.Cuisine);
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Locality))
-        {
-            establishments = establishments.Where(
-                establishment => establishment.Locality == query.Locality);
-        }
-
-        if (query.IsAwaitingFirstInspection is { } awaiting)
-        {
-            establishments = establishments.Where(
-                establishment => establishment.IsAwaitingFirstInspection == awaiting);
-        }
-
-        // Filtering on the *latest* inspection's outcome, not on whether any inspection had it. An
-        // establishment that scored badly in 2024 and well in 2026 is a good establishment, and
-        // Any() would answer the wrong question.
-        if (query.Outcome is { } outcome)
-        {
-            establishments = establishments.Where(
-                establishment => establishment.Inspections
-                    .OrderByDescending(inspection => inspection.InspectedOn)
-                    .ThenByDescending(inspection => inspection.Id)
-                    .Select(inspection => (InspectionOutcome?)inspection.Outcome)
-                    .FirstOrDefault() == outcome);
-        }
+        IQueryable<Establishment> establishments = Filtered(query.Filter);
 
         // The seek predicate — the whole of keyset pagination is this one WHERE clause.
         //
@@ -182,6 +141,128 @@ internal sealed class EstablishmentQueries(FreshlineDbContext dbContext) : IEsta
                 ? new EstablishmentCursor(rows[^1].Name, rows[^1].Id)
                 : null,
         };
+    }
+
+    public async Task<MapResult> MapAsync(MapViewport viewport, CancellationToken cancellationToken)
+    {
+        // A bounding box on the plain columns, not a spatial predicate. Measured in M3: the spatial
+        // index cost 40,359 logical reads against 16,933 for this, because at 31% selectivity one
+        // scan of an 11 MB table beats 7,290 key lookups. The spatial index earns its place on
+        // radius search, which a rectangle cannot express. ADR-0004.
+        //
+        // BETWEEN is inclusive at both ends, so an establishment exactly on the boundary appears in
+        // both of two adjacent viewports rather than in neither. Duplicated at a seam is a cosmetic
+        // problem; missing at a seam is a hole in the map.
+        IQueryable<Establishment> establishments = Filtered(viewport.Filter)
+            .Where(establishment =>
+                establishment.Latitude != null
+                && establishment.Longitude != null
+                && establishment.Latitude >= viewport.MinLatitude
+                && establishment.Latitude <= viewport.MaxLatitude
+                && establishment.Longitude >= viewport.MinLongitude
+                && establishment.Longitude <= viewport.MaxLongitude);
+
+        // The same probe trick the list uses, for a different purpose: one row past the limit tells
+        // the caller its viewport holds more than it was given, without a second COUNT over the box.
+        int probeSize = viewport.Limit + 1;
+
+        List<MapEstablishment> rows = await establishments
+            .OrderBy(establishment => establishment.Id)
+            .Take(probeSize)
+            .Select(establishment => new MapEstablishment
+            {
+                Id = establishment.Id,
+                Name = establishment.Name,
+
+                // The null checks above are in the WHERE clause, which the compiler cannot see, so
+                // the value is known non-null here in a way only a human can verify. Asserting it
+                // with ! would be exactly the suppression CLAUDE.md forbids; Value states the same
+                // expectation and throws rather than corrupting a coordinate if it is ever wrong.
+                Latitude = establishment.Latitude!.Value,
+                Longitude = establishment.Longitude!.Value,
+                IsAwaitingFirstInspection = establishment.IsAwaitingFirstInspection,
+
+                // Left join, as on the list. In this viewport that is the difference between 7,290
+                // establishments and 5,983 — the 1,307 never-inspected ones an inner join deletes,
+                // which on a map is 1,307 pins that simply do not appear.
+                LatestInspection = establishment.Inspections
+                    .OrderByDescending(inspection => inspection.InspectedOn)
+                    .ThenByDescending(inspection => inspection.Id)
+                    .Select(inspection => new LatestInspectionSummary
+                    {
+                        InspectedOn = inspection.InspectedOn,
+                        RawGrade = inspection.RawGrade,
+                        Outcome = inspection.Outcome,
+                        NormalisedSeverity = inspection.NormalisedSeverity,
+                        ClosedByAuthority = inspection.ClosedByAuthority,
+                    })
+                    .FirstOrDefault(),
+            })
+            .ToListAsync(cancellationToken);
+
+        bool isTruncated = rows.Count == probeSize;
+
+        if (isTruncated)
+        {
+            rows.RemoveAt(rows.Count - 1);
+        }
+
+        return new MapResult { Items = rows, IsTruncated = isTruncated };
+    }
+
+    /// <summary>
+    /// The filters both the list and the map apply, in one place so they cannot diverge.
+    /// </summary>
+    private IQueryable<Establishment> Filtered(EstablishmentFilter filter)
+    {
+        IQueryable<Establishment> establishments = dbContext.Establishments;
+
+        // StartsWith translates to LIKE @prefix + '%', which an index on Name can seek on: the rows
+        // that match share a leading edge, so the engine can find the first and read forwards. A
+        // Contains search would translate to LIKE '%...%', which has no such edge and forces a scan
+        // no index can prevent. That is why this filter is a prefix and not a search box.
+        if (!string.IsNullOrWhiteSpace(filter.NameStartsWith))
+        {
+            establishments = establishments.Where(
+                establishment => establishment.Name.StartsWith(filter.NameStartsWith));
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Cuisine))
+        {
+            establishments = establishments.Where(
+                establishment => establishment.Cuisine == filter.Cuisine);
+        }
+
+        if (!string.IsNullOrWhiteSpace(filter.Locality))
+        {
+            establishments = establishments.Where(
+                establishment => establishment.Locality == filter.Locality);
+        }
+
+        if (filter.IsAwaitingFirstInspection is { } awaiting)
+        {
+            establishments = establishments.Where(
+                establishment => establishment.IsAwaitingFirstInspection == awaiting);
+        }
+
+        // Filtering on the *latest* inspection's outcome, not on whether any inspection had it. An
+        // establishment that scored badly in 2024 and well in 2026 is a good establishment, and
+        // Any() would answer the wrong question.
+        //
+        // This one is unindexed and unmeasured — a correlated subquery per candidate row. It is
+        // correct, and a test proves it matches the latest rather than any past inspection, but
+        // nobody has looked at what it costs. Recorded as a known gap in docs/performance.md.
+        if (filter.Outcome is { } outcome)
+        {
+            establishments = establishments.Where(
+                establishment => establishment.Inspections
+                    .OrderByDescending(inspection => inspection.InspectedOn)
+                    .ThenByDescending(inspection => inspection.Id)
+                    .Select(inspection => (InspectionOutcome?)inspection.Outcome)
+                    .FirstOrDefault() == outcome);
+        }
+
+        return establishments;
     }
 
     // Two things deliberately absent from the detail query above, both worth being able to explain:

@@ -42,4 +42,13 @@ public interface IEstablishmentQueries
     /// holds.</para>
     /// </summary>
     Task<EstablishmentPage> ListAsync(EstablishmentListQuery query, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the establishments inside <paramref name="viewport"/> that have coordinates, up to
+    /// the viewport's limit.
+    ///
+    /// <para>Unpaged by design — see <see cref="MapResult"/>. Establishments with no coordinates are
+    /// excluded; establishments with no inspections are not.</para>
+    /// </summary>
+    Task<MapResult> MapAsync(MapViewport viewport, CancellationToken cancellationToken);
 }

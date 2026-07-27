@@ -325,6 +325,68 @@ before M6, not a decision to revisit on taste.**
 
 ---
 
+## M4 — the map viewport query
+
+Same viewport as M3 — latitude 40.700–40.775, longitude −74.020 to −73.960, **7,290 establishments
+with coordinates** — so the box is comparable even where the queries are not.
+
+### The correctness fix is free
+
+The obvious worry about replacing `CROSS APPLY` with `OUTER APPLY` is that keeping the unmatched rows
+costs something. It does not. M3's query, unchanged apart from that one word:
+
+| M3's query over the viewport | Establishments | Inspections | Total | Rows returned |
+|---|---|---|---|---|
+| `CROSS APPLY`, `TOP 50` by severity | 1,408 | 15,539 | **16,947** | 5,983 matched the box |
+| `OUTER APPLY`, otherwise identical | 1,408 | 15,539 | **16,947** | 7,290 matched the box |
+
+Identical cost, 1,307 more establishments. **The wrong answer was not buying any speed.** The 16,947
+also reproduces M3's published 16,933 to within 14 reads — drift from inspections ingested since,
+which is the sanity check that the M3 measurement was real and repeatable.
+
+### The endpoint's own numbers, which are *not* comparable to M3
+
+| | |
+|---|---|
+| `GET /establishments/map`, `limit=1000`, over the M3 viewport | **367** logical reads |
+
+Set beside M3's 16,933 that looks like a 46× improvement. **It is not, and should never be quoted as
+one.** The two queries answer different questions: M3 returned the 50 worst-scoring establishments in
+the box, ordered by severity; this returns up to 1,000 pins ordered by primary key, with a different
+projection and a different join strategy. Only the viewport is shared.
+
+### Where the difference actually comes from — a crossover worth knowing
+
+Holding the viewport, the row count, the projection and the filters constant, and changing **only**
+how the latest inspection is fetched:
+
+| Latest-inspection strategy, `TOP 1001` over the viewport | Establishments | Inspections | Total |
+|---|---|---|---|
+| EF's `ROW_NUMBER() OVER (PARTITION BY …)` window | 256 | **111** | **367** |
+| Hand-written `OUTER APPLY` | 256 | **2,021** | **2,277** |
+
+**The window function is 18× cheaper here** — the exact reverse of what the list endpoint showed,
+where `OUTER APPLY` at 102 reads narrowly beat the window's 111 for a page of 50.
+
+Both numbers are explained by one sentence: **`APPLY` costs roughly two reads per row returned;
+the window function costs one pass over the covering index, about 111 reads, regardless of how many
+rows come back.** So the crossover sits near 55 rows. Below it, seek per row; above it, scan once.
+
+That is why the list and the map — which look like the same query with a different `WHERE` clause —
+land on opposite sides of an argument, and why "`OUTER APPLY` is the right way to get the latest per
+group" is only true for small result sets. Both endpoints are in LINQ and EF emits the window form
+for both, which is the wrong choice for the list by 9 reads and the right one for the map by 1,910.
+
+### What the endpoint refuses
+
+Validation is measured against the data rather than picked: every establishment in the database falls
+inside **0.41° of latitude by 0.55° of longitude**, so a viewport is capped at 1.0° on each axis —
+already larger than anything that could return more. Missing bounds, inverted bounds, out-of-world
+bounds and an out-of-range limit are each a distinct `400`. A viewport holding more than the limit
+returns `isTruncated: true` rather than a silently partial map.
+
+---
+
 ## Decisions taken from this
 
 1. **The map list query uses a bounding box, not a spatial predicate.** Measured, not assumed.
@@ -343,6 +405,11 @@ before M6, not a decision to revisit on taste.**
    was widened by two columns. M4, both measured before and after.
 8. **The list query stays in LINQ.** M4. The case for hand-written SQL evaporated once the index
    covered the window function; 7% does not buy back the loss of composable filters.
+9. **The map query stays in LINQ too, and for the opposite reason.** M4. At 1,000 rows EF's window
+   function beats hand-written `OUTER APPLY` by 18×, because `APPLY` costs ~2 reads per row while the
+   window costs one index pass. The crossover is near 55 rows.
+10. **The map endpoint is not paged.** M4. A cursor is for walking a list to its end; a map client
+    pans, and a viewport it has left is not worth resuming. It reports truncation instead.
 
 ---
 

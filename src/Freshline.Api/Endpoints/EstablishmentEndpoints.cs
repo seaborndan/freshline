@@ -48,6 +48,21 @@ internal static class EstablishmentEndpoints
                 "latestInspection — filter them in or out with `awaitingFirstInspection`.")
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
+        // Before "/{id:int}", though routing scores literal segments above constrained parameters
+        // regardless of order, so /establishments/map cannot be shadowed. Ordered this way for a
+        // reader, not for the router.
+        establishments
+            .MapGet("/map", MapAsync)
+            .WithName("MapEstablishments")
+            .WithSummary("Everything inside a map viewport")
+            .WithDescription(
+                "A bounding box, not a radius. All four bounds are required. Establishments with " +
+                "no coordinates are excluded because they cannot be drawn; establishments with no " +
+                "inspections are included, with a null latestInspection. Not paged — if the " +
+                "viewport holds more than `limit`, isTruncated is true and the client should zoom " +
+                "in rather than try to page.")
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
         establishments
             .MapGet("/{id:int}", GetByIdAsync)
             .WithName("GetEstablishment")
@@ -92,10 +107,9 @@ internal static class EstablishmentEndpoints
     {
         if (pageSize is < 1 or > MaxPageSize)
         {
-            return TypedResults.Problem(
-                title: "Invalid page size",
-                detail: $"pageSize must be between 1 and {MaxPageSize}. It was {pageSize}.",
-                statusCode: StatusCodes.Status400BadRequest);
+            return Problem(
+                "Invalid page size",
+                $"pageSize must be between 1 and {MaxPageSize}. It was {pageSize}.");
         }
 
         EstablishmentCursor? after = null;
@@ -105,20 +119,22 @@ internal static class EstablishmentEndpoints
             // 400 rather than 404 or an empty page. A malformed cursor is a bad request — the caller
             // sent something that is not a cursor at all. Returning an empty page instead would make
             // a client's paging bug look like the end of the data.
-            return TypedResults.Problem(
-                title: "Invalid cursor",
-                detail: "The cursor is not one this API issued. Omit it to start from the beginning.",
-                statusCode: StatusCodes.Status400BadRequest);
+            return Problem(
+                "Invalid cursor",
+                "The cursor is not one this API issued. Omit it to start from the beginning.");
         }
 
         EstablishmentPage page = await queries.ListAsync(
             new EstablishmentListQuery
             {
-                NameStartsWith = nameStartsWith,
-                Cuisine = cuisine,
-                Locality = locality,
-                Outcome = outcome,
-                IsAwaitingFirstInspection = awaitingFirstInspection,
+                Filter = new EstablishmentFilter
+                {
+                    NameStartsWith = nameStartsWith,
+                    Cuisine = cuisine,
+                    Locality = locality,
+                    Outcome = outcome,
+                    IsAwaitingFirstInspection = awaitingFirstInspection,
+                },
                 After = after,
                 PageSize = pageSize,
             },
@@ -130,6 +146,110 @@ internal static class EstablishmentEndpoints
             NextCursor = page.Next is null ? null : EstablishmentCursorCodec.Encode(page.Next),
         });
     }
+
+    /// <summary>The default number of pins when the caller does not ask for one.</summary>
+    private const int DefaultMapLimit = 1_000;
+
+    /// <summary>
+    /// The most pins one viewport may return. A chosen product limit, not a measured one, and worth
+    /// being honest about: a map with more than a thousand pins on it is unreadable long before it
+    /// is slow, and the right fix at that density is clustering rather than a bigger number. The
+    /// response says when it truncated, so the client can ask the user to zoom instead of silently
+    /// drawing a partial map.
+    /// </summary>
+    private const int MaxMapLimit = 5_000;
+
+    /// <summary>
+    /// The largest viewport, in degrees, on either axis.
+    ///
+    /// <para>Grounded in the data rather than picked: every establishment in the database falls
+    /// inside 0.41° of latitude by 0.55° of longitude, measured on 2026-07-26. One degree therefore
+    /// already covers every viewport that could return anything, with headroom. A request for more
+    /// is not a map question, and refusing it bounds the work a single request can ask for.</para>
+    /// </summary>
+    private const double MaxViewportDegrees = 1.0;
+
+    private static async Task<Results<Ok<MapResult>, ProblemHttpResult>> MapAsync(
+        IEstablishmentQueries queries,
+        CancellationToken cancellationToken,
+        double? minLat = null,
+        double? maxLat = null,
+        double? minLon = null,
+        double? maxLon = null,
+        string? nameStartsWith = null,
+        string? cuisine = null,
+        string? locality = null,
+        InspectionOutcome? outcome = null,
+        bool? awaitingFirstInspection = null,
+        int limit = DefaultMapLimit)
+    {
+        // Nullable doubles with a null default, so a missing bound is distinguishable from a
+        // deliberate zero. Defaulting them to 0 would silently turn a forgotten parameter into a
+        // viewport off the coast of Africa and return an empty map rather than an error.
+        if (minLat is null || maxLat is null || minLon is null || maxLon is null)
+        {
+            return Problem(
+                "Incomplete viewport",
+                "All four of minLat, maxLat, minLon and maxLon are required.");
+        }
+
+        if (minLat < -90 || maxLat > 90 || minLon < -180 || maxLon > 180)
+        {
+            return Problem(
+                "Viewport outside the world",
+                "Latitude must be between -90 and 90, longitude between -180 and 180.");
+        }
+
+        // Inverted rather than merely empty. Swapping min and max is the single most likely caller
+        // mistake, and it produces a silently empty map — which looks exactly like a part of the
+        // city with no restaurants in it.
+        if (minLat >= maxLat || minLon >= maxLon)
+        {
+            return Problem(
+                "Inverted viewport",
+                "minLat must be less than maxLat, and minLon less than maxLon.");
+        }
+
+        if (maxLat - minLat > MaxViewportDegrees || maxLon - minLon > MaxViewportDegrees)
+        {
+            return Problem(
+                "Viewport too large",
+                $"A viewport may span at most {MaxViewportDegrees} degrees on each axis. " +
+                "The whole dataset fits inside that.");
+        }
+
+        if (limit is < 1 or > MaxMapLimit)
+        {
+            return Problem(
+                "Invalid limit",
+                $"limit must be between 1 and {MaxMapLimit}. It was {limit}.");
+        }
+
+        MapResult result = await queries.MapAsync(
+            new MapViewport
+            {
+                MinLatitude = minLat.Value,
+                MaxLatitude = maxLat.Value,
+                MinLongitude = minLon.Value,
+                MaxLongitude = maxLon.Value,
+                Filter = new EstablishmentFilter
+                {
+                    NameStartsWith = nameStartsWith,
+                    Cuisine = cuisine,
+                    Locality = locality,
+                    Outcome = outcome,
+                    IsAwaitingFirstInspection = awaitingFirstInspection,
+                },
+                Limit = limit,
+            },
+            cancellationToken);
+
+        return TypedResults.Ok(result);
+    }
+
+    private static ProblemHttpResult Problem(string title, string detail)
+        => TypedResults.Problem(
+            title: title, detail: detail, statusCode: StatusCodes.Status400BadRequest);
 
     /// <summary>
     /// The <c>:int</c> route constraint means a non-numeric id never reaches this method — the

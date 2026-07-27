@@ -3,15 +3,19 @@ using Freshline.Core.Model;
 namespace Freshline.Core.Queries;
 
 /// <summary>
-/// What to select for a page of the establishment list. Filters are combined with AND; every one of
-/// them is optional, and an all-null query means "everything, first page".
+/// The questions that can be asked about which establishments to return. Filters are combined with
+/// AND; every one is optional, and an all-null filter means "everything".
+///
+/// <para>Shared by the list and the map so the two cannot drift. A map that quietly supported a
+/// different set of filters from the list behind it would be a bug nobody notices until the front
+/// end shows different results for the same choice on two screens.</para>
 ///
 /// <para>This is deliberately not an <c>IQueryable</c> handed out of Infrastructure. Letting the API
 /// compose its own query would make every EF limitation an API bug and would put the storage schema
 /// back in the caller's hands — the specific coupling the layering exists to prevent. The set of
-/// questions this endpoint can ask is finite, so it is written down.</para>
+/// questions these endpoints can ask is finite, so it is written down.</para>
 /// </summary>
-public sealed record EstablishmentListQuery
+public sealed record EstablishmentFilter
 {
     /// <summary>Matched against the start of the name, case-insensitively — the database collation
     /// decides, not the application. A prefix rather than a contains-search because a leading
@@ -43,6 +47,16 @@ public sealed record EstablishmentListQuery
     /// rather than something a caller has to infer from an empty inspection list.</para>
     /// </summary>
     public bool? IsAwaitingFirstInspection { get; init; }
+
+    /// <summary>The filter that selects everything, so callers with nothing to filter on do not have
+    /// to reason about null.</summary>
+    public static EstablishmentFilter None { get; } = new();
+}
+
+/// <summary>What to select for a page of the establishment list.</summary>
+public sealed record EstablishmentListQuery
+{
+    public required EstablishmentFilter Filter { get; init; }
 
     /// <summary>Where to resume from. Null starts at the beginning.</summary>
     public EstablishmentCursor? After { get; init; }
