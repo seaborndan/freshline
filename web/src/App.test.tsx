@@ -21,6 +21,9 @@ const handlers = new Map<string, () => void>()
 /** The box the fake map claims to be showing. Times Square, wider than the committed constant. */
 let bounds = { south: 40.7515, north: 40.7605, west: -73.9925, east: -73.9785 }
 
+/** What the fake map reports as being under the next click. */
+let clicked: { properties: { id: number } }[] = []
+
 vi.mock('maplibre-gl', () => ({
   Map: class {
     addControl = vi.fn()
@@ -34,6 +37,8 @@ vi.mock('maplibre-gl', () => ({
     getStyle = () => ({ layers: [{ id: 'place-label', type: 'symbol' }] })
     setLayerZoomRange = vi.fn()
     setLayoutProperty = vi.fn()
+    getCanvas = () => ({ style: {} })
+    queryRenderedFeatures = () => clicked
     getBounds = () => ({
       getSouth: () => bounds.south,
       getNorth: () => bounds.north,
@@ -50,7 +55,8 @@ vi.mock('maplibre-gl', () => ({
 
 const fetchMap = vi.hoisted(() => vi.fn())
 const fetchFilterOptions = vi.hoisted(() => vi.fn())
-vi.mock('./api/client', () => ({ fetchMap, fetchFilterOptions }))
+const fetchEstablishment = vi.hoisted(() => vi.fn())
+vi.mock('./api/client', () => ({ fetchMap, fetchFilterOptions, fetchEstablishment }))
 
 const loaded = mapFixture as unknown as MapResult
 
@@ -69,8 +75,23 @@ beforeEach(() => {
   vi.useFakeTimers()
   handlers.clear()
   bounds = { south: 40.7515, north: 40.7605, west: -73.9925, east: -73.9785 }
+  clicked = []
   fetchMap.mockReset()
   fetchMap.mockResolvedValue(loaded)
+  fetchEstablishment.mockReset()
+  fetchEstablishment.mockResolvedValue({
+    id: 1328,
+    name: 'RAISING CANES #888',
+    cuisine: 'Chicken',
+    phone: null,
+    addressLine: '1 FIXTURE STREET',
+    locality: 'Manhattan',
+    postalCode: '10001',
+    latitude: 40.757,
+    longitude: -73.986,
+    isAwaitingFirstInspection: false,
+    inspections: [],
+  })
   fetchFilterOptions.mockReset()
   fetchFilterOptions.mockResolvedValue({
     cuisines: ['American', 'Chinese'],
@@ -286,5 +307,71 @@ describe('App', () => {
     })
 
     expect(pushState).not.toHaveBeenCalled()
+  })
+
+  /** Fires the map's click handler with whatever `clicked` currently holds. */
+  async function clickMap() {
+    await act(async () => {
+      ;(handlers.get('click') as unknown as (event: { point: unknown }) => void)?.({ point: {} })
+    })
+  }
+
+  it('opens the record when a click lands on one establishment', async () => {
+    render(<App />)
+    await showMap()
+
+    clicked = [{ properties: { id: 1328 } }]
+    await clickMap()
+
+    expect(fetchEstablishment).toHaveBeenCalledWith(1328, expect.anything())
+    // getBy rather than findBy: this file runs on fake timers, and Testing Library's async queries
+    // poll on real ones. The `act` above has already flushed the fetch's microtasks.
+    expect(screen.getByRole('heading', { name: 'RAISING CANES #888' })).toBeInTheDocument()
+  })
+
+  // 47 of the 238 points in the opening view carry more than one establishment. Opening the first
+  // of them would be answering the click arbitrarily.
+  it('offers a choice when a click lands on a stack, without fetching anything', async () => {
+    render(<App />)
+    await showMap()
+
+    clicked = [{ properties: { id: 1328 } }, { properties: { id: 901 } }]
+    await clickMap()
+
+    expect(screen.getByRole('heading', { name: '2 places at this address' })).toBeInTheDocument()
+    expect(fetchEstablishment).not.toHaveBeenCalled()
+  })
+
+  it('puts the open establishment in the address bar', async () => {
+    render(<App />)
+    await showMap()
+
+    clicked = [{ properties: { id: 1328 } }]
+    await clickMap()
+
+    expect(window.location.search).toContain('id=1328')
+  })
+
+  it('opens straight onto an establishment named in the address bar', async () => {
+    window.history.replaceState(null, '', '/?id=1328')
+
+    render(<App />)
+    await showMap()
+
+    expect(fetchEstablishment).toHaveBeenCalledWith(1328, expect.anything())
+  })
+
+  it('closes the panel when the click lands on empty map', async () => {
+    render(<App />)
+    await showMap()
+
+    clicked = [{ properties: { id: 1328 } }]
+    await clickMap()
+    expect(screen.getByRole('heading', { name: 'RAISING CANES #888' })).toBeInTheDocument()
+
+    clicked = []
+    await clickMap()
+
+    expect(screen.queryByRole('heading', { name: 'RAISING CANES #888' })).not.toBeInTheDocument()
   })
 })

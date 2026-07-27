@@ -118,9 +118,23 @@ export interface MapViewProps {
    * belongs to `useEstablishments`.
    */
   onViewportChange?: (viewport: Viewport) => void
+
+  /**
+   * Called with the ids of every establishment under a click, in draw order — several when the
+   * click landed on a stacked point, none when it landed on empty map.
+   *
+   * Ids rather than establishments, because this component is handed pins to draw and should not
+   * also become the place that decides what a click *means*.
+   */
+  onSelect?: (ids: number[]) => void
 }
 
-export function MapView({ establishments, initialViewport, onViewportChange }: MapViewProps) {
+export function MapView({
+  establishments,
+  initialViewport,
+  onViewportChange,
+  onSelect,
+}: MapViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | null>(null)
 
@@ -150,6 +164,9 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
   // hold the first render's copy of a prop.
   const latestOnViewportChange = useRef(onViewportChange)
   latestOnViewportChange.current = onViewportChange
+
+  const latestOnSelect = useRef(onSelect)
+  latestOnSelect.current = onSelect
 
   /**
    * Pins that arrived while the user was still moving the map, held until they stop.
@@ -264,6 +281,34 @@ export function MapView({ establishments, initialViewport, onViewportChange }: M
     created.on('error', (event: { error?: Error }) => {
       setMapFailure(event.error?.message ?? 'The map could not be drawn.')
     })
+
+    // Queried rather than registered per layer, so the two pin layers are asked as one and the
+    // answer keeps its draw order. A click on empty map returns nothing, which is a deselection.
+    //
+    // Every feature under the cursor comes back, not just the top one. That matters here: 47 of the
+    // 238 points in the opening view carry more than one establishment and the busiest carries 18,
+    // so answering with the first would be answering arbitrarily.
+    created.on('click', (event) => {
+      const features = created.queryRenderedFeatures(event.point, {
+        layers: [ordinaryLayerId, priorityLayerId],
+      })
+
+      const ids = features
+        .map((feature) => feature.properties?.id)
+        .filter((id): id is number => typeof id === 'number')
+
+      latestOnSelect.current?.([...new Set(ids)])
+    })
+
+    // A dot that can be clicked should say so before it is clicked.
+    for (const layerId of [ordinaryLayerId, priorityLayerId]) {
+      created.on('mouseenter', layerId, () => {
+        created.getCanvas().style.cursor = 'pointer'
+      })
+      created.on('mouseleave', layerId, () => {
+        created.getCanvas().style.cursor = ''
+      })
+    }
 
     // `moveend`, not `move`. A drag fires `move` continuously — one event per frame — and every one
     // of them would start the debounce timer again; `moveend` fires once when the camera settles,

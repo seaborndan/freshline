@@ -383,7 +383,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | 2 | Map with pins, coloured by outcome, with a legend | **done** |
 | 3 | Viewport-driven fetching, debounced, with truncation handling | **done** |
 | 4 | Filter panel | **done** |
-| 5 | Detail panel with inspection history | not started |
+| 5 | Detail panel with inspection history | **done** |
 | 6 | Loading, error, empty states and keyboard navigation | not started |
 | 7 | Deployment, and the URL | not started |
 | 8 | Consolidation — ADR, README, roadmap, log | not started |
@@ -724,6 +724,49 @@ rendered (89 cuisines, 5 boroughs, 5 outcomes, three "Any" rows), and a shared l
 exact bounds — the browser's fitted box is slightly wider, which is the same mechanism documented on
 `initialViewport` rather than a discrepancy.
 
+### Slice 5, as built
+
+`detail/DetailPanel.tsx` and `detail/useEstablishmentDetail.ts`, plus a click handler on the map and
+one more parameter in the URL.
+
+#### A click on a crowded point opens a list, not an establishment
+
+The open item from slice 2, answered. New York geocodes many establishments to the same address:
+**47 of the 238 points in the opening view carry more than one**, the busiest carries 18, and one
+address in the city carries 49. They are drawn exactly on top of each other, so a click there is a
+question with several answers.
+
+Taking whichever feature MapLibre returned first would have answered it arbitrarily — silently, and
+differently depending on how the source happened to tile. So one establishment opens a record and
+several open their names, each with its own state beside it, because at a stacked point the dot's
+colour belongs to whichever establishment was drawn last, which is to say nobody's.
+
+Rejected: spreading pins apart on click, which is a lot of machinery and draws restaurants where they
+are not; and a cluster count, which answers "how many" when the question is "which".
+
+The candidates come from the pins already on screen rather than from a second request — the map
+response carried a name and a state for each, and re-asking would spend rate-limit tokens
+re-learning what is in memory.
+
+#### Details worth defending
+
+- **Dates are rendered from the string.** `"2026-03-09"` through `new Date()` is UTC midnight, which
+  is the 8th in New York, and there is a test asserting the 9th appears and the 8th does not.
+- **Never inspected is described as a published state**, not as missing data — it is the
+  third-largest group on the map and the panel says so in words.
+- **Closure is separate from the grade.** The fixture establishment was closed while `Ungraded`, with
+  no letter grade at all.
+- **`isCritical` is only shown for a definite true**, because null means the source published "Not
+  Applicable" and flattening it would assert something nobody said.
+- **The open establishment is in the URL**, so a single place is shareable, and an `id` that is not a
+  positive integer is dropped rather than sent to the API to be told 404.
+
+**Verified.** 156 web tests, `tsc -b`, build and lint clean. Checked end to end against the running
+API — and that check found a real bug: gating the panel on the clicked candidates hid it entirely for
+a `?id=` link naming an establishment outside the current view, which is most of them. `?id=21` is in
+Staten Island and the opening view is Times Square. Now the record renders whether or not its pin is
+on screen.
+
 ## Standing requirements
 
 Not specific to M5. Repeated because a milestone brief that omits them reads as if they were optional.
@@ -741,11 +784,14 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
 
 ## Open items carried into M5
 
-- **Establishments stacked on one coordinate have no way to be told apart, and slice 5 needs an
-  answer.** 49 of them share one address in the opening viewport alone. A click at that point is
-  ambiguous today — whichever feature MapLibre returns first wins, arbitrarily — and the honest
-  options are a cluster count, a spiderfier, or a detail panel that opens on a list rather than on an
-  establishment. Recorded here rather than decided in passing.
+- ~~**Establishments stacked on one coordinate have no way to be told apart**~~ — answered in slice
+  5: a click resolving to more than one establishment opens the list, and the user chooses. See
+  below.
+- **A shared `?id=` link does not move the map to the establishment it names.** The record opens and
+  is readable, and the map stays wherever the link's viewport put it — which for a link carrying only
+  an id is the opening view, usually nowhere near. Found by loading `?id=21`, which is in Staten
+  Island. Fixing it means the map taking a camera instruction from outside, which is a small piece of
+  design rather than a line of code.
 
 - **The rate limiter partitions on `RemoteIpAddress`, which becomes the proxy's address behind any
   ingress.** Every caller then shares one bucket and a per-client limit becomes a global one that

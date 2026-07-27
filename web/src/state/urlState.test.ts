@@ -11,7 +11,7 @@ const timesSquare: Viewport = {
 
 describe('readUrlState', () => {
   it('reads an empty query as no viewport and no filters', () => {
-    expect(readUrlState('')).toEqual({ viewport: null, filters: {} })
+    expect(readUrlState('')).toEqual({ viewport: null, filters: {}, selectedId: null })
   })
 
   it('reads every filter', () => {
@@ -70,18 +70,18 @@ describe('readUrlState', () => {
 
 describe('writeUrlState', () => {
   it('writes nothing for an empty state', () => {
-    expect(writeUrlState({ viewport: null, filters: {} })).toBe('')
+    expect(writeUrlState({ viewport: null, filters: {}, selectedId: null })).toBe('')
   })
 
   it('writes the bounds under the names the API uses, so the two can be compared', () => {
-    const query = writeUrlState({ viewport: timesSquare, filters: {} })
+    const query = writeUrlState({ viewport: timesSquare, filters: {}, selectedId: null })
 
     expect(query).toContain('minLat=40.755500')
     expect(query).toContain('maxLon=-73.979180')
   })
 
   it('omits an empty name rather than writing name=', () => {
-    expect(writeUrlState({ viewport: null, filters: { nameStartsWith: '' } })).toBe('')
+    expect(writeUrlState({ viewport: null, filters: { nameStartsWith: '' }, selectedId: null })).toBe('')
   })
 
   // The round trip is what makes a link shareable: what comes out of the address bar has to be what
@@ -89,6 +89,7 @@ describe('writeUrlState', () => {
   it('round-trips a full state', () => {
     const state = {
       viewport: timesSquare,
+      selectedId: 1328,
       filters: {
         nameStartsWith: 'DUNKIN',
         cuisine: 'Coffee/Tea',
@@ -104,9 +105,24 @@ describe('writeUrlState', () => {
   // Panning writes the URL on every settle. If the parameter order moved with it, the address bar
   // would reshuffle while the user dragged.
   it('writes parameters in a stable order', () => {
-    const first = writeUrlState({ viewport: timesSquare, filters: { locality: 'Bronx' } })
-    const second = writeUrlState({ filters: { locality: 'Bronx' }, viewport: timesSquare })
+    const first = writeUrlState({ viewport: timesSquare, filters: { locality: 'Bronx' }, selectedId: null })
+    const second = writeUrlState({ filters: { locality: 'Bronx' }, viewport: timesSquare, selectedId: null })
 
     expect(first).toBe(second)
+  })
+
+  // "Look at this restaurant" is a thing people send each other, and a link that reopens the map
+  // but not the panel has lost the point of the message.
+  it('carries the open establishment', () => {
+    expect(readUrlState('?id=1328').selectedId).toBe(1328)
+    expect(writeUrlState({ viewport: null, filters: {}, selectedId: 1328 })).toBe('?id=1328')
+  })
+
+  // An identity here is a positive integer. Both of these are a link somebody mangled, and neither
+  // should reach the API to be told 404.
+  it('ignores an id that is not one', () => {
+    expect(readUrlState('?id=banana').selectedId).toBeNull()
+    expect(readUrlState('?id=-1').selectedId).toBeNull()
+    expect(readUrlState('?id=1.5').selectedId).toBeNull()
   })
 })

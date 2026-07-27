@@ -39,9 +39,17 @@ export interface MapUrlState {
   /** Null means "no viewport in the URL" — the caller falls back to the committed opening view. */
   viewport: Viewport | null
   filters: EstablishmentFilter
+
+  /**
+   * The establishment whose record is open, if any.
+   *
+   * In the URL for the same reason the viewport is: "look at this restaurant" is a thing people send
+   * each other, and a link that reopens the map but not the panel has lost the point of the message.
+   */
+  selectedId: number | null
 }
 
-export const emptyUrlState: MapUrlState = { viewport: null, filters: {} }
+export const emptyUrlState: MapUrlState = { viewport: null, filters: {}, selectedId: null }
 
 function readNumber(params: URLSearchParams, name: string): number | null {
   const raw = params.get(name)
@@ -97,6 +105,11 @@ export function readUrlState(search: string): MapUrlState {
     filters.awaitingFirstInspection = uninspected === 'true'
   }
 
+  // Integer and positive, because that is what an identity is here. `?id=banana` and `?id=-1` are
+  // both a link somebody mangled, and neither should reach an endpoint to be told 404.
+  const rawId = readNumber(params, 'id')
+  const selectedId = rawId !== null && Number.isInteger(rawId) && rawId > 0 ? rawId : null
+
   const minLatitude = readNumber(params, 'minLat')
   const maxLatitude = readNumber(params, 'maxLat')
   const minLongitude = readNumber(params, 'minLon')
@@ -108,13 +121,13 @@ export function readUrlState(search: string): MapUrlState {
     minLongitude === null ||
     maxLongitude === null
   ) {
-    return { viewport: null, filters }
+    return { viewport: null, filters, selectedId }
   }
 
   const viewport: Viewport = { minLatitude, maxLatitude, minLongitude, maxLongitude }
 
   // The same rules the API enforces, applied before the request rather than after the 400.
-  return { viewport: viewportProblem(viewport) === null ? viewport : null, filters }
+  return { viewport: viewportProblem(viewport) === null ? viewport : null, filters, selectedId }
 }
 
 /**
@@ -125,7 +138,7 @@ export function readUrlState(search: string): MapUrlState {
  */
 export function writeUrlState(state: MapUrlState): string {
   const params = new URLSearchParams()
-  const { filters, viewport } = state
+  const { filters, viewport, selectedId } = state
 
   if (filters.nameStartsWith !== undefined && filters.nameStartsWith !== '') {
     params.set('name', filters.nameStartsWith)
@@ -145,6 +158,10 @@ export function writeUrlState(state: MapUrlState): string {
 
   if (filters.awaitingFirstInspection !== undefined) {
     params.set('uninspected', String(filters.awaitingFirstInspection))
+  }
+
+  if (selectedId !== null) {
+    params.set('id', String(selectedId))
   }
 
   if (viewport !== null) {
