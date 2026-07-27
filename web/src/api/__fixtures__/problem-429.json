@@ -1,0 +1,6 @@
+{
+  "title": "Too many requests",
+  "status": 429,
+  "detail": "This API allows 30 requests every 10 seconds per client, after an initial burst of 60. Retry after the interval in the Retry-After header.",
+  "traceId": "00-d61f9eeeb779da91c8cb5466116cf40f-23b1fb1663c6ea09-00"
+}

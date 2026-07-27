@@ -1,0 +1,220 @@
+/**
+ * The only place in this application that calls `fetch`.
+ *
+ * Everything it knows how to do is here: build a query string, send one request, turn a failure into
+ * one of four errors, and hand the success to `validate.ts` before anyone sees it.
+ *
+ * **No token, no `Authorization` header, no credentials.** The read endpoints are anonymous by
+ * decision, not by omission — ADR-0005. There is no login, no auth state and no 401 path to handle,
+ * and `credentials` stays at the default `'same-origin'` so no cookie is ever sent cross-origin.
+ *
+ * **Nothing here retries.** Not the 429, for the reason in `errors.ts`, and not a network failure
+ * either — a map that silently repeats a request the user did not make burns their rate-limit budget
+ * on their behalf. Retrying is the caller's choice, made once, in response to something a person did.
+ */
+
+import type { EstablishmentDetail, EstablishmentFilter, MapResult } from './contract'
+import {
+  ApiProblemError,
+  ApiUnreachableError,
+  InvalidViewportError,
+  isAbortError,
+  type ProblemDetails,
+} from './errors'
+import { readEstablishmentDetail, readMapResult } from './validate'
+import { viewportProblem, type Viewport } from './viewport'
+
+/**
+ * Where the API is.
+ *
+ * **Deliberately not a Vite dev proxy**, which was the alternative and is the more comfortable one.
+ * A proxy makes the browser see one origin and removes CORS from development entirely — which is the
+ * problem with it: CORS is a production condition, and hiding it locally means the first time anyone
+ * meets it is on the deployed URL, as a console error, with a different tool chain to debug it in.
+ * The API already allows `http://localhost:5173` from a committed default in `CrossOriginPolicy`, so
+ * the honest arrangement costs nothing and exercises the real path on every request.
+ *
+ * The deployed value arrives as a build-time environment variable in slice 7. The fallback is the
+ * `dotnet run` address from `docs/local-development.md`.
+ */
+const baseUrl: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5045'
+
+const apiRoot = `${baseUrl.replace(/\/+$/, '')}/api/v1`
+
+/**
+ * Pins per viewport request.
+ *
+ * Sent explicitly rather than left to the server's default, so this number is visible in this
+ * repository and changing it is a change someone can read. It is the server's current default and
+ * it is not yet a measured choice — slice 3 picks it against `isTruncated` at the zoom levels the
+ * map actually opens at.
+ */
+export const defaultMapLimit = 1000
+
+export interface MapRequest {
+  viewport: Viewport
+  filter?: EstablishmentFilter
+  limit?: number
+}
+
+/**
+ * Coordinates in the query string, at about 10cm of precision.
+ *
+ * Fixed precision rather than whatever `toString` gives, because a map reports bounds as full
+ * float64 and the trailing digits change on every frame of a drag. Beyond six decimal places they
+ * describe nothing and only make each URL unique — which matters here, since the same rounding is
+ * what lets slice 3 tell "the viewport changed" from "the viewport jittered".
+ */
+function coordinate(value: number): string {
+  return value.toFixed(6)
+}
+
+function buildMapUrl(request: MapRequest): string {
+  const { viewport, filter, limit } = request
+
+  const query = new URLSearchParams({
+    minLat: coordinate(viewport.minLatitude),
+    maxLat: coordinate(viewport.maxLatitude),
+    minLon: coordinate(viewport.minLongitude),
+    maxLon: coordinate(viewport.maxLongitude),
+    limit: String(limit ?? defaultMapLimit),
+  })
+
+  appendFilter(query, filter)
+
+  return `${apiRoot}/establishments/map?${query.toString()}`
+}
+
+/**
+ * Absent filters are absent parameters, never empty ones. `?cuisine=` is not "no cuisine filter" to
+ * this API — it is an exact match against the empty string, which nothing has.
+ *
+ * `outcome` goes on the wire as its name, matching how the API serialises it. Nothing here maps an
+ * outcome to a number.
+ */
+function appendFilter(query: URLSearchParams, filter: EstablishmentFilter | undefined): void {
+  if (filter === undefined) {
+    return
+  }
+
+  if (filter.nameStartsWith !== undefined && filter.nameStartsWith !== '') {
+    query.set('nameStartsWith', filter.nameStartsWith)
+  }
+
+  if (filter.cuisine !== undefined) {
+    query.set('cuisine', filter.cuisine)
+  }
+
+  if (filter.locality !== undefined) {
+    query.set('locality', filter.locality)
+  }
+
+  if (filter.outcome !== undefined) {
+    query.set('outcome', filter.outcome)
+  }
+
+  if (filter.awaitingFirstInspection !== undefined) {
+    query.set('awaitingFirstInspection', String(filter.awaitingFirstInspection))
+  }
+}
+
+/**
+ * Everything inside a viewport.
+ *
+ * Throws `InvalidViewportError` without sending anything when the API is already known to refuse the
+ * box. The rate limiter is real and applies in development too, and a map spends its budget in
+ * bursts while the user drags.
+ */
+export async function fetchMap(request: MapRequest, signal?: AbortSignal): Promise<MapResult> {
+  const problem = viewportProblem(request.viewport)
+
+  if (problem !== null) {
+    throw new InvalidViewportError(problem)
+  }
+
+  const body = await requestJson(buildMapUrl(request), signal)
+
+  return readMapResult(body, request.viewport)
+}
+
+/** One establishment with its full inspection history. */
+export async function fetchEstablishment(
+  id: number,
+  signal?: AbortSignal,
+): Promise<EstablishmentDetail> {
+  const body = await requestJson(`${apiRoot}/establishments/${id}`, signal)
+
+  return readEstablishmentDetail(body)
+}
+
+async function requestJson(url: string, signal?: AbortSignal): Promise<unknown> {
+  let response: Response
+
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      headers: { Accept: 'application/json' },
+      signal,
+    })
+  } catch (error) {
+    // An abort is not a failure — it is this client cancelling a request the user superseded by
+    // panning. It travels up untouched so callers can ignore it by name.
+    if (isAbortError(error)) {
+      throw error
+    }
+
+    // `fetch` rejects with a TypeError for every transport-level problem and deliberately tells the
+    // page nothing more: connection refused, DNS, and a CORS rejection are one indistinguishable
+    // failure by design, so the message here cannot be more specific than it is.
+    throw new ApiUnreachableError(error)
+  }
+
+  if (!response.ok) {
+    throw new ApiProblemError(
+      response.status,
+      await readProblemDetails(response),
+      readRetryAfterSeconds(response),
+    )
+  }
+
+  return await response.json()
+}
+
+/**
+ * Every failure from this API is ProblemDetails — 400, 404 and the 429 alike. This still tolerates a
+ * body that is not, because the response in front of the API on the deployed URL will not be: an
+ * ingress returning its own 502 or 504 sends HTML, and the client should report a status rather than
+ * throw a parse error over it.
+ */
+async function readProblemDetails(response: Response): Promise<ProblemDetails> {
+  try {
+    const body: unknown = await response.json()
+
+    if (typeof body === 'object' && body !== null && !Array.isArray(body)) {
+      return body as ProblemDetails
+    }
+  } catch {
+    // Not JSON. The status is still worth reporting.
+  }
+
+  return {}
+}
+
+/**
+ * `Retry-After: 10` — the API sends delta-seconds.
+ *
+ * RFC 9110 also permits an HTTP-date, which is not parsed here: this client talks to one API, that
+ * API's rate limiter writes seconds, and a date would need `Date.parse` and a clock-skew argument to
+ * be worth anything. An unrecognised value reads as null and the UI says "try again shortly".
+ */
+function readRetryAfterSeconds(response: Response): number | null {
+  const header = response.headers.get('Retry-After')
+
+  if (header === null) {
+    return null
+  }
+
+  const seconds = Number(header)
+
+  return Number.isInteger(seconds) && seconds >= 0 ? seconds : null
+}
