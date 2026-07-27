@@ -1,0 +1,113 @@
+{
+    "id": 21,
+    "name": "POPEYES",
+    "cuisine": "Chicken",
+    "phone": "7187201545",
+    "addressLine": "1351 FOREST AVENUE",
+    "locality": "Staten Island",
+    "postalCode": "10302",
+    "latitude": 40.625949769931,
+    "longitude": -74.134450400927,
+    "isAwaitingFirstInspection": false,
+    "inspections": [
+        {
+            "id": 19,
+            "inspectedOn": "2026-03-09",
+            "inspectionType": "Cycle Inspection / Initial Inspection",
+            "action": "Establishment Closed by DOHMH. Violations were cited in the following area(s) and those requiring immediate action were addressed.",
+            "rawGrade": null,
+            "rawScore": 75,
+            "outcome": "Ungraded",
+            "normalisedSeverity": 75,
+            "closedByAuthority": true,
+            "violations": [
+                {
+                    "code": "04L",
+                    "description": "Evidence of mice or live mice in establishment's food or non-food areas.",
+                    "isCritical": true
+                },
+                {
+                    "code": "04N",
+                    "description": "Filth flies or food/refuse/sewage associated with (FRSA) flies or other nuisance pests in establishment\u00e2\u20ac\u2122s food and/or non-food areas. FRSA flies include house flies, blow flies, bottle flies, flesh flies, drain flies, Phorid flies and fruit flies.",
+                    "isCritical": true
+                },
+                {
+                    "code": "05E",
+                    "description": "Toilet facility not provided for employees or for patrons when required. Shared patron-employee toilet accessed through kitchen, food prep or storage area or utensil washing area.",
+                    "isCritical": true
+                },
+                {
+                    "code": "06C",
+                    "description": "Food, supplies, or equipment not protected from potential source of contamination during storage, preparation, transportation, display, service or from customer\u00e2\u20ac\u2122s refillable, reusable container. Condiments not in single-service containers or dispensed directly by the vendor.",
+                    "isCritical": true
+                },
+                {
+                    "code": "06D",
+                    "description": "Food contact surface not properly washed, rinsed and sanitized after each use and following any activity when contamination may have occurred.",
+                    "isCritical": true
+                },
+                {
+                    "code": "08A",
+                    "description": "Establishment is not free of harborage or conditions conducive to rodents, insects or other pests.",
+                    "isCritical": false
+                },
+                {
+                    "code": "10B",
+                    "description": "Anti-siphonage or back-flow prevention device not provided where required; equipment or floor not properly drained; sewage disposal system in disrepair or not functioning properly. Condensation or liquid waste improperly disposed of.",
+                    "isCritical": false
+                }
+            ]
+        },
+        {
+            "id": 669,
+            "inspectedOn": "2026-03-03",
+            "inspectionType": "Administrative Miscellaneous / Initial Inspection",
+            "action": "Violations were cited in the following area(s).",
+            "rawGrade": null,
+            "rawScore": null,
+            "outcome": "Ungraded",
+            "normalisedSeverity": null,
+            "closedByAuthority": false,
+            "violations": [
+                {
+                    "code": "20-06",
+                    "description": "Current letter grade or Grade Pending card not posted",
+                    "isCritical": false
+                }
+            ]
+        },
+        {
+            "id": 515,
+            "inspectedOn": "2025-08-27",
+            "inspectionType": "Cycle Inspection / Re-inspection",
+            "action": "Violations were cited in the following area(s).",
+            "rawGrade": "B",
+            "rawScore": 19,
+            "outcome": "Fair",
+            "normalisedSeverity": 19,
+            "closedByAuthority": false,
+            "violations": [
+                {
+                    "code": "04N",
+                    "description": "Filth flies or food/refuse/sewage associated with (FRSA) flies or other nuisance pests in establishment\u00e2\u20ac\u2122s food and/or non-food areas. FRSA flies include house flies, blow flies, bottle flies, flesh flies, drain flies, Phorid flies and fruit flies.",
+                    "isCritical": true
+                },
+                {
+                    "code": "06D",
+                    "description": "Food contact surface not properly washed, rinsed and sanitized after each use and following any activity when contamination may have occurred.",
+                    "isCritical": true
+                },
+                {
+                    "code": "08A",
+                    "description": "Establishment is not free of harborage or conditions conducive to rodents, insects or other pests.",
+                    "isCritical": false
+                },
+                {
+                    "code": "10F",
+                    "description": "Non-food contact surface or equipment made of unacceptable material, not kept clean, or not properly sealed, raised, spaced or movable to allow accessibility for cleaning on all sides, above and underneath the unit.",
+                    "isCritical": false
+                }
+            ]
+        }
+    ]
+}

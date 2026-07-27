@@ -357,9 +357,17 @@ cd web && npm run dev                         # http://localhost:5173
 
 `http://localhost:5173` and `http://127.0.0.1:5173` are **already allowed by the API's CORS policy in
 Development**, from a committed default in `CrossOriginPolicy` — not from `appsettings.Development.json`,
-which is gitignored. So direct calls from the dev server work with no proxy. A Vite proxy is still an
-option and is a decision: it removes CORS from the picture in development and hides a class of bug
-that will reappear in production.
+which is gitignored. So direct calls from the dev server work with no proxy.
+
+**Decided in slice 1: no Vite proxy.** It was the more comfortable option — one origin, CORS gone
+from development entirely — and that is the objection to it. CORS is a production condition, and a
+proxy means the first time anyone meets it is on the deployed URL, as a browser console error, with a
+different tool chain to debug it in. The direct arrangement costs nothing here and exercises the real
+path on every request. The base URL is `VITE_API_BASE_URL`, defaulting to the `dotnet run` address;
+slice 7 sets it at build time.
+
+The API must therefore be running for the front end to show anything, which is the honest dependency
+rather than a hidden one.
 
 See [`docs/local-development.md`](../local-development.md) for the rest of the setup.
 
@@ -371,7 +379,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 
 | # | Slice | Status |
 |---|---|---|
-| 1 | API client and generated types, error and 429 handling | not started |
+| 1 | API client and types, error and 429 handling | **done** |
 | 2 | Map with pins, coloured by outcome, with a legend | not started |
 | 3 | Viewport-driven fetching, debounced, with truncation handling | not started |
 | 4 | Filter panel | not started |
@@ -382,6 +390,40 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 
 **Needs line-by-line human review before merge:** any new dependency, and anything touching
 deployment configuration or secrets.
+
+### Slice 1, as built
+
+`web/src/api/` — `contract.ts` (the types), `validate.ts` (the boundary), `client.ts` (the only
+`fetch` in the application), `errors.ts`, `viewport.ts`, `plainDate.ts`. No new dependencies. The
+slice is renamed from "generated types" because codegen was turned down; see the dependency decision
+above.
+
+Three things in it are worth being able to defend, because each replaces something a reviewer would
+expect to find:
+
+- **The boundary check earns its place by catching what types cannot.** An unknown `outcome` is
+  rejected by name, and a numeric one — `1` instead of `"Good"` — is rejected as a wrong type. Both
+  compile fine and both would draw a wrong colour on a real restaurant.
+- **A swapped axis is caught by containment, not by range.** New York is near 40.7°N, -74.0°E, and
+  each of those is a legal value for the other axis, so a swap lands in the Indian Ocean looking
+  entirely plausible. Range-checking cannot see it. Being outside the rectangle that was requested
+  can, and one swap in the query builder puts every pin outside it at once.
+- **Nothing retries, including the 429.** `Retry-After` is read and surfaced so the UI can say when
+  to come back. A client that retries a throttle is how a rate limit becomes an outage.
+
+Fixtures in `__fixtures__/` are captured from the running API, not transcribed from the C# records —
+including the 429, whose body has no `type` member while the 400's does. A hand-written fixture would
+have had one.
+
+**Verified, not assumed.** 49 web tests pass. The two checks the slice exists for were
+mutation-tested — the containment guard and the outcome guard were each broken deliberately, and
+exactly the test naming them failed. The client was then run once against the live API: 5,000 pins
+validated end to end (`Good` 2,387 · `Ungraded` 2,014 · never inspected 305 · `Fair` 251 · `Poor` 43,
+`isTruncated` true), the `outcome` filter combined with `locality` returned 7 `Poor` in the Bronx, a
+detail request returned its history, and a 404 surfaced the API's own sentence.
+
+That truncated whole-city response is the measurement behind the initial-viewport decision: at the
+maximum limit the API allows, the city does not fit.
 
 ---
 

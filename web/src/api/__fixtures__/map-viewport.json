@@ -1,0 +1,69 @@
+{
+  "items": [
+    {
+      "id": 1328,
+      "name": "RAISING CANES #888",
+      "latitude": 40.7570962405,
+      "longitude": -73.986193424352,
+      "isAwaitingFirstInspection": false,
+      "latestInspection": {
+        "inspectedOn": "2025-11-20",
+        "rawGrade": "A",
+        "outcome": "Good",
+        "normalisedSeverity": 9,
+        "closedByAuthority": false
+      }
+    },
+    {
+      "id": 901,
+      "name": "NOA",
+      "latitude": 40.746317217454,
+      "longitude": -73.983550287385,
+      "isAwaitingFirstInspection": false,
+      "latestInspection": {
+        "inspectedOn": "2026-02-03",
+        "rawGrade": null,
+        "outcome": "Ungraded",
+        "normalisedSeverity": null,
+        "closedByAuthority": false
+      }
+    },
+    {
+      "id": 922,
+      "name": "PARTNERS COFFEE",
+      "latitude": 40.719010693384,
+      "longitude": -73.956439536567,
+      "isAwaitingFirstInspection": true,
+      "latestInspection": null
+    },
+    {
+      "id": 1203,
+      "name": "EARTHBAR",
+      "latitude": 40.781468685378,
+      "longitude": -73.979555148809,
+      "isAwaitingFirstInspection": false,
+      "latestInspection": {
+        "inspectedOn": "2026-03-31",
+        "rawGrade": "C",
+        "outcome": "Poor",
+        "normalisedSeverity": 55,
+        "closedByAuthority": false
+      }
+    },
+    {
+      "id": 21,
+      "name": "POPEYES",
+      "latitude": 40.625949769931,
+      "longitude": -74.134450400927,
+      "isAwaitingFirstInspection": false,
+      "latestInspection": {
+        "inspectedOn": "2026-03-09",
+        "rawGrade": null,
+        "outcome": "Ungraded",
+        "normalisedSeverity": 75,
+        "closedByAuthority": true
+      }
+    }
+  ],
+  "isTruncated": false
+}

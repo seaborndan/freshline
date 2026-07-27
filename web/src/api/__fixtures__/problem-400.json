@@ -1,0 +1,7 @@
+{
+  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+  "title": "Incomplete viewport",
+  "status": 400,
+  "detail": "All four of minLat, maxLat, minLon and maxLon are required.",
+  "traceId": "00-a95568b5e5da113f331bd3fb11a5e0c5-6e897697c2a58301-00"
+}
