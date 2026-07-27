@@ -22,7 +22,7 @@ import {
   type ProblemDetails,
 } from './errors'
 import { readEstablishmentDetail, readMapResult } from './validate'
-import { viewportProblem, type Viewport } from './viewport'
+import { formatCoordinate, viewportProblem, type Viewport } from './viewport'
 
 /**
  * Where the API is.
@@ -57,26 +57,14 @@ export interface MapRequest {
   limit?: number
 }
 
-/**
- * Coordinates in the query string, at about 10cm of precision.
- *
- * Fixed precision rather than whatever `toString` gives, because a map reports bounds as full
- * float64 and the trailing digits change on every frame of a drag. Beyond six decimal places they
- * describe nothing and only make each URL unique — which matters here, since the same rounding is
- * what lets slice 3 tell "the viewport changed" from "the viewport jittered".
- */
-function coordinate(value: number): string {
-  return value.toFixed(6)
-}
-
 function buildMapUrl(request: MapRequest): string {
   const { viewport, filter, limit } = request
 
   const query = new URLSearchParams({
-    minLat: coordinate(viewport.minLatitude),
-    maxLat: coordinate(viewport.maxLatitude),
-    minLon: coordinate(viewport.minLongitude),
-    maxLon: coordinate(viewport.maxLongitude),
+    minLat: formatCoordinate(viewport.minLatitude),
+    maxLat: formatCoordinate(viewport.maxLatitude),
+    minLon: formatCoordinate(viewport.minLongitude),
+    maxLon: formatCoordinate(viewport.maxLongitude),
     limit: String(limit ?? defaultMapLimit),
   })
 

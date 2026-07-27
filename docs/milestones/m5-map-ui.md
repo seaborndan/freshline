@@ -381,7 +381,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 |---|---|---|
 | 1 | API client and types, error and 429 handling | **done** |
 | 2 | Map with pins, coloured by outcome, with a legend | **done** |
-| 3 | Viewport-driven fetching, debounced, with truncation handling | not started |
+| 3 | Viewport-driven fetching, debounced, with truncation handling | **done** |
 | 4 | Filter panel | not started |
 | 5 | Detail panel with inspection history | not started |
 | 6 | Loading, error, empty states and keyboard navigation | not started |
@@ -500,6 +500,62 @@ count them and conclude the map is broken — found by a reader doing exactly th
 now stated.
 
 ---
+
+### Slice 3, as built
+
+`useEstablishments.ts` owns the fetching policy, `viewportOf.ts` reads the box off the map, and `App`
+is the one place that reconciles the two. The map reports where it is and holds no state of its own —
+the structure decision 3 needs when filters and the URL arrive in slice 4.
+
+**Four rules, each of which exists because of a specific way this goes wrong:**
+
+1. **Debounce, on top of `moveend`.** `moveend` already collapses a drag into one event; the debounce
+   collapses runs of discrete gestures, like wheel-zoom steps.
+2. **Cancel the superseded request.** Its answer describes a box nobody is looking at, and without
+   cancellation a slow response can arrive after a fast one and overwrite newer pins with older ones.
+3. **Never ask the same question twice.** Compared on the rounded coordinates that go on the wire, so
+   a click that does not move the camera costs nothing.
+4. **Never send a viewport the API will refuse.** Zoomed out past a degree the answer is a `400`, and
+   the whole dataset spans 0.41° by 0.55°, so that is a user who has zoomed past the entire city. It
+   is said as an instruction — "zoom in to load establishments" — because nothing has gone wrong.
+
+**Why 400 milliseconds.** Read from `PublicApiRateLimiting`: a token bucket of **60**, refilling **30
+every 10 seconds** — three per second sustained — with `QueueLimit = 0`, so an over-limit request is
+refused rather than delayed. It is **one bucket for every data endpoint** (ADR-0005), so the map
+shares its allowance with every detail request slice 5 will make. 400ms caps a user who does nothing
+but wiggle the map at 2.5 requests per second, under the sustained refill and leaving room for the
+detail panel, while staying short enough to read as the request taking a moment rather than the
+interface being slow.
+
+**A 429 starts a cooldown rather than a retry.** Nothing retries — that rule stands. What the hook
+does is decline to *send* until the limiter would accept it, so a user panning through a cooldown
+collects one refusal instead of a dozen. The request that eventually goes is the one their last
+movement asked for.
+
+**Pins are never cleared while the next viewport loads.** An empty map is indistinguishable from an
+area with nothing in it; stale pins about to be replaced are the better lie for a few hundred
+milliseconds.
+
+#### The initial viewport was wrong, and only the running app could say so
+
+Slice 2 chose a box holding 518 establishments specifically so the opening view would not truncate.
+It truncated anyway. **`fitBounds` fits the committed box *inside* the window**, so the box on screen
+is larger on whichever axis has room to spare, and it is the on-screen box that gets fetched. The
+nearly-square box became 0.0216° wide on a 1440×900 window and the fetch returned **1,019** — nineteen
+over the limit. Every number in slice 2's candidate table was correct; none of them described what a
+browser would ask for.
+
+The box is now shaped like a window rather than a square — a longitude span about 2.5× the latitude
+span, because a degree of longitude covers about 76% of the ground a degree of latitude does here. It
+holds 369, and a real browser at 1440×900 fetches **424 places at 282 points**, untruncated, with a
+margin that survives a window twice as wide (782). Keeping the two `Poor` in view cost a deliberate
+nudge north: at 0.4% of the data, an opening view without one shows a legend row nothing on screen
+demonstrates.
+
+**Verified.** 100 web tests, `tsc -b`, build and lint clean. All four fetching rules were
+mutation-tested — each was broken deliberately and failed exactly the tests naming it, and nothing
+else. The opening view was confirmed end to end against the running API by reading the status line
+the app renders.
 
 ## Standing requirements
 

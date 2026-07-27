@@ -24,6 +24,7 @@ import {
   priorityFilter,
 } from './layers'
 import { basemapStyleUrl } from './initialView'
+import { viewportOf } from './viewportOf'
 
 const sourceId = 'establishments'
 const ordinaryLayerId = 'establishments-ordinary'
@@ -35,9 +36,18 @@ export interface MapViewProps {
 
   /** The box the map opens on. Read once, at construction. */
   initialViewport: Viewport
+
+  /**
+   * Called with the box the map is showing, whenever it settles.
+   *
+   * The map is the authority on what is on screen — it knows the window size, the zoom and the
+   * projection, and nothing above it does. It reports; deciding what to do about it, and how often,
+   * belongs to `useEstablishments`.
+   */
+  onViewportChange?: (viewport: Viewport) => void
 }
 
-export function MapView({ establishments, initialViewport }: MapViewProps) {
+export function MapView({ establishments, initialViewport, onViewportChange }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | null>(null)
 
@@ -62,6 +72,11 @@ export function MapView({ establishments, initialViewport }: MapViewProps) {
    */
   const latestEstablishments = useRef(establishments)
   latestEstablishments.current = establishments
+
+  // The same reasoning as the pins above, for the same reason: a handler registered once must not
+  // hold the first render's copy of a prop.
+  const latestOnViewportChange = useRef(onViewportChange)
+  latestOnViewportChange.current = onViewportChange
 
   // Created once and never recreated: the effect has no dependencies, so a change of pins re-runs
   // the second effect rather than tearing down a WebGL context and rebuilding the basemap.
@@ -97,6 +112,14 @@ export function MapView({ establishments, initialViewport }: MapViewProps) {
       setMapFailure(event.error?.message ?? 'The map could not be drawn.')
     })
 
+    // `moveend`, not `move`. A drag fires `move` continuously — one event per frame — and every one
+    // of them would start the debounce timer again; `moveend` fires once when the camera settles,
+    // including at the end of MapLibre's inertial glide. The debounce downstream is for the case
+    // this does not cover: several discrete gestures in quick succession, like wheel-zoom steps.
+    created.on('moveend', () => {
+      latestOnViewportChange.current?.(viewportOf(created))
+    })
+
     // `style.load`, not `load`. They sound interchangeable and are not: `load` waits for "the first
     // visually complete rendering of the map", so it depends on a frame actually being painted, while
     // `style.load` fires once the style is ready — which is the real precondition for adding a source
@@ -104,6 +127,11 @@ export function MapView({ establishments, initialViewport }: MapViewProps) {
     // are never added to a map that is otherwise working. Observed here: in headless Chromium the
     // style loads, the sources load, and `load` never fires.
     created.on('style.load', () => {
+      // The opening box is set by the constructor rather than by an animation, so no `moveend` ever
+      // announces it. Without this the map would sit on its initial viewport having told nobody what
+      // it was, and the first request would be the one the user's first pan triggered.
+      latestOnViewportChange.current?.(viewportOf(created))
+
       created.addSource(sourceId, {
         type: 'geojson',
         data: toFeatureCollection(latestEstablishments.current),
