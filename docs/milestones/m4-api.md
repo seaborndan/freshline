@@ -134,16 +134,12 @@ still on screen and nothing gets written from recollection.
 
 ## Running it locally
 
-`docs/local-development.md` is **not on this branch** — it exists only on the unmerged
-`docs/local-development` branch (`94167db`). Until that merges, the things needed to work on M4 are
-here.
+[`docs/local-development.md`](../local-development.md) has the general setup — the container, the
+connection string, browsing the database, and why Visual Studio 2022 cannot build this at all. It
+merged to `main` in PR #6 while M4 was in progress; an earlier version of this section duplicated a
+subset of it under a note saying it was unavailable, and that duplication is gone.
 
-```bash
-docker compose up -d --wait
-```
-
-Docker Desktop's process running is not the same as its engine being up; `docker info` is the check
-that matters.
+What follows is only the part specific to working on the API.
 
 **Running the API outside Development**, which is what you want for capturing SQL, needs the
 connection string passed explicitly — user secrets are only loaded in the Development environment,
@@ -164,12 +160,6 @@ generated SQL rather than assuming what EF emits — it produced a `ROW_NUMBER` 
 **Two databases.** `Freshline` holds the ingested data and is what the measurements run against.
 `Freshline_ApiTests` is dropped and recreated by `ApiFixture` on every test run — never point the
 tests at the first one.
-
-**A running API locks its DLLs on Windows**, so `dotnet test` fails with MSB3027 until it is stopped:
-
-```powershell
-Get-Process -Name "Freshline.Api" -ErrorAction SilentlyContinue | Stop-Process -Force
-```
 
 ---
 
