@@ -94,14 +94,16 @@ measure again, and write both numbers down.
 > violations — because 899 establishments cannot demonstrate an index. Still one source, one city,
 > one connector: a configuration value, not new code.
 >
-> **Carried forward:** these are warm-cache numbers from a single-user laptop container, and 23,528
+> **Carried forward:** these are warm-cache numbers from a single-user container on an unconstrained
+> desktop workstation — 24 logical cores, ~10.9 GB of buffer pool against an 11 MB table, so every
+> page was permanently resident and physical reads were zero throughout. And 23,528
 > rows is small enough that the spatial conclusion could reverse at ten times the data. The decision
 > to keep the spatial index rests on an M6 feature that does not exist yet; if M6 changes shape, the
 > index should be reconsidered rather than inherited.
 
 ---
 
-### M4 — API *(~5h)*
+### M4 — API ✅ *(2026-07-26)*
 
 ASP.NET Core Web API. Establishment list with filtering and keyset pagination, detail, and map
 queries. OpenAPI documented. JWT auth. `ProblemDetails` on every failure path. Health check. Rate
@@ -109,6 +111,35 @@ limiting on anything expensive.
 
 **Done when:** a stranger can explore live Swagger and every endpoint is correct on verbs, codes, and
 error shape.
+
+> **The most important thing M4 found was a correctness bug in M3's own conclusion.** The map query
+> `docs/performance.md` recommended used `CROSS APPLY`, which is an inner join: every establishment
+> with no inspection vanished from the result. Across the whole table it returned **19,923 of
+> 23,528** — the 3,605 missing are exactly those awaiting a first inspection, which is the greenfield
+> signal M6's scoring is built on. Nothing failed, nothing was slow, and no performance measurement
+> could ever have surfaced it, because the fastest way to answer a question is to answer less of it.
+> The fix costs nothing: measured over the M3 viewport, `OUTER APPLY` returns 1,307 more rows for an
+> identical 16,947 logical reads.
+>
+> **A second reversal, in the opposite direction to the obvious one.** Against the M3 indexes, EF's
+> generated SQL cost 1.6× a hand-written `OUTER APPLY` and the clear inference was to drop to raw SQL.
+> It was the wrong inference: the window function was expensive because it scanned the *clustered*
+> index, and once a covering index could answer it the same plan went from 2,809 logical reads to 132
+> — 21× — closing the gap to 7%. **The fix was the index, not the ORM.** And the map endpoint lands on
+> the opposite side of the same argument: at 1,000 rows the window form beats `OUTER APPLY` by 18×,
+> because `APPLY` costs ~2 reads per row while the window costs one index pass. The crossover sits
+> near 55 rows.
+>
+> **The map is public and stays public**, with rate limiting rather than authentication as the bound
+> on anonymous use. JWT validation is built alongside so M6 has identity to hang features on, with an
+> asymmetric key so that "this API validates tokens and does not issue them" is a property of the
+> cryptography rather than a promise. Reasoning in
+> [ADR-0005](adr/0005-public-read-surface-and-token-validation.md).
+>
+> **Carried forward:** the rate limiter partitions on the client IP, which is the proxy's address the
+> moment anything sits in front of it — a **deploy-time blocker for M5**, not a cleanup. The limits
+> themselves are chosen rather than load tested. Nothing issues tokens yet, and stateless bearer
+> tokens have no revocation by construction.
 
 ---
 

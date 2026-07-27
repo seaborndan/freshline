@@ -9,7 +9,7 @@ behaviour that does not exist yet are marked _(planned)_. Nothing here is claime
 
 > ### Scope: one source, one area, finished properly
 >
-> Freshline ingests **one dataset — NYC DOHMH restaurant inspections — filtered to Staten Island.**
+> Freshline ingests **one dataset — NYC DOHMH restaurant inspections, all five boroughs.**
 > That is the whole scope, and it is a deliberate choice rather than a stopping point I drifted into.
 >
 > A second city was planned and **cut**. The reasoning is in [the roadmap](docs/roadmap.md#m2--ingest-a-second-city--cut):
@@ -22,8 +22,11 @@ behaviour that does not exist yet are marked _(planned)_. Nothing here is claime
 > That extension point is designed and unused. It has not been proven by a second implementation,
 > and this README does not claim otherwise.
 >
-> Widening from Staten Island to all five boroughs is a configuration value, not code — 295,294 rows
-> instead of 3,237, no migration and no new class.
+> M1 ran a single borough — Staten Island, 3,237 rows — deliberately, so the schema could go through
+> a revision cheaply while it was still unsettled. M3 widened it to the whole city, which was a
+> configuration value rather than code: no migration, no new class. The result, counted rather than
+> estimated on 2026-07-26: **23,528 establishments, 29,601 inspections, 94,400 violations** from
+> 99,050 retained source records.
 
 ---
 
@@ -63,7 +66,7 @@ is also why the scope is one area rather than many: the interesting problems are
 
 ```mermaid
 flowchart LR
-    NYC["NYC DOHMH<br/>Socrata · Staten Island"]
+    NYC["NYC DOHMH<br/>Socrata · all five boroughs"]
 
     NYC --> ING
 
@@ -107,11 +110,12 @@ calls made on 2026-07-25, not estimates.
 | Carries | Grade, score, violation code and description, critical flag, cuisine, coordinates |
 | Freshness | Latest inspection was two days old when checked |
 | Access | Socrata SODA, unauthenticated. The anonymous rate limit has not been measured and is not claimed here |
-| **Ingested** | **Staten Island, from 2025-07-25 — 3,237 rows, 899 establishments, of which 118 hold a permit and have never been inspected** |
+| **Ingested** | **All five boroughs, from 2025-07-25 — 99,050 retained source records giving 23,528 establishments, 29,601 inspections and 94,400 violations. 3,605 of those establishments hold a permit and have never been inspected.** Counted 2026-07-26 |
 
-Widening the slice to all five boroughs is a configuration value. Adding a different city would be a
-new connector class, and there is no plan to write one — see the
-[roadmap](docs/roadmap.md#m2--ingest-a-second-city--cut).
+M1 ingested one borough — 3,237 rows, 899 establishments — so the schema could be revised cheaply
+while it was still unsettled. M3 widened it to the whole city, which was a configuration value rather
+than code. Adding a different *city* would be a new connector class, and there is no plan to write one
+— see the [roadmap](docs/roadmap.md#m2--ingest-a-second-city--cut).
 
 [ADR-0002](docs/adr/0002-per-source-connectors-and-a-canonical-schema.md) explains why ingestion is
 shaped as a per-source connector behind an interface even with one source, and
@@ -132,6 +136,10 @@ Full set in [`docs/adr/`](docs/adr/).
 - [ADR-0004](docs/adr/0004-spatial-types-in-core.md) — why a spatial type is allowed into Core when
   nothing else is, and why the map query uses a bounding box rather than the spatial index that was
   built for it. Both measured rather than argued.
+- [ADR-0005](docs/adr/0005-public-read-surface-and-token-validation.md) — why the map is anonymous and
+  stays anonymous, with rate limiting rather than a login as the bound on open use; and why the API
+  validates JWTs with an asymmetric key it cannot sign with, so that "this service does not issue
+  tokens" is a property of the cryptography rather than a promise about restraint.
 
 ## Measured results
 
@@ -144,10 +152,37 @@ severity. Measured over 23,528 establishments and 29,601 inspections:
 | | Logical reads | CPU |
 |---|---|---|
 | Original: bounding box, two correlated subqueries | 66,536 | 78 ms |
-| After: covering index + `CROSS APPLY` | **16,933** | ~15 ms |
+| After: covering index + `APPLY` | **16,933** | ~15 ms |
 
 **3.9× fewer logical reads.** Roughly half of that came from an `INCLUDE` on the inspections index
 removing key lookups, and half from asking for the latest inspection once instead of twice.
+
+**The follow-up that mattered more than the speed-up.** M4 found that the improved query used
+`CROSS APPLY` — an inner join, which silently dropped every establishment that had never been
+inspected. Across the whole table it returned **19,923 of 23,528 rows**; the 3,605 missing are exactly
+those awaiting a first inspection, which is the greenfield signal the product is partly built on. It
+ran, returned thousands of rows, and looked entirely healthy. No performance measurement could have
+caught it, because the fastest way to answer a question is to answer less of it. `OUTER APPLY` returns
+1,307 more rows over the same viewport for an identical **16,947** logical reads — **the wrong answer
+was not buying any speed.**
+
+**A conclusion that reversed on being measured again.** Against the M3 indexes, EF Core's generated
+SQL cost 1.6× a hand-written `OUTER APPLY`, and the obvious inference was to drop this query to raw
+SQL. That was wrong. EF's window function was expensive because it scanned the *clustered* index; once
+a narrow covering index could answer it, the same plan fell from 2,809 logical reads to **132 — 21×**
+— and the gap to hand-written SQL closed to 7%. **The fix was the index, not the ORM.**
+
+**Keyset pagination, measured against depth** — `Establishments` logical reads, EF's own SQL:
+
+| Page (row) | Keyset | `OFFSET` |
+|---|---|---|
+| 1 (row 1) | 16 | 16 |
+| 100 (row 4,951) | 21 | 78 |
+| 201 (row 10,001) | 21 | 142 |
+| 461 (row 23,001) | **9** | **307** |
+
+Keyset is flat; `OFFSET` grows linearly, because the rows before the page still have to be produced
+and thrown away.
 
 **The result that was not expected:** the spatial index made this query **2.4× worse** — 40,359
 logical reads against 16,933 — because scanning an 11 MB table once beats 7,290 key lookups into it.
@@ -194,7 +229,53 @@ when it is missing, on the grounds that a silently skipped test looks exactly li
 from VS Code, and why Visual Studio 2022 cannot build this project at all (it is the .NET 10 target,
 not the `.slnx` solution file).
 
-_(The API and web app are still the M0 scaffolds; they arrive at M4 and M5.)_
+```bash
+# The API. Serves the OpenAPI document and a browsable UI at /scalar/v1 in every environment.
+export ConnectionStrings__Freshline="$FRESHLINE_CONNECTIONSTRING"
+dotnet run --project src/Freshline.Api
+```
+
+_(The web app is still the M0 scaffold; it arrives at M5.)_
+
+## The API
+
+Four endpoints under `/api/v1`, documented by an OpenAPI document served in **every** environment —
+not just development — because the read paths are public by design and the document describes nothing
+a caller could not discover by using it. A browsable UI is at `/scalar/v1`.
+
+| | |
+|---|---|
+| `GET /establishments` | Filtered list, ordered by name, paged by cursor |
+| `GET /establishments/map` | Everything inside a viewport, not paged |
+| `GET /establishments/{id}` | One establishment with its full inspection history |
+| `GET /me` | The claims on your bearer token — the only endpoint needing one |
+
+Plus `/health` (liveness, runs no checks) and `/health/ready` (readiness, reaches the database).
+
+**The three establishment endpoints are anonymous and stay that way.** The data is NYC's published
+record and the value of this API is that it can simply be opened and used. What bounds open use is a
+per-IP token-bucket rate limiter, not a login. JWT validation exists alongside it so M6 has identity
+to hang saved territories on, using an asymmetric key the API cannot sign with — reasoning in
+[ADR-0005](docs/adr/0005-public-read-surface-and-token-validation.md).
+
+Every failure path returns RFC 9457 `ProblemDetails`, including the ones produced by middleware rather
+than by an endpoint: a 429 from the rate limiter and a 401 from the auth handler are the same shape as
+a 400 from validation.
+
+A few details that are decisions rather than defaults:
+
+- **Paging is by cursor, never `OFFSET`.** Flat cost with depth, measured above. There is no total
+  count and no page number — a caller pages until `nextCursor` is null.
+- **Establishments with no inspections are returned**, with a null `latestInspection`, everywhere.
+  They are 3,605 of 23,528 rows and they are the signal, not missing data.
+- **The map endpoint is not paged.** A cursor is for walking a list to its end; a map client pans, and
+  a viewport it has left is not worth resuming. It reports `isTruncated` instead.
+- **Nulls are serialised, not omitted**, so a caller never has to distinguish "absent" from "null".
+  A grade is null on 11,358 of the inspections in this dataset; that is a fact about the data and the
+  response should say it.
+- **Invalid input is refused rather than corrected.** `pageSize=5000` is a 400, not a silent clamp to
+  200 — a caller who believes they received a complete answer will page wrongly and never see an
+  error.
 
 ## What's next
 

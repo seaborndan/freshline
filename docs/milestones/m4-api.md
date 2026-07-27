@@ -264,7 +264,7 @@ still on screen and nothing gets written from recollection.
 | 4 | Map viewport query — bounding box, left join | ✅ |
 | 5 | Rate limiting and CORS | ✅ |
 | 6 | JWT auth surface | ✅ — **awaiting line-by-line review** |
-| 7 | Consolidation — ADR-0005, README, roadmap, log | not started |
+| 7 | Consolidation — ADR-0005, README, roadmap, log | ✅ |
 
 **Needs line-by-line human review before merge:** the slice 2 index migration, and all of slice 6.
 
