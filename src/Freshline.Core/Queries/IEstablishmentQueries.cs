@@ -51,4 +51,14 @@ public interface IEstablishmentQueries
     /// excluded; establishments with no inspections are not.</para>
     /// </summary>
     Task<MapResult> MapAsync(MapViewport viewport, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns the distinct values the <c>cuisine</c> and <c>locality</c> filters can match.
+    ///
+    /// <para>Unfiltered and un-scoped on purpose: these are the values that exist in the data, not
+    /// the ones that would return something inside the caller's current viewport. Narrowing them to
+    /// a viewport would make the filter panel's options change as the user pans, which reads as
+    /// options disappearing rather than as a smaller map.</para>
+    /// </summary>
+    Task<EstablishmentFilterOptions> GetFilterOptionsAsync(CancellationToken cancellationToken);
 }

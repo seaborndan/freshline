@@ -382,7 +382,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | 1 | API client and types, error and 429 handling | **done** |
 | 2 | Map with pins, coloured by outcome, with a legend | **done** |
 | 3 | Viewport-driven fetching, debounced, with truncation handling | **done** |
-| 4 | Filter panel | not started |
+| 4 | Filter panel | **done** |
 | 5 | Detail panel with inspection history | not started |
 | 6 | Loading, error, empty states and keyboard navigation | not started |
 | 7 | Deployment, and the URL | not started |
@@ -557,6 +557,60 @@ mutation-tested — each was broken deliberately and failed exactly the tests na
 else. The opening view was confirmed end to end against the running API by reading the status line
 the app renders.
 
+### Slice 4, as built
+
+`filters/FilterPanel.tsx`, `filters/useFilterOptions.ts`, `state/urlState.ts`, and one new API
+endpoint. The panel holds no state of its own — every value comes from the URL through `App`, which
+is the structure decision 3 required.
+
+#### A new endpoint, taken as a decision
+
+**The cuisine filter could not be built without one.** A client cannot discover the 89 values: a map
+pin does not carry a cuisine, and the list endpoint returns one page's worth rather than the
+vocabulary. The three options were to ask, to hard-code, or to drop the filter. Hard-coding puts one
+city's source vocabulary in a front end and drifts silently the first time ingestion meets a new
+value — the same objection that makes the canonical field `Locality` rather than `Borough`.
+
+So `GET /api/v1/establishments/filter-options` returns the distinct cuisines and localities, ordered,
+with nulls excluded because they are not selectable. It goes through the same seam as everything
+else: a method on `IEstablishmentQueries` in Core, an EF implementation in Infrastructure, an
+endpoint in Api. Five endpoint tests, including one asserting it answers without a token, because
+ADR-0005 says the read surface must be defended against drift.
+
+#### The two filter combinations that can only return nothing
+
+- **`outcome` matches the latest inspection**, so an establishment with no inspections matches none.
+- **`cuisine` is null for exactly the never-inspected establishments.** Verified as an exact
+  correspondence in both directions against the live database — 3,605 rows, zero exceptions either
+  way. NYC publishes no cuisine until somebody has been.
+
+Nothing in the words "cuisine" and "never inspected" suggests they are mutually exclusive, so
+choosing both would return an empty map with no explanation. When never-inspected is on, both
+controls are disabled and the panel says why — disabled rather than hidden, because a control that
+vanishes leaves a user wondering what they did while a sentence teaches them something true about the
+data.
+
+#### Decision 3, partly reversed
+
+The URL carries the filters and the viewport, synced with `URLSearchParams` and `replaceState`, no
+router — as decided. **The viewport is a bounding box rather than a centre and a zoom, which is the
+opposite of what was decided**, and the reason is worth keeping:
+
+The original argument was that a box is a function of the window, so the same box frames different
+amounts of city on a phone and a laptop, while a centre and a zoom reopen the same place. That holds
+for "look at this point" and is backwards for a product about areas. `fitBounds` guarantees a shared
+box is *entirely visible* on whatever screen opens it — a phone shows that area and more. Centre and
+zoom guarantee the opposite: the phone shows a fraction of what the sender saw, silently. The box
+also removes a second camera representation from an application that already speaks in boxes
+everywhere else.
+
+**Verified.** 141 backend tests and 127 web tests, `tsc -b`, build and lint clean. Checked end to
+end against the running API: a plain load reports 424 places at 282 points with 102 dropdown options
+rendered (89 cuisines, 5 boroughs, 5 outcomes, three "Any" rows), and a shared link carrying
+`outcome=Poor&locality=Manhattan` opens directly on 9 matching places. The API returns 8 for those
+exact bounds — the browser's fitted box is slightly wider, which is the same mechanism documented on
+`initialViewport` rather than a discrepancy.
+
 ## Standing requirements
 
 Not specific to M5. Repeated because a milestone brief that omits them reads as if they were optional.
@@ -590,8 +644,10 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
   anything server-side.
 - **The rate limits are chosen, not load tested.** A real client panning a map is the first thing that
   will exercise them.
-- **The `outcome` filter is unmeasured** and is the one most likely to be slow. M5 is the milestone
-  that will actually use it.
+- ~~**The `outcome` filter is unmeasured**~~ — measured in slice 4 against the live database, warm
+  cache, one workstation: **61–105 ms** against 26 ms unfiltered over a 0.2° × 0.15° box, so 2.5–4×
+  the cost of no filter and not a problem at this scale. Same caveats as everything in
+  `docs/performance.md`: warm, single machine, not a capacity claim.
 - **No cold-cache performance measurement exists**, and every figure in `docs/performance.md` is
   warm-cache from a single unconstrained workstation.
 - **Branch protection is not enabled server-side.** `.githooks/pre-push` is a local stand-in.

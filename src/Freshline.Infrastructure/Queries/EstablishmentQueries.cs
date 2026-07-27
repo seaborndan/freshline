@@ -265,6 +265,38 @@ internal sealed class EstablishmentQueries(FreshlineDbContext dbContext) : IEsta
         return establishments;
     }
 
+    /// <summary>
+    /// Two <c>SELECT DISTINCT</c>s, ordered in the database.
+    ///
+    /// <para>Nulls are filtered out before the distinct rather than removed afterwards, so the
+    /// database never has to sort a null it is going to discard — and so the result cannot contain
+    /// one. A null in this list would be a value the filter can never match, offered to a user as
+    /// though it could.</para>
+    ///
+    /// <para>Two round trips rather than one. They could be combined with a union and a discriminator
+    /// column, which would be one query returning a shape that then has to be unpicked in memory —
+    /// slower to read for a saving of one round trip on a request made once per page load.</para>
+    /// </summary>
+    public async Task<EstablishmentFilterOptions> GetFilterOptionsAsync(
+        CancellationToken cancellationToken)
+    {
+        List<string> cuisines = await dbContext.Establishments
+            .Where(establishment => establishment.Cuisine != null)
+            .Select(establishment => establishment.Cuisine!)
+            .Distinct()
+            .OrderBy(cuisine => cuisine)
+            .ToListAsync(cancellationToken);
+
+        List<string> localities = await dbContext.Establishments
+            .Where(establishment => establishment.Locality != null)
+            .Select(establishment => establishment.Locality!)
+            .Distinct()
+            .OrderBy(locality => locality)
+            .ToListAsync(cancellationToken);
+
+        return new EstablishmentFilterOptions { Cuisines = cuisines, Localities = localities };
+    }
+
     // Two things deliberately absent from the detail query above, both worth being able to explain:
     //
     // AsNoTracking() is not here because it would do nothing. The change tracker holds entities;

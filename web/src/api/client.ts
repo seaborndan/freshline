@@ -13,7 +13,12 @@
  * on their behalf. Retrying is the caller's choice, made once, in response to something a person did.
  */
 
-import type { EstablishmentDetail, EstablishmentFilter, MapResult } from './contract'
+import type {
+  EstablishmentDetail,
+  EstablishmentFilter,
+  EstablishmentFilterOptions,
+  MapResult,
+} from './contract'
 import {
   ApiProblemError,
   ApiUnreachableError,
@@ -21,7 +26,7 @@ import {
   isAbortError,
   type ProblemDetails,
 } from './errors'
-import { readEstablishmentDetail, readMapResult } from './validate'
+import { readEstablishmentDetail, readFilterOptions, readMapResult } from './validate'
 import { formatCoordinate, viewportProblem, type Viewport } from './viewport'
 
 /**
@@ -123,6 +128,17 @@ export async function fetchMap(request: MapRequest, signal?: AbortSignal): Promi
   const body = await requestJson(buildMapUrl(request), signal)
 
   return readMapResult(body, request.viewport)
+}
+
+/**
+ * The values the cuisine and locality filters can match.
+ *
+ * Fetched once, at startup. The vocabulary changes only when ingestion runs, and re-asking on every
+ * filter change would spend rate-limit tokens on an answer that cannot have changed — out of the
+ * same bucket the map is panning on.
+ */
+export async function fetchFilterOptions(signal?: AbortSignal): Promise<EstablishmentFilterOptions> {
+  return readFilterOptions(await requestJson(`${apiRoot}/establishments/filter-options`, signal))
 }
 
 /** One establishment with its full inspection history. */

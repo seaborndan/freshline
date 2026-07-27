@@ -64,6 +64,17 @@ internal static class EstablishmentEndpoints
             .ProducesProblem(StatusCodes.Status400BadRequest);
 
         establishments
+            .MapGet("/filter-options", GetFilterOptionsAsync)
+            .WithName("GetEstablishmentFilterOptions")
+            .WithSummary("The values the cuisine and locality filters can match")
+            .WithDescription(
+                "Every distinct cuisine and sub-city area in the data, ordered by name. A client " +
+                "cannot discover these otherwise: the map endpoint does not carry cuisine and the " +
+                "list endpoint returns one page's values rather than the vocabulary. Nulls are " +
+                "excluded because they are not selectable — establishments with no cuisine or no " +
+                "locality match no value here, and there are some of both.");
+
+        establishments
             .MapGet("/{id:int}", GetByIdAsync)
             .WithName("GetEstablishment")
             .WithSummary("Get one establishment with its inspection history")
@@ -246,6 +257,16 @@ internal static class EstablishmentEndpoints
 
         return TypedResults.Ok(result);
     }
+
+    /// <summary>
+    /// No parameters, no validation, and therefore no failure to shape: this endpoint asks the data
+    /// what it contains. <see cref="Ok{TValue}"/> alone rather than <c>Results&lt;…&gt;</c>, because
+    /// a union with one member documents a choice that does not exist.
+    /// </summary>
+    private static async Task<Ok<EstablishmentFilterOptions>> GetFilterOptionsAsync(
+        IEstablishmentQueries queries,
+        CancellationToken cancellationToken)
+        => TypedResults.Ok(await queries.GetFilterOptionsAsync(cancellationToken));
 
     private static ProblemHttpResult Problem(string title, string detail)
         => TypedResults.Problem(
