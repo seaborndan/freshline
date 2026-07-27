@@ -132,6 +132,47 @@ still on screen and nothing gets written from recollection.
 
 ---
 
+## Running it locally
+
+`docs/local-development.md` is **not on this branch** — it exists only on the unmerged
+`docs/local-development` branch (`94167db`). Until that merges, the things needed to work on M4 are
+here.
+
+```bash
+docker compose up -d --wait
+```
+
+Docker Desktop's process running is not the same as its engine being up; `docker info` is the check
+that matters.
+
+**Running the API outside Development**, which is what you want for capturing SQL, needs the
+connection string passed explicitly — user secrets are only loaded in the Development environment,
+so `dotnet run --no-launch-profile` otherwise fails at startup with "No 'Freshline' connection string
+is configured":
+
+```bash
+env "ConnectionStrings__Freshline=Server=localhost,1433;Database=Freshline;User Id=sa;Password=Freshline_Local_2026!;TrustServerCertificate=True" \
+    "Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command=Information" \
+    "ASPNETCORE_URLS=http://127.0.0.1:5199" \
+    dotnet run --project src/Freshline.Api --no-launch-profile
+```
+
+That logging switch is how every piece of SQL in `docs/performance.md` was captured. Read the
+generated SQL rather than assuming what EF emits — it produced a `ROW_NUMBER` window where
+`OUTER APPLY` was expected, and that difference turned out to matter in both directions.
+
+**Two databases.** `Freshline` holds the ingested data and is what the measurements run against.
+`Freshline_ApiTests` is dropped and recreated by `ApiFixture` on every test run — never point the
+tests at the first one.
+
+**A running API locks its DLLs on Windows**, so `dotnet test` fails with MSB3027 until it is stopped:
+
+```powershell
+Get-Process -Name "Freshline.Api" -ErrorAction SilentlyContinue | Stop-Process -Force
+```
+
+---
+
 ## Verified state of the data
 
 Counts taken from the live database on **2026-07-26** with `count(*)`, not recalled. Anything not
