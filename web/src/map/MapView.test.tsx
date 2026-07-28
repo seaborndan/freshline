@@ -120,7 +120,9 @@ function deliveredFeatures(): unknown[] {
     return fromSetData.features
   }
 
-  const fromSource = addSource.mock.calls.at(-1)?.[1] as
+  // By name rather than by position: there is a second, separate source holding the hovered point,
+  // and it is added after this one.
+  const fromSource = addSource.mock.calls.findLast((call) => call[0] === 'establishments')?.[1] as
     | { data: { features: unknown[] } }
     | undefined
 

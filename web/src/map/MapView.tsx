@@ -14,8 +14,15 @@ import type { GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { MapEstablishment } from '../api/contract'
 import type { Viewport } from '../api/viewport'
-import { idsOf, toFeatureCollection } from './geoJson'
-import { iconImage, iconSize, ordinaryFilter, priorityFilter, sphereImageName } from './layers'
+import { idsOf, toFeatureCollection, type PinFeature } from './geoJson'
+import {
+  hoverIconSize,
+  iconImage,
+  iconSize,
+  ordinaryFilter,
+  priorityFilter,
+  sphereImageName,
+} from './layers'
 import { closedModifier, pinStates, pinStyles } from './pinStyle'
 import { sphereImage } from './sphereSprite'
 import {
@@ -98,6 +105,19 @@ const sourceId = 'establishments'
 
 const ordinaryLayerId = 'establishments-ordinary'
 const priorityLayerId = 'establishments-priority'
+
+/**
+ * The hovered point, drawn larger, over a source holding at most one feature.
+ *
+ * A separate layer because `icon-size` is a layout property and MapLibre refuses `feature-state`
+ * there — see `hoverIconSize`. It is excluded from every `queryRenderedFeatures` call: it draws a
+ * copy of a pin that is already interactive underneath it, and including it would return that point
+ * twice from one click.
+ */
+const hoverSourceId = 'establishment-hover'
+const hoverLayerId = 'establishment-hover'
+
+const noFeatures = { type: 'FeatureCollection' as const, features: [] as PinFeature[] }
 
 /**
  * Registers one shaded sphere per pin state.
@@ -357,20 +377,19 @@ export function MapView({
     /*
      * Hover: the pointer grows the dot it is over.
      *
-     * `setFeatureState` rather than a filter or a data change, because it mutates one value MapLibre
-     * already re-reads each frame — no source rebuild, no re-tiling, nothing recomputed per pin.
-     *
-     * Only one feature is ever in the hovered state, and the previous one is cleared before the next
-     * is set. Without that, dragging the pointer across a dense block leaves a trail of permanently
-     * enlarged dots, because `mouseleave` fires for the layer rather than for each feature.
+     * Written into a source of its own that holds the hovered feature and nothing else, so the
+     * update is one feature rather than a re-tiling of every pin on screen. The pin underneath is
+     * still drawn; the larger copy simply covers it.
      */
     let hovered: number | null = null
 
     const clearHover = () => {
-      if (hovered !== null) {
-        created.setFeatureState({ source: sourceId, id: hovered }, { hover: false })
-        hovered = null
+      if (hovered === null) {
+        return
       }
+
+      hovered = null
+      ;(created.getSource(hoverSourceId) as GeoJSONSource | undefined)?.setData(noFeatures)
     }
 
     // A dot that can be clicked should say so before it is clicked.
@@ -387,15 +406,20 @@ export function MapView({
           return
         }
 
-        const id = event.features?.[0]?.id
+        const feature = event.features?.[0]
 
-        if (typeof id !== 'number' || id === hovered) {
+        if (feature === undefined || typeof feature.id !== 'number' || feature.id === hovered) {
           return
         }
 
-        clearHover()
-        hovered = id
-        created.setFeatureState({ source: sourceId, id }, { hover: true })
+        hovered = feature.id
+        ;(created.getSource(hoverSourceId) as GeoJSONSource | undefined)?.setData({
+          type: 'FeatureCollection',
+          // The feature as MapLibre handed it back, which already carries the geometry and the
+          // properties the sprite is chosen from. Cast because the queried feature's type describes
+          // a rendered feature rather than a source one; the shape setData needs is the same.
+          features: [feature as unknown as PinFeature],
+        })
       })
 
       created.on('mouseleave', layerId, () => {
@@ -444,6 +468,8 @@ export function MapView({
 
       registerSphereImages(created)
 
+      created.addSource(hoverSourceId, { type: 'geojson', data: noFeatures })
+
       // Two layers over one source. The ordinary pins first, then the ones that must not be hidden
       // by them — see `priorityFilter`.
       for (const [id, filter] of [
@@ -480,6 +506,21 @@ export function MapView({
           },
         } as Parameters<typeof created.addLayer>[0])
       }
+
+      // Last, so the enlarged copy draws over every ordinary pin rather than under its neighbours.
+      created.addLayer({
+        id: hoverLayerId,
+        type: 'symbol',
+        source: hoverSourceId,
+        layout: {
+          'icon-image': iconImage,
+          'icon-size': hoverIconSize,
+          'icon-allow-overlap': true,
+          'icon-ignore-placement': true,
+          'icon-rotation-alignment': 'viewport',
+          'icon-pitch-alignment': 'viewport',
+        },
+      } as Parameters<typeof created.addLayer>[0])
     })
 
     map.current = created
