@@ -140,6 +140,11 @@ Full set in [`docs/adr/`](docs/adr/).
   stays anonymous, with rate limiting rather than a login as the bound on open use; and why the API
   validates JWTs with an asymmetric key it cannot sign with, so that "this service does not issue
   tokens" is a property of the cryptography rather than a promise about restraint.
+- [ADR-0006](docs/adr/0006-trusting-the-ingress-not-the-caller.md) — supersedes ADR-0005's instruction
+  to identify the proxy by address, which turned out to be unfollowable on the platform this deploys
+  to. How a per-caller rate limit survives behind an ingress when `X-Forwarded-For` is written by the
+  caller, why the number of proxies is the safer thing to configure than a list of their addresses,
+  and what assumption that leaves standing.
 
 ## Measured results
 
