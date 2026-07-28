@@ -14,15 +14,10 @@ import type { GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { MapEstablishment } from '../api/contract'
 import type { Viewport } from '../api/viewport'
-import { toFeatureCollection } from './geoJson'
-import {
-  circleColour,
-  circleRadius,
-  circleStrokeColour,
-  circleStrokeWidth,
-  ordinaryFilter,
-  priorityFilter,
-} from './layers'
+import { idsOf, toFeatureCollection } from './geoJson'
+import { iconImage, iconSize, ordinaryFilter, priorityFilter, sphereImageName } from './layers'
+import { closedModifier, pinStates, pinStyles } from './pinStyle'
+import { sphereImage } from './sphereSprite'
 import {
   basemapAttribution,
   basemapRasterTiles,
@@ -100,8 +95,42 @@ function quietenLabelsWhenZoomedOut(map: MapLibreMap): void {
 }
 
 const sourceId = 'establishments'
+
 const ordinaryLayerId = 'establishments-ordinary'
 const priorityLayerId = 'establishments-priority'
+
+/**
+ * Registers one shaded sphere per pin state.
+ *
+ * Six images, computed once at startup and held by the map for its lifetime — 64×64 RGBA is 16 KB
+ * each, so the whole set is under 100 KB and none of it is recomputed as the map moves.
+ *
+ * `pixelRatio: 2` tells MapLibre the 64px sprite represents 32 logical pixels, which is what keeps
+ * the spheres sharp on a high-density display rather than upscaled and soft.
+ *
+ * Guarded with `hasImage`, because a style reload re-fires `style.load` and re-registering an
+ * existing name throws.
+ */
+function registerSphereImages(map: MapLibreMap): void {
+  for (const state of pinStates) {
+    const style = pinStyles[state]
+
+    // Two per state. The closed variant differs only in the colour its silhouette darkens towards,
+    // which is how a closure stays visible now that the ring is baked into the sprite rather than
+    // painted as a stroke.
+    for (const closed of [false, true]) {
+      const name = sphereImageName(state, closed)
+
+      if (map.hasImage(name)) {
+        continue
+      }
+
+      const rim = closed ? closedModifier.stroke : style.stroke
+
+      map.addImage(name, sphereImage(style.fill, rim), { pixelRatio: 2 })
+    }
+  }
+}
 
 export interface MapViewProps {
   /** The pins to draw. */
@@ -317,22 +346,66 @@ export function MapView({
         layers: [ordinaryLayerId, priorityLayerId],
       })
 
-      const ids = features
-        .map((feature) => feature.properties?.id)
-        .filter((id): id is number => typeof id === 'number')
+      // A feature is a point now, not an establishment, so each one carries every id stacked on it.
+      const ids = features.flatMap((feature) =>
+        typeof feature.properties?.ids === 'string' ? idsOf({ ids: feature.properties.ids }) : [],
+      )
 
       latestOnSelect.current?.([...new Set(ids)])
     })
+
+    /*
+     * Hover: the pointer grows the dot it is over.
+     *
+     * `setFeatureState` rather than a filter or a data change, because it mutates one value MapLibre
+     * already re-reads each frame — no source rebuild, no re-tiling, nothing recomputed per pin.
+     *
+     * Only one feature is ever in the hovered state, and the previous one is cleared before the next
+     * is set. Without that, dragging the pointer across a dense block leaves a trail of permanently
+     * enlarged dots, because `mouseleave` fires for the layer rather than for each feature.
+     */
+    let hovered: number | null = null
+
+    const clearHover = () => {
+      if (hovered !== null) {
+        created.setFeatureState({ source: sourceId, id: hovered }, { hover: false })
+        hovered = null
+      }
+    }
 
     // A dot that can be clicked should say so before it is clicked.
     for (const layerId of [ordinaryLayerId, priorityLayerId]) {
       created.on('mouseenter', layerId, () => {
         created.getCanvas().style.cursor = 'pointer'
       })
+
+      created.on('mousemove', layerId, (event) => {
+        // Nothing while the map is moving. A drag fires mousemove continuously, and the pointer is
+        // then a consequence of the gesture rather than a choice — growing whatever passes under it
+        // adds work to exactly the frames that must stay cheap.
+        if (created.isMoving()) {
+          return
+        }
+
+        const id = event.features?.[0]?.id
+
+        if (typeof id !== 'number' || id === hovered) {
+          return
+        }
+
+        clearHover()
+        hovered = id
+        created.setFeatureState({ source: sourceId, id }, { hover: true })
+      })
+
       created.on('mouseleave', layerId, () => {
         created.getCanvas().style.cursor = ''
+        clearHover()
       })
     }
+
+    // A gesture can carry the pointer off a dot without a mouseleave ever firing for it.
+    created.on('movestart', clearHover)
 
     // `moveend`, not `move`. A drag fires `move` continuously — one event per frame — and every one
     // of them would start the debounce timer again; `moveend` fires once when the camera settles,
@@ -369,6 +442,8 @@ export function MapView({
         data: toFeatureCollection(latestEstablishments.current),
       })
 
+      registerSphereImages(created)
+
       // Two layers over one source. The ordinary pins first, then the ones that must not be hidden
       // by them — see `priorityFilter`.
       for (const [id, filter] of [
@@ -377,14 +452,31 @@ export function MapView({
       ] as const) {
         created.addLayer({
           id,
-          type: 'circle',
+          type: 'symbol',
           source: sourceId,
           filter,
-          paint: {
-            'circle-color': circleColour,
-            'circle-radius': circleRadius,
-            'circle-stroke-color': circleStrokeColour,
-            'circle-stroke-width': circleStrokeWidth,
+          layout: {
+            'icon-image': iconImage,
+            'icon-size': iconSize,
+
+            /*
+             * Collision detection off, on both counts.
+             *
+             * A symbol layer's whole reason for existing is placing labels that must not overlap, so
+             * by default it *hides* icons that collide. These are pins: a dense block is the honest
+             * picture, and silently dropping some of them would be the map lying about how much is
+             * there — the same failure as the stacked pins this milestone just fixed.
+             *
+             * It is also what keeps the cost down. With overlap allowed there is no placement
+             * calculation to run on every frame of a pan.
+             */
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+
+            // The sprite is drawn upright regardless of bearing, so rotating the map does not tip
+            // the spheres over and break the illusion that they are lit from one direction.
+            'icon-rotation-alignment': 'viewport',
+            'icon-pitch-alignment': 'viewport',
           },
         } as Parameters<typeof created.addLayer>[0])
       }

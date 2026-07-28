@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MapEstablishment } from '../api/contract'
 import type { Viewport } from '../api/viewport'
 import { MapView } from './MapView'
+import { pinStates } from './pinStyle'
 
 /**
  * These tests exist because of a bug that shipped past a green suite.
@@ -22,6 +23,7 @@ import { MapView } from './MapView'
 const handlers = new Map<string, () => void>()
 const addSource = vi.fn()
 const addLayer = vi.fn()
+const addImage = vi.fn()
 const setData = vi.fn()
 let sourceExists = false
 
@@ -53,6 +55,10 @@ vi.mock('maplibre-gl', () => ({
       }
       addSource(...args)
     }
+    // The sphere sprites. hasImage answers false so registration runs; the pixels themselves are
+    // asserted in sphereSprite.test.ts, where they can actually be read.
+    hasImage = () => false
+    addImage = addImage
     addLayer = (...args: unknown[]) => {
       addedLayers.push(args)
       addLayer(...args)
@@ -125,6 +131,7 @@ beforeEach(() => {
   handlers.clear()
   addSource.mockClear()
   addLayer.mockClear()
+  addImage.mockClear()
   setData.mockClear()
   sourceExists = false
   moving = false
@@ -164,7 +171,14 @@ describe('MapView', () => {
     expect(deliveredFeatures()).toHaveLength(1)
   })
 
-  it('adds two layers over one source, so the rare pins are not painted over', () => {
+  /**
+   * Two layers over one source, split so the rare states are not painted over by their neighbours.
+   *
+   * There is no separate shadow layer any more: an offset blurred copy read as a sticker rather than
+   * as an object, and the spheres carry their own shading in the sprite. Two layers rather than
+   * three is the cheaper arrangement as well as the better-looking one.
+   */
+  it('adds two pin layers over one source', () => {
     render(<MapView establishments={[pin]} initialViewport={viewport} />)
 
     loadStyle()
@@ -173,6 +187,44 @@ describe('MapView', () => {
       (call) => (call[0] as { source?: string }).source === 'establishments',
     )
     expect(pinLayers).toHaveLength(2)
+  })
+
+  /**
+   * Symbols, not circles — a circle layer has no gradient or lighting, so a sphere has to be an
+   * image. Collision detection is off on both counts: a symbol layer's default is to *hide* icons
+   * that overlap, and a dense block of restaurants is the honest picture rather than a placement
+   * problem.
+   */
+  it('draws the pins as sprites that are never hidden by their neighbours', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+
+    loadStyle()
+
+    const [firstPinLayer] = addedLayers
+      .map((call) => call[0] as { source?: string; type?: string; layout?: Record<string, unknown> })
+      .filter((layer) => layer.source === 'establishments')
+
+    expect(firstPinLayer.type).toBe('symbol')
+    expect(firstPinLayer.layout?.['icon-allow-overlap']).toBe(true)
+    expect(firstPinLayer.layout?.['icon-ignore-placement']).toBe(true)
+  })
+
+  /**
+   * Two spheres per state, registered before any layer asks for one by name: the ordinary one and
+   * the closed variant, whose silhouette darkens towards the closure colour. Closure is a separate
+   * fact from the result, and baking the rim into a sprite is the only way it survives the move from
+   * a stroked circle.
+   */
+  it('registers an ordinary and a closed sphere for every pin state', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+
+    loadStyle()
+
+    expect(addImage).toHaveBeenCalledTimes(pinStates.length * 2)
+
+    const names = addImage.mock.calls.map((call) => call[0] as string)
+    expect(names).toContain('sphere-Poor')
+    expect(names).toContain('sphere-Poor-closed')
   })
 
   it('says so when the map itself fails, rather than leaving a blank rectangle', () => {
@@ -209,7 +261,14 @@ describe('MapView', () => {
     setData.mockClear()
 
     moving = true
-    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
+    // A different coordinate, not just a different id: features are one per point now, so two pins
+    // at the same place would arrive as one feature and this would be counting the wrong thing.
+    rerender(
+      <MapView
+        establishments={[pin, { ...pin, id: 2, latitude: pin.latitude + 0.001 }]}
+        initialViewport={viewport}
+      />,
+    )
     endMovement()
 
     expect(setData).toHaveBeenCalledTimes(1)
@@ -224,13 +283,13 @@ describe('MapView', () => {
     setData.mockClear()
 
     moving = true
-    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
-    rerender(
-      <MapView
-        establishments={[pin, { ...pin, id: 2 }, { ...pin, id: 3 }]}
-        initialViewport={viewport}
-      />,
-    )
+    // Distinct coordinates throughout, for the reason above: one feature per point means pins that
+    // share a place arrive as one feature, and the count would stop meaning what it says.
+    const second = { ...pin, id: 2, latitude: pin.latitude + 0.001 }
+    const third = { ...pin, id: 3, latitude: pin.latitude + 0.002 }
+
+    rerender(<MapView establishments={[pin, second]} initialViewport={viewport} />)
+    rerender(<MapView establishments={[pin, second, third]} initialViewport={viewport} />)
     endMovement()
 
     expect(setData).toHaveBeenCalledTimes(1)

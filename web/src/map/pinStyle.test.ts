@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inspectionOutcomes } from '../api/contract'
-import { circleColour } from './layers'
+import { iconImage, sphereImageName } from './layers'
 import { closedModifier, pinStates, pinStyles } from './pinStyle'
 
 describe('the pin table', () => {
@@ -55,20 +55,30 @@ describe('the pin table', () => {
 })
 
 describe('the generated paint expression', () => {
-  // The legend and the layer are generated from one table so they cannot disagree. This asserts the
-  // generation, which is the only place they could.
-  it('names every state with the colour the legend shows', () => {
+  /**
+   * The legend and the layer are generated from one table so they cannot disagree.
+   *
+   * The pins are sprites now rather than coloured circles, so the expression names an image per
+   * state instead of a hex. The colour itself is asserted where it is now decided — the sprite is
+   * built from `pinStyles[state].fill`, and `sphereSprite.test.ts` proves the fill reaches the
+   * pixels. What can still drift is the *naming*, which is what this covers.
+   */
+  it('names an image for every state the legend shows', () => {
+    // The trailing match is the not-closed branch, which is the one the legend describes.
+    const openBranch = iconImage[iconImage.length - 1] as unknown[]
+
     for (const state of pinStates) {
-      const index = circleColour.indexOf(state)
+      const index = openBranch.indexOf(state)
 
       expect(index).toBeGreaterThan(-1)
-      expect(circleColour[index + 1]).toBe(pinStyles[state].fill)
+      expect(openBranch[index + 1]).toBe(sphereImageName(state, false))
     }
   })
 
-  it('falls back to a colour that is obviously wrong rather than a plausible one', () => {
-    const fallback = circleColour[circleColour.length - 1]
+  it('falls back to something obviously wrong rather than a plausible image', () => {
+    const openBranch = iconImage[iconImage.length - 1] as unknown[]
+    const fallback = openBranch[openBranch.length - 1]
 
-    expect(pinStates.map((state) => pinStyles[state].fill)).not.toContain(fallback)
+    expect(pinStates.map((state) => sphereImageName(state, false))).not.toContain(fallback)
   })
 })

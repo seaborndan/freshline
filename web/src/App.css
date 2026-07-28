@@ -758,8 +758,12 @@ main {
      percentage keeps the relationship to the column explicit and survives the column changing width.
 
      Wider than typographic guidance likes for a measure, deliberately: these are two or three
-     sentences of framing, not body copy somebody reads for minutes. */
+     sentences of framing, not body copy somebody reads for minutes.
+
+     Centred in the column with margin-inline, so it is inset evenly rather than aligned to one
+     edge — at 80% that is a 10% gutter on each side. */
   max-width: 80%;
+  margin-inline: auto;
   font-size: 0.9375rem;
 }
 
@@ -820,6 +824,7 @@ main {
   border-radius: 8px;
   font-size: 0.875rem;
   max-width: 80%;
+  margin-inline: auto;
 }
 
 .reports-notice-failure {
