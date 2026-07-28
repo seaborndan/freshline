@@ -385,7 +385,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | 4 | Filter panel | **done** |
 | 5 | Detail panel with inspection history | **done** |
 | 6 | Loading, error, empty states and keyboard navigation | **done** |
-| 7 | Deployment, and the URL | **in progress** — ingress blocker cleared, deploy not started |
+| 7 | Deployment, and the URL | **in progress** — repository is deployable; no Azure resource exists yet |
 | 8 | Consolidation — ADR, README, roadmap, log | not started |
 
 **Needs line-by-line human review before merge:** any new dependency, and anything touching
@@ -910,6 +910,86 @@ against the real ingress, confirming the limiter still counts it against the cal
 The tests above prove the middleware's behaviour; only that check proves the hop count matches the
 deployment.
 
+### Slice 7, part two: making the repository deployable
+
+The roadmap fixes the scope of this before it starts: *"Deployment at this milestone is done by hand
+— Static Web Apps for the front end, App Service or a container for the API — and that is fine. M7
+replaces it with Bicep and deploy-on-merge."* So there is no IaC here and no deploy workflow; both
+would be M7 work done a milestone early. What is here is everything needed for the hand-deploy to be
+short, repeatable, and written down: `Dockerfile`, `.dockerignore`, a build-time guard on the API
+origin, and [`docs/deployment.md`](../deployment.md).
+
+#### The defect this slice found: `VITE_API_BASE_URL`
+
+```ts
+const baseUrl: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5045'
+```
+
+That fallback is correct in development and is a trap in a build. Vite substitutes `import.meta.env`
+at build time, so a production bundle built without the variable would ship to a real URL and ask
+**the visitor's own machine** for its data. Every request fails, and it fails looking exactly like the
+API being down — the site is broken in a way that points at the wrong component.
+
+Two changes, at two different moments:
+
+- **`vite.config.ts` fails the build** when `command === 'build'`, `mode === 'production'` and the
+  variable is absent. This is the last moment the mistake is catchable, and failing here means there
+  is no artifact to deploy rather than a broken one.
+- **The fallback is guarded by `import.meta.env.DEV`.** In a production build the branch is the empty
+  string, which makes the request path relative and sends it to the site's own origin. Still wrong —
+  the API is a separate origin and will stay one — but wrong *visibly*, as a 404 from the site the
+  user is on. A same-origin 404 describes itself; a request to the visitor's localhost does not.
+
+Verified by building both ways rather than by reading the diff. Without the variable the build stops
+with the error naming it. With it, the bundle contains the configured origin and contains
+`localhost:5045` **zero times** — the development branch is compiled out, so that string cannot reach
+a visitor at all.
+
+CI passes `https://ci-build-is-not-deployed.invalid`. `.invalid` is reserved by RFC 2606 and is
+guaranteed never to resolve, so a CI artifact mistaken for a deployable one fails against a name that
+cannot exist rather than against something plausible.
+
+#### The container
+
+Root `Dockerfile`, multi-stage, non-root, port 8080. The build context is the repository root because
+the API does not build alone — it references Core and Infrastructure, and `Directory.Build.props` at
+the root is what promotes NuGet advisories to build errors. Building from the project directory would
+have produced an image whose build had a weaker check than CI's.
+
+`.dockerignore` excludes `appsettings.Development.json` specifically. It is gitignored, so it exists
+only on a developer's machine — which is exactly where a real connection string lives — and `COPY
+src/ src/` would otherwise bake it into a layer.
+
+Verified by running it, not by it building:
+
+| Check | Result |
+|---|---|
+| `whoami` / `id -u` in the container | `app`, uid **1654** — non-root |
+| `GET /health` (liveness, runs no checks) | **200 Healthy**, with the database unreachable |
+| `GET /health/ready` (readiness, checks the database) | **503**, with the database unreachable |
+| `GET /openapi/v1.json` | **200** |
+
+The second and third together are the point. The liveness/readiness split was designed in M4 on the
+argument that a liveness probe which fails on a dependency causes a restart that cannot fix the
+dependency — this is the first time that argument has been *observed* rather than asserted.
+
+#### A warning that had been merged unread
+
+The container build surfaced `ASPDEPR005`: `ForwardedHeadersOptions.KnownNetworks` is obsolete in
+.NET 10, replaced by `KnownIPNetworks`. It was on a line written in part one of this slice, and part
+one was reported as "0 warnings" — from an **incremental** build that did not recompile the file. A
+clean `--no-incremental` Release build shows it; CI showed it too, in output nobody read, because
+`TreatWarningsAsErrors` is `false`.
+
+Fixed, and the three forwarded-headers tests still pass, which is what makes the swap
+behaviour-preserving rather than merely compiling.
+
+**Raised rather than quietly fixed:** a clean build of this solution now emits **zero** warnings, so
+promoting warnings to errors in `Directory.Build.props` would cost nothing today and would stop the
+next deprecation from merging unread. That is a repository-wide policy change affecting every future
+build, which makes it the author's decision rather than an implementation detail — the same rule
+`CLAUDE.md` applies to dependencies. Listed in the open items below.
+
 ## Standing requirements
 
 Not specific to M5. Repeated because a milestone brief that omits them reads as if they were optional.
@@ -941,8 +1021,17 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
   one check that still has to run against the deployed URL are written up in "Slice 7, part one"
   above.
 - **The API's CORS policy has no production origin configured**, and cannot have one until the front
-  end has a deployed URL. Slice 7 work, and the failure mode is a browser console error rather than
-  anything server-side.
+  end has a deployed URL. The failure mode is a browser console error rather than anything
+  server-side. The ordering this forces — API, then web, then *back* to the API to set
+  `Cors__AllowedOrigins__0` — is written up in [`docs/deployment.md`](../deployment.md), because the
+  last step is the one that looks optional and is not.
+- **Warnings are not errors.** `TreatWarningsAsErrors` is `false` in `Directory.Build.props`, and one
+  deprecation warning has already merged unread as a result (`ASPDEPR005`, slice 7). A clean build
+  currently emits zero warnings, so turning it on would cost nothing today. Not done unilaterally:
+  it changes every future build, which makes it a decision rather than a fix.
+- **Nothing has been deployed yet.** The repository is deployable — image, build guard, documented
+  steps — and no Azure resource exists. The forged-header check against a real ingress, which is the
+  only way to confirm `ProxyHopCount` matches the real topology, is waiting on that.
 - **The rate limits are chosen, not load tested.** A real client panning a map is the first thing that
   will exercise them.
 - ~~**The `outcome` filter is unmeasured**~~ — measured in slice 4 against the live database, warm

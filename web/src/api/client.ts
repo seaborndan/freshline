@@ -39,10 +39,22 @@ import { formatCoordinate, viewportProblem, type Viewport } from './viewport'
  * The API already allows `http://localhost:5173` from a committed default in `CrossOriginPolicy`, so
  * the honest arrangement costs nothing and exercises the real path on every request.
  *
- * The deployed value arrives as a build-time environment variable in slice 7. The fallback is the
- * `dotnet run` address from `docs/local-development.md`.
+ * The deployed value is `VITE_API_BASE_URL`, substituted at build time. The fallback is the
+ * `dotnet run` address from `docs/local-development.md`, and it is **guarded by `DEV` rather than
+ * left unconditional**: a production bundle built without the variable would otherwise ask
+ * `http://localhost:5045` — the visitor's own machine — for its data, on a real deployed URL, failing
+ * in a way indistinguishable from the API being down. `vite.config.ts` fails the build for the same
+ * reason, so this line is the second of two chances to catch it rather than the only one.
+ *
+ * The production branch is the empty string, which makes `apiRoot` the relative `/api/v1` and sends
+ * requests to the site's own origin. It is still wrong — the API is a separate origin and will stay
+ * one — but it is wrong *visibly*, as a 404 from the site the user is on, surfaced by the existing
+ * unreachable-API message. Pointing at the visitor's localhost is the failure worth engineering
+ * away; a same-origin 404 is a failure that describes itself.
  */
-const baseUrl: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5045'
+const configuredBaseUrl: string | undefined = import.meta.env.VITE_API_BASE_URL
+
+const baseUrl: string = configuredBaseUrl ?? (import.meta.env.DEV ? 'http://localhost:5045' : '')
 
 const apiRoot = `${baseUrl.replace(/\/+$/, '')}/api/v1`
 

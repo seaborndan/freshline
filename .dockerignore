@@ -1,0 +1,31 @@
+# Everything the image does not need, kept out of the build context so it is neither uploaded to the
+# daemon nor able to end up in a layer.
+#
+# `appsettings.Development.json` is the one that matters. It is gitignored, so it exists only on a
+# developer's machine — and a developer's machine is exactly where a real connection string lives.
+# Without this line, `COPY src/ src/` would bake it into the image.
+
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/*.user
+
+**/bin/
+**/obj/
+**/.vs/
+
+.git/
+.github/
+.githooks/
+
+web/
+docs/
+infra/
+tests/
+
+**/node_modules/
+**/.env
+**/.env.*
+
+docker-compose.yml
+Dockerfile
+.dockerignore
