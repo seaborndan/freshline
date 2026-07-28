@@ -739,7 +739,11 @@ main {
 }
 
 .reports-lede {
-  margin: 0.625rem 0 0;
+  /* margin-block, not the shorthand. `.reports > *` centres children with `margin-inline: auto`, and
+     `margin: 0.625rem 0 0` sets margin-inline to 0 — which silently un-centres this paragraph while
+     the table and controls beside it stay centred. That is exactly what it looked like: prose hugging
+     the left of a centred page. Same trap below on .reports-notice and .reports-status. */
+  margin-block: 0.625rem 0;
   color: #3d3c39;
   line-height: 1.6;
   max-width: 76ch;
@@ -798,7 +802,7 @@ main {
 }
 
 .reports-notice {
-  margin: 1rem 0 0;
+  margin-block: 1rem 0;
   padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.875rem;
@@ -811,7 +815,7 @@ main {
 }
 
 .reports-status {
-  margin: 1rem 0 0;
+  margin-block: 1rem 0;
   font-size: 0.8125rem;
   color: #52514e;
 }
