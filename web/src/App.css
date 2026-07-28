@@ -722,14 +722,22 @@ main {
 
 /* ---- Reports ---------------------------------------------------------------------------------- */
 
+/* The readable column lives on this element, not on each child.
+ *
+ * It used to be `.reports > * { max-width: 78rem; margin-inline: auto }`, which centres every child
+ * independently — so a paragraph capped at 76ch became a narrow box floating in the middle, starting
+ * well to the right of the table's left edge. Every child was centred, and none of them agreed on
+ * where the left edge was.
+ *
+ * With the column here, children simply fill it and a narrower one starts where the wider ones do.
+ * border-box so the padding is inside the max-width rather than added to it. */
 .reports {
+  box-sizing: border-box;
   overflow-y: auto;
-  padding: 2rem 1.25rem 4rem;
-}
-
-.reports > * {
-  max-width: 78rem;
+  width: 100%;
+  max-width: 80.5rem;
   margin-inline: auto;
+  padding: 2rem 1.25rem 4rem;
 }
 
 .reports-header h1 {
@@ -739,10 +747,9 @@ main {
 }
 
 .reports-lede {
-  /* margin-block, not the shorthand. `.reports > *` centres children with `margin-inline: auto`, and
-     `margin: 0.625rem 0 0` sets margin-inline to 0 — which silently un-centres this paragraph while
-     the table and controls beside it stay centred. That is exactly what it looked like: prose hugging
-     the left of a centred page. Same trap below on .reports-notice and .reports-status. */
+  /* margin-block rather than the shorthand, so the inline margins stay whatever the layout wants.
+     `margin: 0.625rem 0 0` would pin them to 0, which is fine now and would silently fight any
+     future rule that tried to place this paragraph horizontally. */
   margin-block: 0.625rem 0;
   color: #3d3c39;
   line-height: 1.6;
