@@ -753,7 +753,13 @@ main {
   margin-block: 0.625rem 0;
   color: #3d3c39;
   line-height: 1.6;
-  max-width: 76ch;
+  /* A share of the column rather than a character count. 76ch at this size is roughly 43% of the
+     78rem column, which read as a bunched block under the left of a much wider picker box. A
+     percentage keeps the relationship to the column explicit and survives the column changing width.
+
+     Wider than typographic guidance likes for a measure, deliberately: these are two or three
+     sentences of framing, not body copy somebody reads for minutes. */
+  max-width: 80%;
   font-size: 0.9375rem;
 }
 
@@ -813,7 +819,7 @@ main {
   padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.875rem;
-  max-width: 76ch;
+  max-width: 80%;
 }
 
 .reports-notice-failure {
