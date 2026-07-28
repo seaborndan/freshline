@@ -61,4 +61,13 @@ public interface IEstablishmentQueries
     /// options disappearing rather than as a smaller map.</para>
     /// </summary>
     Task<EstablishmentFilterOptions> GetFilterOptionsAsync(CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Returns counts describing the dataset as a whole, for the landing page.
+    ///
+    /// <para>Unfiltered, and unaffected by anything the user has selected: it describes what is in
+    /// the database, which is what makes it a sensible thing to state before a visitor has chosen
+    /// anything.</para>
+    /// </summary>
+    Task<DatasetSummary> GetSummaryAsync(CancellationToken cancellationToken);
 }

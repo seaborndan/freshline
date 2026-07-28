@@ -19,10 +19,19 @@
 
 import {
   inspectionOutcomes,
+  reportDimensions,
+  type DatasetSummary,
   type EstablishmentDetail,
   type EstablishmentFilterOptions,
   type InspectionDetail,
   type InspectionOutcome,
+  type LocalityBounds,
+  type OutcomeBreakdown,
+  type OutcomeBreakdownRow,
+  type EstablishmentReport,
+  type EstablishmentReportRow,
+  type ProportionEstimate,
+  type ReportDimension,
   type LatestInspectionSummary,
   type MapEstablishment,
   type MapResult,
@@ -331,5 +340,309 @@ export function readFilterOptions(body: unknown): EstablishmentFilterOptions {
   return {
     cuisines: readNames(source.cuisines, 'cuisines'),
     localities: readNames(source.localities, 'localities'),
+    localityBounds: readArray(source.localityBounds, 'localityBounds').map((entry, index) =>
+      readLocalityBounds(entry, `localityBounds[${index}]`),
+    ),
+  }
+}
+
+/**
+ * One area's box, checked hard because it is about to be handed to a camera.
+ *
+ * The check that matters is **ordering**, and it is the one a range check cannot make: a swapped
+ * min and max are both perfectly valid New York coordinates, so "is this a plausible latitude" says
+ * yes to an inside-out box. Handed to `fitBounds`, that box either frames nothing or throws inside
+ * MapLibre, and the failure surfaces as a broken map rather than as a bad response.
+ *
+ * This is the same shape of bug the viewport containment check exists for, one level up: the values
+ * are individually fine and their relationship is wrong.
+ */
+function readLocalityBounds(value: unknown, path: string): LocalityBounds {
+  const source = readObject(value, path)
+
+  const locality = readString(source.locality, `${path}.locality`)
+
+  if (locality === '') {
+    fail(`${path}.locality`, 'expected a locality name, got an empty string')
+  }
+
+  const minLatitude = readNumber(source.minLatitude, `${path}.minLatitude`)
+  const maxLatitude = readNumber(source.maxLatitude, `${path}.maxLatitude`)
+  const minLongitude = readNumber(source.minLongitude, `${path}.minLongitude`)
+  const maxLongitude = readNumber(source.maxLongitude, `${path}.maxLongitude`)
+
+  if (minLatitude > maxLatitude) {
+    fail(`${path}.minLatitude`, `expected at most maxLatitude (${maxLatitude}), got ${minLatitude}`)
+  }
+
+  if (minLongitude > maxLongitude) {
+    fail(
+      `${path}.minLongitude`,
+      `expected at most maxLongitude (${maxLongitude}), got ${minLongitude}`,
+    )
+  }
+
+  return { locality, minLatitude, maxLatitude, minLongitude, maxLongitude }
+}
+
+/**
+ * `GET /establishments/summary`.
+ *
+ * Every count is checked to be a non-negative integer, which is not ceremony: these numbers go
+ * straight onto the landing page as claims about the data, and `-1` or `2.5` reaching a page that
+ * says "23,528 establishments" would be the page inventing a number on the API's behalf.
+ *
+ * The relationship between the two establishment counts is checked as well. Never-inspected
+ * establishments are a subset of all establishments, so a summary claiming more of the former than
+ * the latter is internally inconsistent — and a page rendering it would print a percentage above
+ * 100 rather than fail.
+ */
+export function readDatasetSummary(body: unknown): DatasetSummary {
+  const source = readObject(body, 'response')
+
+  const readCount = (value: unknown, path: string): number => {
+    const count = readNumber(value, path)
+
+    if (!Number.isInteger(count) || count < 0) {
+      fail(path, `expected a count, got ${JSON.stringify(count)}`)
+    }
+
+    return count
+  }
+
+  const establishmentCount = readCount(source.establishmentCount, 'establishmentCount')
+  const awaitingFirstInspectionCount = readCount(
+    source.awaitingFirstInspectionCount,
+    'awaitingFirstInspectionCount',
+  )
+
+  if (awaitingFirstInspectionCount > establishmentCount) {
+    fail(
+      'awaitingFirstInspectionCount',
+      `expected at most establishmentCount (${establishmentCount}), got ${awaitingFirstInspectionCount}`,
+    )
+  }
+
+  return {
+    establishmentCount,
+    awaitingFirstInspectionCount,
+    inspectionCount: readCount(source.inspectionCount, 'inspectionCount'),
+    localityCount: readCount(source.localityCount, 'localityCount'),
+    cuisineCount: readCount(source.cuisineCount, 'cuisineCount'),
+    // Null is a real answer — an empty database before the first ingestion run — and is distinct
+    // from a malformed date, which still fails.
+    latestInspectionOn:
+      source.latestInspectionOn === null
+        ? null
+        : readPlainDateString(source.latestInspectionOn, 'latestInspectionOn'),
+  }
+}
+
+
+/**
+ * `GET /reports/outcome-breakdown`.
+ *
+ * Checked harder than the map responses, and for a different reason. A wrong pin is visibly in the
+ * wrong place; a wrong number in a report is indistinguishable from a right one, and the reader has
+ * already been told it is a finding.
+ */
+export function readOutcomeBreakdown(body: unknown): OutcomeBreakdown {
+  const source = readObject(body, 'response')
+
+  const dimension = readString(source.dimension, 'dimension')
+
+  if (!(reportDimensions as readonly string[]).includes(dimension)) {
+    fail(
+      'dimension',
+      `expected one of ${reportDimensions.join(', ')}, got ${JSON.stringify(dimension)}`,
+    )
+  }
+
+  return {
+    dimension: dimension as ReportDimension,
+    rows: readArray(source.rows, 'rows').map((entry, index) =>
+      readOutcomeBreakdownRow(entry, `rows[${index}]`),
+    ),
+    ungroupedEstablishments: readCount(
+      source.ungroupedEstablishments,
+      'ungroupedEstablishments',
+    ),
+    hasDateRange: readBoolean(source.hasDateRange, 'hasDateRange'),
+  }
+}
+
+function readCount(value: unknown, path: string): number {
+  const count = readNumber(value, path)
+
+  if (!Number.isInteger(count) || count < 0) {
+    fail(path, `expected a count, got ${JSON.stringify(count)}`)
+  }
+
+  return count
+}
+
+function readOutcomeBreakdownRow(value: unknown, path: string): OutcomeBreakdownRow {
+  const source = readObject(value, path)
+
+  const group = readString(source.group, `${path}.group`)
+
+  if (group === '') {
+    fail(`${path}.group`, 'expected a group name, got an empty string')
+  }
+
+  const row: OutcomeBreakdownRow = {
+    group,
+    total: readCount(source.total, `${path}.total`),
+    neverInspected: readCount(source.neverInspected, `${path}.neverInspected`),
+    noInspectionInPeriod: readCount(source.noInspectionInPeriod, `${path}.noInspectionInPeriod`),
+    good: readCount(source.good, `${path}.good`),
+    fair: readCount(source.fair, `${path}.fair`),
+    poor: readCount(source.poor, `${path}.poor`),
+    ungraded: readCount(source.ungraded, `${path}.ungraded`),
+    pendingReinspection: readCount(source.pendingReinspection, `${path}.pendingReinspection`),
+    inspected: readCount(source.inspected, `${path}.inspected`),
+    poorShare: readProportion(source.poorShare, `${path}.poorShare`),
+  }
+
+  /*
+   * The arithmetic a reader will do in their head, checked before they do it.
+   *
+   * Every establishment in a group is in exactly one bucket: it has a counted outcome, or it has
+   * never been inspected, or it was inspected outside the period. A table whose columns do not add
+   * up to its total is one a reader is right to distrust — and this is the failure that no type can
+   * catch, because every individual number is a perfectly good non-negative integer.
+   */
+  const accounted = row.inspected + row.neverInspected + row.noInspectionInPeriod
+
+  if (accounted !== row.total) {
+    fail(
+      path,
+      `the columns do not account for the total: inspected ${row.inspected} + never inspected ` +
+        `${row.neverInspected} + not inspected in period ${row.noInspectionInPeriod} = ` +
+        `${accounted}, but total is ${row.total}`,
+    )
+  }
+
+  const outcomes = row.good + row.fair + row.poor + row.ungraded + row.pendingReinspection
+
+  if (outcomes !== row.inspected) {
+    fail(
+      `${path}.inspected`,
+      `the five outcome counts sum to ${outcomes}, but inspected is ${row.inspected}`,
+    )
+  }
+
+  return row
+}
+
+/**
+ * A rate and its evidence, arriving together.
+ *
+ * `total` is rejected when it disagrees with the row's own `inspected`, elsewhere — here the check
+ * is that the estimate is internally coherent, because ADR-0007's whole position is that a
+ * percentage without a trustworthy denominator is not a finding.
+ */
+function readProportion(value: unknown, path: string): ProportionEstimate {
+  const source = readObject(value, path)
+
+  const count = readCount(source.count, `${path}.count`)
+  const total = readCount(source.total, `${path}.total`)
+
+  if (count > total) {
+    fail(`${path}.count`, `expected at most total (${total}), got ${count}`)
+  }
+
+  const observed = readNumber(source.observed, `${path}.observed`)
+  const supportedAtLeast = readNumber(source.supportedAtLeast, `${path}.supportedAtLeast`)
+
+  for (const [name, rate] of [
+    ['observed', observed],
+    ['supportedAtLeast', supportedAtLeast],
+  ] as const) {
+    if (rate < 0 || rate > 1) {
+      fail(`${path}.${name}`, `expected a proportion between 0 and 1, got ${rate}`)
+    }
+  }
+
+  // A lower bound above the value it bounds is not a rounding artefact, it is a swapped pair — and
+  // swapped, the table would rank confident large groups last. Both are valid proportions, so only
+  // their relationship can catch it.
+  if (supportedAtLeast > observed) {
+    fail(
+      `${path}.supportedAtLeast`,
+      `a lower bound cannot exceed the observed rate: ${supportedAtLeast} > ${observed}`,
+    )
+  }
+
+  return { count, total, observed, supportedAtLeast }
+}
+
+
+/**
+ * `GET /reports/establishments`.
+ *
+ * The relationship checked here is the one no type can express: a null `outcome` and a null
+ * `inspectedOn` must travel together. One without the other means a row claiming a result with no
+ * date, or a date with no result — and a table would render either without complaint.
+ */
+export function readEstablishmentReport(body: unknown): EstablishmentReport {
+  const source = readObject(body, 'response')
+
+  return {
+    rows: readArray(source.rows, 'rows').map((entry, index) =>
+      readEstablishmentReportRow(entry, `rows[${index}]`),
+    ),
+    isTruncated: readBoolean(source.isTruncated, 'isTruncated'),
+    hasDateRange: readBoolean(source.hasDateRange, 'hasDateRange'),
+  }
+}
+
+function readEstablishmentReportRow(value: unknown, path: string): EstablishmentReportRow {
+  const source = readObject(value, path)
+
+  const outcome =
+    source.outcome === null ? null : readOutcome(source.outcome, `${path}.outcome`)
+  const inspectedOn =
+    source.inspectedOn === null
+      ? null
+      : readPlainDateString(source.inspectedOn, `${path}.inspectedOn`)
+
+  if ((outcome === null) !== (inspectedOn === null)) {
+    fail(
+      path,
+      `outcome is ${outcome === null ? 'null' : JSON.stringify(outcome)} but inspectedOn is ` +
+        `${inspectedOn === null ? 'null' : JSON.stringify(inspectedOn)}. They describe the same ` +
+        'inspection and cannot disagree about whether it exists.',
+    )
+  }
+
+  const isAwaitingFirstInspection = readBoolean(
+    source.isAwaitingFirstInspection,
+    `${path}.isAwaitingFirstInspection`,
+  )
+
+  // An establishment awaiting its first inspection cannot have a result. The reverse is not an
+  // error: a place with inspections outside the selected period also has no result, which is the
+  // distinction this row exists to preserve.
+  if (isAwaitingFirstInspection && outcome !== null) {
+    fail(
+      path,
+      `isAwaitingFirstInspection is true but outcome is ${JSON.stringify(outcome)}. An ` +
+        'establishment that has never been inspected cannot have an inspection result.',
+    )
+  }
+
+  return {
+    id: readNumber(source.id, `${path}.id`),
+    name: readString(source.name, `${path}.name`),
+    addressLine: readNullableString(source.addressLine, `${path}.addressLine`),
+    locality: readNullableString(source.locality, `${path}.locality`),
+    cuisine: readNullableString(source.cuisine, `${path}.cuisine`),
+    isAwaitingFirstInspection,
+    outcome,
+    inspectedOn,
+    rawGrade: readNullableString(source.rawGrade, `${path}.rawGrade`),
+    rawScore: readNullableNumber(source.rawScore, `${path}.rawScore`),
+    closedByAuthority: readBoolean(source.closedByAuthority, `${path}.closedByAuthority`),
   }
 }

@@ -38,4 +38,48 @@ public sealed record EstablishmentFilterOptions
     /// source publishes, and the filter matches those strings exactly.</para>
     /// </summary>
     public required IReadOnlyList<string> Localities { get; init; }
+
+    /// <summary>
+    /// Where each of those areas is, so that choosing one can move the camera to it.
+    ///
+    /// <para><strong>Added alongside <see cref="Localities"/> rather than replacing it.</strong> The
+    /// API's evolution rule is to add optional fields and never remove or repurpose one; turning a
+    /// list of strings into a list of objects would break every client reading it today, including
+    /// this project's own filter panel.</para>
+    ///
+    /// <para>An area with no drawable establishments has no entry here, so a locality can appear in
+    /// <see cref="Localities"/> and not in this list. That is the honest shape: there is nowhere to
+    /// point a camera at a set of establishments that have no coordinates.</para>
+    /// </summary>
+    public required IReadOnlyList<LocalityBounds> LocalityBounds { get; init; }
+}
+
+/// <summary>
+/// The box containing every drawable establishment in one sub-city area.
+///
+/// <para><strong>Measured from the data, not taken from a published outline.</strong> Borough
+/// outlines would be a second dataset to ingest and reconcile, and they answer a different question.
+/// This box frames where the establishments <em>are</em>, which is what a camera should show when
+/// somebody filters to a borough — a geographic outline of Queens includes a great deal of Queens
+/// with no restaurants in it.</para>
+///
+/// <para><strong>What a single badly geocoded row would do.</strong> A minimum and a maximum are the
+/// two statistics least robust to one bad value: a row geocoded into the Southern Ocean, of the kind
+/// ADR-0004 describes as possible, would stretch this box across the Atlantic. Checked rather than
+/// assumed — at the time of writing, zero establishments fall outside New York, zero sit at a zero
+/// coordinate, and zero carry coordinates without a locality.</para>
+///
+/// <para>It is not defended against beyond that check, and the reason is that the defence already
+/// exists somewhere better: the map refuses to move its camera outside the city at all
+/// (<c>maxBounds</c>). So the worst a future bad row can do here is frame more of New York than it
+/// should — visibly odd, and not a camera in the ocean.</para>
+/// </summary>
+public sealed record LocalityBounds
+{
+    public required string Locality { get; init; }
+
+    public required double MinLatitude { get; init; }
+    public required double MaxLatitude { get; init; }
+    public required double MinLongitude { get; init; }
+    public required double MaxLongitude { get; init; }
 }

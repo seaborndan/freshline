@@ -181,6 +181,28 @@ export interface EstablishmentDetail {
 export interface EstablishmentFilterOptions {
   cuisines: string[]
   localities: string[]
+
+  /**
+   * Where each area's drawable establishments are, so choosing a borough can move the camera to it.
+   *
+   * Measured from the establishments rather than taken from a published borough outline — it frames
+   * where the restaurants are, which is a different question from where the legal boundary runs, and
+   * the more useful one for a camera.
+   *
+   * An area whose establishments all lack coordinates appears in `localities` and not here, so this
+   * list can be shorter than that one. A lookup that misses is a borough with nowhere to point at,
+   * not an error.
+   */
+  localityBounds: LocalityBounds[]
+}
+
+/** The box containing one area's drawable establishments. Named as `Viewport` names its edges. */
+export interface LocalityBounds {
+  locality: string
+  minLatitude: number
+  maxLatitude: number
+  minLongitude: number
+  maxLongitude: number
 }
 
 /**
@@ -197,4 +219,156 @@ export interface EstablishmentFilter {
   locality?: string
   outcome?: InspectionOutcome
   awaitingFirstInspection?: boolean
+}
+
+/**
+ * What the dataset contains, for the landing page.
+ *
+ * Counts rather than conclusions. No rates, no averages, no "worst borough" — every one of those is
+ * a claim rather than a measurement, and a claim drawn over a whole city hides exactly the
+ * small-sample effects that make per-cuisine figures misleading. This says what is in here.
+ *
+ * Fetched rather than hard-coded, because a figure typed into a page is true on the day it is
+ * written and silently false after the next ingestion run.
+ */
+export interface DatasetSummary {
+  establishmentCount: number
+
+  /** A published state, not an absence in our records — 3,605 of 23,528 in the live data. */
+  awaitingFirstInspectionCount: number
+
+  inspectionCount: number
+  localityCount: number
+  cuisineCount: number
+
+  /**
+   * The most recent inspection date in the data, as `yyyy-mm-dd`, or null when there are none.
+   *
+   * **The source's freshness, not ours.** A successful ingestion run that found nothing new leaves
+   * this unchanged, which is the honest thing to show: a figure based on our own job history would
+   * report the data as current at the moment the city went quiet.
+   */
+  latestInspectionOn: string | null
+}
+
+
+/** What an outcome breakdown groups by. */
+export const reportDimensions = ['Locality', 'Cuisine'] as const
+export type ReportDimension = (typeof reportDimensions)[number]
+
+/**
+ * A proportion, with how much evidence stands behind it.
+ *
+ * `observed` is what a table displays — the true rate, never adjusted. `supportedAtLeast` is what it
+ * sorts by: the lower bound of a 95% Wilson score interval, read as "the data supports a rate of at
+ * least this much". See ADR-0007.
+ */
+export interface ProportionEstimate {
+  count: number
+  total: number
+  observed: number
+  supportedAtLeast: number
+}
+
+/** One borough or cuisine, and how its establishments' latest results distribute. */
+export interface OutcomeBreakdownRow {
+  group: string
+
+  /** Every establishment in the group, including those with no counted outcome. */
+  total: number
+
+  /** Listed by the city and never inspected. A published state, not missing data. */
+  neverInspected: number
+
+  /** Inspected at some point, but not inside the selected date range. */
+  noInspectionInPeriod: number
+
+  good: number
+  fair: number
+  poor: number
+  ungraded: number
+  pendingReinspection: number
+
+  /** Establishments with a counted outcome — the denominator for every rate on this row. */
+  inspected: number
+
+  poorShare: ProportionEstimate
+}
+
+export interface OutcomeBreakdown {
+  dimension: ReportDimension
+  rows: OutcomeBreakdownRow[]
+
+  /**
+   * Establishments excluded from every row because the grouping column is null.
+   *
+   * 3,605 have no cuisine — exactly those never inspected — and 66 have no locality. Shown, because
+   * a table whose totals do not reconcile with the landing page, with nothing explaining the gap, is
+   * one a reader is right to distrust.
+   */
+  ungroupedEstablishments: number
+
+  hasDateRange: boolean
+}
+
+/** The parameters an outcome breakdown accepts. Undefined means "do not send this". */
+export interface OutcomeBreakdownRequest {
+  dimension: ReportDimension
+  locality?: string
+  cuisine?: string
+  inspectedFrom?: string
+  inspectedTo?: string
+}
+
+
+/** One establishment, as a row in a report. */
+export interface EstablishmentReportRow {
+  id: number
+  name: string
+  addressLine: string | null
+  locality: string | null
+  cuisine: string | null
+
+  /**
+   * The city lists it and has never inspected it.
+   *
+   * Distinct from having no result *in the selected period*. Both produce a null `outcome`, and a
+   * reader needs to tell them apart.
+   */
+  isAwaitingFirstInspection: boolean
+
+  outcome: InspectionOutcome | null
+
+  /** Null exactly when `outcome` is. */
+  inspectedOn: string | null
+
+  rawGrade: string | null
+  rawScore: number | null
+
+  /** A separate fact from the result — a place can be closed at an inspection with no letter. */
+  closedByAuthority: boolean
+}
+
+export interface EstablishmentReport {
+  rows: EstablishmentReportRow[]
+
+  /**
+   * More matched than were returned.
+   *
+   * Which rows were dropped is arbitrary, so nothing derived from a truncated result may be stated
+   * as a fact about the whole set.
+   */
+  isTruncated: boolean
+
+  hasDateRange: boolean
+}
+
+/** The parameters the establishment report accepts. Undefined means "do not send this". */
+export interface EstablishmentReportRequest {
+  locality?: string
+  cuisine?: string
+  outcome?: InspectionOutcome
+  awaitingFirstInspection?: boolean
+  inspectedFrom?: string
+  inspectedTo?: string
 }

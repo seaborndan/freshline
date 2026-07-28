@@ -653,3 +653,137 @@ So the habit worth building is not "write more tests". It is: **before trusting 
 what it would do if the thing were broken.** If the answer is "the same thing", nothing has been
 measured yet — and on this milestone, every single time, the person looking at the screen found it
 first.
+
+## M5b — Landing page and reporting suite
+
+**Date:** 2026-07-27 · **Tool:** Claude Code (Opus 5)
+
+### The most useful thing I did was talk someone out of what they asked for
+
+The request was a reporting suite with "a UI for running queries based on any number of parameters we
+see fit". That is a small BI tool, and building it would have been the wrong answer to a reasonable
+question.
+
+The argument that carried it was not mine — it was already in this repository, in the roadmap:
+*"Breadth is the cheap kind of impressive; a system finished end to end is the expensive kind."* A
+query builder over restaurant inspections and one over insurance claims are the same artefact. The
+interesting thinking in this project is about *this* data — six grades collapsing to five outcomes,
+3,605 establishments never visited, closure being a fact separate from the grade — and a generic
+control panel hides all of it.
+
+Named reports instead: each one a question somebody chose to ask, with a shape that can be indexed,
+measured and explained.
+
+What it gives up is real and worth stating: questions nobody anticipated. Accepted, because an
+unanticipated report can be added in an afternoon.
+
+### The decision I got wrong, and only found by running it
+
+`ADR-0007` was written before any report existed. It said rankings must sort by the lower bound of a
+Wilson interval rather than by observed rate, so that a cuisine with two establishments and one poor
+result does not outrank one with four hundred — and it claimed small samples would "sink under their
+own uncertainty".
+
+Then it ran against all 23,528 establishments:
+
+| Sorted by supported floor (shipped) | n | observed | supported |
+|---|---|---|---|
+| Basque | 2 | 50.00% | 9.45% |
+| Latin American | 795 | 1.51% | 0.87% |
+| Chinese | 1,736 | 1.09% | 0.70% |
+
+**It works, and not as well as I said it would.** The naive ordering fills the top of the table with
+groups of 31, 46 and 61; the shipped ordering replaces them with 795, 1,736 and 541 — a real
+improvement. But Basque, at n=2, still tops the table, because the city-wide `Poor` rate is around
+0.5% and the uncertainty on a sample of two stays an order of magnitude above a well-established
+small number.
+
+The interval turned *"50%, obviously first"* into *"9.45%, still first"*. That is a smaller lie, not
+a true statement.
+
+Two things changed as a result, and both were in the ADR as niceties before the measurement made them
+load-bearing: `n` is a column rather than a footnote, and the table says in words that a small group
+can sit at the top. The ADR now carries both orderings as measured tables and states the correction
+as a correction.
+
+The generalisable part: **an ADR written before the code is a hypothesis.** This one was right about
+the mechanism and wrong about the magnitude, and nothing but running it on real data could have
+distinguished those.
+
+### Three bugs, each found by a test written before I believed there was a bug
+
+- **A borough named in a link never framed the map.** The camera move was recorded as "handled"
+  *before* checking that the borough's bounds had loaded — and since the vocabulary is fetched
+  asynchronously, a `?locality=Brooklyn` link spent its one chance on a render where there was nothing
+  to frame with.
+- **A backwards date range silently showed different data.** It dropped both dates and re-ran, so the
+  table reloaded as the *unfiltered* report while an error above it said the range was wrong. Real
+  numbers, for a period nobody asked for. The request now freezes at the last valid one.
+- **The report table's columns did not add up to its own total.** `noInspectionInPeriod` was in the
+  CSV and not in the table — the exact reconciliation failure the response validator rejects a whole
+  payload for.
+
+None of these throw. All three produce a plausible screen.
+
+### Where the documentation had silently stopped tracking the work
+
+Two features shipped with thorough commit messages, thorough code comments, and **no milestone
+document and no roadmap entry at all**. The largest decision behind them — named reports over a query
+builder — existed only in a conversation.
+
+Caught by being asked, not by noticing. That is worth recording plainly: the per-change discipline
+held completely while the per-milestone discipline had lapsed, and they fail independently. Fixed by
+writing M5b up and inserting it in the roadmap rather than renumbering M6 and M7, which are referred
+to by number elsewhere.
+
+### Where a rule from an earlier milestone paid for itself immediately
+
+`TreatWarningsAsErrors` went on at the start of this milestone, on the argument that a warning nobody
+reads is not a warning. Within an hour it failed a build over an xUnit analyser complaint —
+`Assert.Single(x.Where(...))` — that would previously have scrolled past in CI output.
+
+Small, and exactly the class of thing the change was for.
+
+### What was delegated, and how it was verified
+
+- **The Wilson interval**, checked against the published bound for 5 of 10 rather than against its own
+  output — a test written by pasting what the code printed proves only that the code does what it
+  does. The ranking property is asserted directly: the 400-establishment group must outrank the
+  2-establishment one.
+- **The borough bounding boxes**, measured from the establishments rather than taken from published
+  borough outlines, with the outlier risk checked rather than assumed: zero establishments outside New
+  York, zero at a zero coordinate, zero with coordinates and no locality.
+- **The `popstate` handler**, verified by deleting the listener, watching the test fail, and putting it
+  back.
+- **186 backend tests, 229 web tests, 0 warnings**, and no new dependencies — including the router
+  that was not added, and the `.xlsx` library that CSV made unnecessary.
+
+### Where a human still has to look
+
+- **The small-sample handling in every ranking report.** Named in the milestone doc's review list
+  before it was written, and the measurement above is why.
+- **`ProportionEstimate`** — a scoring rule, which `CLAUDE.md` puts in the same category as grading
+  normalisation: wrong here is silent and inverts a conclusion while everything runs.
+
+### Where I took the tool's word for it
+
+- **That the report query is affordable.** It runs a correlated subquery per establishment across the
+  whole table. It returns quickly on a warm local database with 23,528 rows; nobody has looked at the
+  plan, and no report appears in `docs/performance.md`.
+- **That the cuisine vocabulary means something.** 89 values, assigned by the source, uncurated. Every
+  per-cuisine report inherits whatever inconsistency is in that field, and this project has not
+  examined it.
+
+### What I'd tell a junior
+
+M5's lesson was that an instrument can report success while being structurally unable to observe the
+failure. M5b's is the version that applies to *decisions*: **writing the reasoning down first does not
+make it true, and the document is not finished until the thing it describes has been run.**
+
+ADR-0007 was carefully argued, correct about the mechanism, and overstated in a way that changed what
+the interface had to do. Fifteen minutes against real data was worth more than the hour spent writing
+it — and the ADR is better for carrying the correction than it would have been if I had quietly
+adjusted the claim.
+
+Write the decision before the code. Then go and find out whether you were right, and record the answer
+next to the question.

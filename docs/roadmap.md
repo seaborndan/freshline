@@ -176,6 +176,34 @@ empty resource group. Resuming it is a documented sequence rather than a design 
 
 ---
 
+### M5b — Landing page and reporting suite
+
+Added after M5 was built, and inserted rather than renumbered: M6 and M7 are referred to by number in
+ADR-0005 and elsewhere, so shifting them would silently change what those references mean.
+
+A landing page that says what this is, whose data it is and how current it is — the map alone made a
+stranger arrive inside a tool with no framing. Then a reporting suite: named reports answering
+specific questions about the data, each with filters, a sortable table and an export, because the map
+answers "what is near here" and cannot answer "which cuisines have the worst results in Queens".
+
+**Done when:** somebody arriving at the root understands what the site is without being told, and can
+reach a report that answers a question the map cannot.
+
+> **Deliberately not a query builder.** The ask was a UI for arbitrary parameters; that is a small BI
+> tool, and it is the same artefact whether the data underneath is restaurant inspections or
+> insurance claims. Fixed named reports keep the interesting thinking — grades collapsing to
+> outcomes, never-inspected as a real state — visible instead of hidden behind a generic control
+> panel. This roadmap's own words: *breadth is the cheap kind of impressive*.
+>
+> **The risk to watch** is not performance, it is authority. A ranking table looks precise, and
+> ranked by percentage a cuisine with three establishments will outrank one with four hundred and a
+> real problem. Every ranking states its sample size, and the handling gets an ADR before any ranking
+> report merges.
+
+Detail in [`docs/milestones/m5b-landing-and-reporting.md`](milestones/m5b-landing-and-reporting.md).
+
+---
+
 ### M6 — Scoring and territories *(~5h)*
 
 The opportunity score: inspection trend, critical-violation recency, and whether an establishment is

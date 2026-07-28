@@ -7,6 +7,15 @@ import { FilterPanel } from './FilterPanel'
 const options: EstablishmentFilterOptions = {
   cuisines: ['American', 'Chinese', 'Coffee/Tea'],
   localities: ['Bronx', 'Brooklyn', 'Manhattan'],
+
+  // Real bounds, measured from the live data. The panel does not read them — moving the camera is
+  // the page's job — but a fixture carrying plausible values is what makes it obvious that this
+  // panel deliberately ignores them.
+  localityBounds: [
+    { locality: 'Bronx', minLatitude: 40.8003, maxLatitude: 40.9128, minLongitude: -73.9312, maxLongitude: -73.7829 },
+    { locality: 'Brooklyn', minLatitude: 40.5727, maxLatitude: 40.7377, minLongitude: -74.0370, maxLongitude: -73.8581 },
+    { locality: 'Manhattan', minLatitude: 40.6911, maxLatitude: 40.8729, minLongitude: -74.0196, maxLongitude: -73.9148 },
+  ],
 }
 
 function renderPanel(overrides: Partial<Parameters<typeof FilterPanel>[0]> = {}) {

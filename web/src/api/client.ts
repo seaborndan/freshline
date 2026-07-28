@@ -14,6 +14,11 @@
  */
 
 import type {
+  DatasetSummary,
+  OutcomeBreakdown,
+  OutcomeBreakdownRequest,
+  EstablishmentReport,
+  EstablishmentReportRequest,
   EstablishmentDetail,
   EstablishmentFilter,
   EstablishmentFilterOptions,
@@ -26,7 +31,14 @@ import {
   isAbortError,
   type ProblemDetails,
 } from './errors'
-import { readEstablishmentDetail, readFilterOptions, readMapResult } from './validate'
+import {
+  readDatasetSummary,
+  readOutcomeBreakdown,
+  readEstablishmentReport,
+  readEstablishmentDetail,
+  readFilterOptions,
+  readMapResult,
+} from './validate'
 import { formatCoordinate, viewportProblem, type Viewport } from './viewport'
 
 /**
@@ -151,6 +163,83 @@ export async function fetchMap(request: MapRequest, signal?: AbortSignal): Promi
  */
 export async function fetchFilterOptions(signal?: AbortSignal): Promise<EstablishmentFilterOptions> {
   return readFilterOptions(await requestJson(`${apiRoot}/establishments/filter-options`, signal))
+}
+
+/**
+ * Counts describing the whole dataset, for the landing page.
+ *
+ * Fetched once. Like the filter vocabulary, these change only when ingestion runs, and they are the
+ * first request a visitor causes — so it is worth being the cheapest one the API answers.
+ */
+export async function fetchDatasetSummary(signal?: AbortSignal): Promise<DatasetSummary> {
+  return readDatasetSummary(await requestJson(`${apiRoot}/establishments/summary`, signal))
+}
+
+/**
+ * How inspection results distribute across boroughs or cuisines.
+ *
+ * Spends the API's *report* budget rather than the map's — a separate, smaller token bucket, because
+ * a report costs many times what a viewport query costs. A 429 here means too many reports, not too
+ * much panning, and the message says so.
+ */
+export async function fetchOutcomeBreakdown(
+  request: OutcomeBreakdownRequest,
+  signal?: AbortSignal,
+): Promise<OutcomeBreakdown> {
+  const params = new URLSearchParams({ dimension: request.dimension })
+
+  // Only parameters with a value are sent. An empty string is an exact match against the empty
+  // string, which no cuisine or borough has, so sending one would silently return nothing.
+  if (request.locality !== undefined && request.locality !== '') {
+    params.set('locality', request.locality)
+  }
+
+  if (request.cuisine !== undefined && request.cuisine !== '') {
+    params.set('cuisine', request.cuisine)
+  }
+
+  if (request.inspectedFrom !== undefined && request.inspectedFrom !== '') {
+    params.set('inspectedFrom', request.inspectedFrom)
+  }
+
+  if (request.inspectedTo !== undefined && request.inspectedTo !== '') {
+    params.set('inspectedTo', request.inspectedTo)
+  }
+
+  return readOutcomeBreakdown(
+    await requestJson(`${apiRoot}/reports/outcome-breakdown?${params}`, signal),
+  )
+}
+
+/**
+ * The establishments themselves, filtered — the row-level report.
+ *
+ * Spends the report budget, like the breakdown. Bounded rather than paged, so a wide filter comes
+ * back truncated and the caller is told.
+ */
+export async function fetchEstablishmentReport(
+  request: EstablishmentReportRequest,
+  signal?: AbortSignal,
+): Promise<EstablishmentReport> {
+  const params = new URLSearchParams()
+
+  if (request.locality) params.set('locality', request.locality)
+  if (request.cuisine) params.set('cuisine', request.cuisine)
+  if (request.outcome) params.set('outcome', request.outcome)
+  if (request.inspectedFrom) params.set('inspectedFrom', request.inspectedFrom)
+  if (request.inspectedTo) params.set('inspectedTo', request.inspectedTo)
+
+  // Explicitly compared to undefined: false is a meaningful value here — "exclude never-inspected"
+  // — and a truthiness check would drop it.
+  if (request.awaitingFirstInspection !== undefined) {
+    params.set('awaitingFirstInspection', String(request.awaitingFirstInspection))
+  }
+
+  const query = params.toString()
+
+  return readEstablishmentReport(
+    await requestJson(`${apiRoot}/reports/establishments${query === '' ? '' : `?${query}`}`, signal),
+  )
 }
 
 /** One establishment with its full inspection history. */

@@ -58,6 +58,66 @@ public class FilterOptionsEndpointTests(ApiFixture fixture)
     }
 
     /// <summary>
+    /// The box a camera is pointed at when somebody filters to a borough.
+    ///
+    /// <para>The fixture seeds Manhattan establishments between 40.7200 and 40.7210 north, and
+    /// -74.0020 and -74.0010 east. The assertion is on containment rather than on the exact numbers,
+    /// so that adding a seeded establishment inside that area does not fail a test about camera
+    /// framing.</para>
+    /// </summary>
+    [Fact]
+    public async Task Returns_a_box_that_contains_the_areas_establishments()
+    {
+        EstablishmentFilterOptions options = await GetAsync();
+
+        LocalityBounds manhattan = Assert.Single(options.LocalityBounds);
+
+        Assert.Equal("Manhattan", manhattan.Locality);
+        Assert.True(manhattan.MinLatitude <= 40.7200, "the box must contain the southernmost pin");
+        Assert.True(manhattan.MaxLatitude >= 40.7210, "the box must contain the northernmost pin");
+        Assert.True(manhattan.MinLongitude <= -74.0020, "the box must contain the westernmost pin");
+        Assert.True(manhattan.MaxLongitude >= -74.0010, "the box must contain the easternmost pin");
+    }
+
+    /// <summary>
+    /// A box is not a point, and a camera told to fit a degenerate one has nothing to fit.
+    ///
+    /// <para>This is the check that a min/max pair has not been swapped, which is the single most
+    /// likely mistake in code that produces four coordinates and the one a range check cannot catch:
+    /// both orderings are made of valid New York coordinates.</para>
+    /// </summary>
+    [Fact]
+    public async Task Orders_each_bound_so_the_box_is_not_inside_out()
+    {
+        EstablishmentFilterOptions options = await GetAsync();
+
+        foreach (LocalityBounds bounds in options.LocalityBounds)
+        {
+            Assert.True(
+                bounds.MinLatitude <= bounds.MaxLatitude,
+                $"{bounds.Locality}: min latitude {bounds.MinLatitude} exceeds max {bounds.MaxLatitude}");
+            Assert.True(
+                bounds.MinLongitude <= bounds.MaxLongitude,
+                $"{bounds.Locality}: min longitude {bounds.MinLongitude} exceeds max {bounds.MaxLongitude}");
+        }
+    }
+
+    /// <summary>
+    /// Establishments with no coordinates cannot contribute to a box a camera is pointed at. The
+    /// fixture seeds one — FIXTURE NO COORDINATES, in Manhattan — and it must not widen the box or
+    /// create an entry of its own.
+    /// </summary>
+    [Fact]
+    public async Task Ignores_establishments_that_cannot_be_drawn()
+    {
+        EstablishmentFilterOptions options = await GetAsync();
+
+        Assert.All(
+            options.LocalityBounds,
+            bounds => Assert.Contains(bounds.Locality, options.Localities));
+    }
+
+    /// <summary>
     /// Public, like every other read endpoint. ADR-0005 makes anonymity a decision rather than an
     /// omission, and there is a test per endpoint because a global authorization fallback policy is
     /// the natural thing to add once auth exists and would silently close the map.

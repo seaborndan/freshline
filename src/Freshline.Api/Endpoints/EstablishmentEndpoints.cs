@@ -72,7 +72,28 @@ internal static class EstablishmentEndpoints
                 "cannot discover these otherwise: the map endpoint does not carry cuisine and the " +
                 "list endpoint returns one page's values rather than the vocabulary. Nulls are " +
                 "excluded because they are not selectable — establishments with no cuisine or no " +
-                "locality match no value here, and there are some of both.");
+                "locality match no value here, and there are some of both. " +
+                "localityBounds carries the box containing each area's drawable establishments, so " +
+                "a client can move a camera to a locality it has just filtered to. Those boxes are " +
+                "measured from the establishments themselves rather than taken from published " +
+                "borough outlines: they frame where the restaurants are, which is a different and " +
+                "more useful question than where the borough's legal boundary runs. An area whose " +
+                "establishments all lack coordinates appears in localities and not in " +
+                "localityBounds.");
+
+        establishments
+            .MapGet("/summary", GetSummaryAsync)
+            .WithName("GetDatasetSummary")
+            .WithSummary("Counts describing the dataset as a whole")
+            .WithDescription(
+                "What is in here, rather than what it means: how many establishments and " +
+                "inspections, how many of those establishments have never been inspected, how many " +
+                "boroughs and cuisines, and the date of the most recent inspection. " +
+                "latestInspectionOn is the source's own freshness, not ours — a successful " +
+                "ingestion run that found nothing new leaves it unchanged, which is the honest " +
+                "thing to report. It is null only when there are no inspections at all. No rates " +
+                "or averages: those are conclusions, and a conclusion drawn over a whole city " +
+                "hides the small-sample effects that make per-cuisine figures misleading.");
 
         establishments
             .MapGet("/{id:int}", GetByIdAsync)
@@ -267,6 +288,11 @@ internal static class EstablishmentEndpoints
         IEstablishmentQueries queries,
         CancellationToken cancellationToken)
         => TypedResults.Ok(await queries.GetFilterOptionsAsync(cancellationToken));
+
+    private static async Task<Ok<DatasetSummary>> GetSummaryAsync(
+        IEstablishmentQueries queries,
+        CancellationToken cancellationToken)
+        => TypedResults.Ok(await queries.GetSummaryAsync(cancellationToken));
 
     private static ProblemHttpResult Problem(string title, string detail)
         => TypedResults.Problem(
