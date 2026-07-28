@@ -212,12 +212,12 @@ describe('MapView', () => {
   })
 
   /**
-   * Two spheres per state, registered before any layer asks for one by name: the ordinary one and
+   * Two sprites per state, registered before any layer asks for one by name: the ordinary one and
    * the closed variant, whose silhouette darkens towards the closure colour. Closure is a separate
    * fact from the result, and baking the rim into a sprite is the only way it survives the move from
    * a stroked circle.
    */
-  it('registers an ordinary and a closed sphere for every pin state', () => {
+  it('registers an ordinary and a closed pin for every state', () => {
     render(<MapView establishments={[pin]} initialViewport={viewport} />)
 
     loadStyle()
@@ -225,8 +225,8 @@ describe('MapView', () => {
     expect(addImage).toHaveBeenCalledTimes(pinStates.length * 2)
 
     const names = addImage.mock.calls.map((call) => call[0] as string)
-    expect(names).toContain('sphere-Poor')
-    expect(names).toContain('sphere-Poor-closed')
+    expect(names).toContain('pin-Poor')
+    expect(names).toContain('pin-Poor-closed')
   })
 
   it('says so when the map itself fails, rather than leaving a blank rectangle', () => {

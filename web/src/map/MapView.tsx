@@ -21,10 +21,10 @@ import {
   iconSize,
   ordinaryFilter,
   priorityFilter,
-  sphereImageName,
+  pinImageName,
 } from './layers'
 import { closedModifier, pinStates, pinStyles } from './pinStyle'
-import { sphereImage } from './sphereSprite'
+import { pinImage } from './pinSprite'
 import {
   basemapAttribution,
   basemapRasterTiles,
@@ -120,18 +120,18 @@ const hoverLayerId = 'establishment-hover'
 const noFeatures = { type: 'FeatureCollection' as const, features: [] as PinFeature[] }
 
 /**
- * Registers one shaded sphere per pin state.
+ * Registers one pin sprite per state, and a closed variant of each.
  *
- * Six images, computed once at startup and held by the map for its lifetime — 64×64 RGBA is 16 KB
- * each, so the whole set is under 100 KB and none of it is recomputed as the map moves.
+ * Twelve images, computed once at startup and held for the map's lifetime — 64×88 RGBA is 22 KB
+ * each, so the whole set is under 270 KB and none of it is recomputed as the map moves.
  *
- * `pixelRatio: 2` tells MapLibre the 64px sprite represents 32 logical pixels, which is what keeps
- * the spheres sharp on a high-density display rather than upscaled and soft.
+ * `pixelRatio: 2` tells MapLibre the sprite is drawn at twice its logical size, which is what keeps
+ * the pins sharp on a high-density display rather than upscaled and soft.
  *
  * Guarded with `hasImage`, because a style reload re-fires `style.load` and re-registering an
  * existing name throws.
  */
-function registerSphereImages(map: MapLibreMap): void {
+function registerPinImages(map: MapLibreMap): void {
   for (const state of pinStates) {
     const style = pinStyles[state]
 
@@ -139,7 +139,7 @@ function registerSphereImages(map: MapLibreMap): void {
     // which is how a closure stays visible now that the ring is baked into the sprite rather than
     // painted as a stroke.
     for (const closed of [false, true]) {
-      const name = sphereImageName(state, closed)
+      const name = pinImageName(state, closed)
 
       if (map.hasImage(name)) {
         continue
@@ -147,7 +147,7 @@ function registerSphereImages(map: MapLibreMap): void {
 
       const rim = closed ? closedModifier.stroke : style.stroke
 
-      map.addImage(name, sphereImage(style.fill, rim), { pixelRatio: 2 })
+      map.addImage(name, pinImage(style.fill, rim), { pixelRatio: 2 })
     }
   }
 }
@@ -466,7 +466,7 @@ export function MapView({
         data: toFeatureCollection(latestEstablishments.current),
       })
 
-      registerSphereImages(created)
+      registerPinImages(created)
 
       created.addSource(hoverSourceId, { type: 'geojson', data: noFeatures })
 
@@ -501,6 +501,10 @@ export function MapView({
 
             // The sprite is drawn upright regardless of bearing, so rotating the map does not tip
             // the spheres over and break the illusion that they are lit from one direction.
+            // The tip marks the establishment, so the sprite hangs above its coordinate rather than
+            // being centred on it. A centred pin covers the thing it points at with its own head.
+            'icon-anchor': 'bottom',
+
             'icon-rotation-alignment': 'viewport',
             'icon-pitch-alignment': 'viewport',
           },
@@ -517,6 +521,7 @@ export function MapView({
           'icon-size': hoverIconSize,
           'icon-allow-overlap': true,
           'icon-ignore-placement': true,
+          'icon-anchor': 'bottom',
           'icon-rotation-alignment': 'viewport',
           'icon-pitch-alignment': 'viewport',
         },

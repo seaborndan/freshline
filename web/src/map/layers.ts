@@ -89,11 +89,12 @@ const sizedRadius: Expression = ['*', stateRadius, countScale]
  * size, scaled by how many establishments share the point, grown while hovered, all interpolated
  * over zoom.
  *
- * Divided by half the sprite size, because the state sizes in `pinStyle.ts` are radii in pixels and
- * `icon-size` is a scale factor. Keeping the radii as the unit means the legend swatches and the map
- * still read from one table.
+ * Divided by the sprite's head radius, because the state sizes in `pinStyle.ts` are radii in pixels
+ * and `icon-size` is a scale factor. Keeping the radii as the unit means the legend swatches and the
+ * map still read from one table — a state whose radius is raised gets a bigger pin and a bigger
+ * swatch, from one edit.
  */
-const iconScale: Expression = ['/', sizedRadius, 32]
+const iconScale: Expression = ['/', sizedRadius, 13]
 
 function sizeAcrossZoom(scale: Expression): Expression {
   return [
@@ -139,9 +140,9 @@ export const hoverIconSize: Expression = sizeAcrossZoom(['*', iconScale, 1.35])
  * Which sphere to draw.
  *
  * Two images per state, because closure is a separate fact from the result and has to survive the
- * move to sprites. A circle layer expressed it as a different stroke colour; a sprite bakes its rim
- * in, so the closed variant is a second image whose silhouette darkens towards
- * `closedModifier.stroke` instead of the state's own.
+ * move to sprites. A circle layer expressed it as a different stroke colour; a sprite bakes its
+ * outline in, so the closed variant is a second image outlined in `closedModifier.stroke` instead of
+ * the state's own.
  *
  * Twelve images rather than six. At 16 KB each that is under 200 KB held for the map's lifetime, and
  * none of it is recomputed as the map moves.
@@ -149,15 +150,15 @@ export const hoverIconSize: Expression = sizeAcrossZoom(['*', iconScale, 1.35])
 export const iconImage: Expression = [
   'case',
   ['get', 'closed'],
-  matchOnState((state) => sphereImageName(state, true)),
-  matchOnState((state) => sphereImageName(state, false)),
+  matchOnState((state) => pinImageName(state, true)),
+  matchOnState((state) => pinImageName(state, false)),
 ]
 
 /**
  * The image name for a state, so registration and the expression above cannot disagree about it.
  */
-export function sphereImageName(state: (typeof pinStates)[number], closed: boolean): string {
-  return closed ? `sphere-${state}-closed` : `sphere-${state}`
+export function pinImageName(state: (typeof pinStates)[number], closed: boolean): string {
+  return closed ? `pin-${state}-closed` : `pin-${state}`
 }
 
 /**

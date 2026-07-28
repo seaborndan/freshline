@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inspectionOutcomes } from '../api/contract'
-import { iconImage, sphereImageName } from './layers'
+import { iconImage, pinImageName } from './layers'
 import { closedModifier, pinStates, pinStyles } from './pinStyle'
 
 describe('the pin table', () => {
@@ -71,7 +71,7 @@ describe('the generated paint expression', () => {
       const index = openBranch.indexOf(state)
 
       expect(index).toBeGreaterThan(-1)
-      expect(openBranch[index + 1]).toBe(sphereImageName(state, false))
+      expect(openBranch[index + 1]).toBe(pinImageName(state, false))
     }
   })
 
@@ -79,6 +79,6 @@ describe('the generated paint expression', () => {
     const openBranch = iconImage[iconImage.length - 1] as unknown[]
     const fallback = openBranch[openBranch.length - 1]
 
-    expect(pinStates.map((state) => sphereImageName(state, false))).not.toContain(fallback)
+    expect(pinStates.map((state) => pinImageName(state, false))).not.toContain(fallback)
   })
 })
