@@ -747,19 +747,13 @@ main {
 }
 
 .reports-lede {
-  /* margin-block rather than the shorthand, so the inline margins stay whatever the layout wants.
-     `margin: 0.625rem 0 0` would pin them to 0, which is fine now and would silently fight any
-     future rule that tried to place this paragraph horizontally. */
-  margin-block: 0.625rem 0;
+  /* A grid cell now, so the cell decides its width and this decides nothing about placement.
+     Every earlier version of this rule tried to position itself — a character-count max-width, then
+     a share of the page, then auto margins — and each was a guess about a container it could not
+     see. Putting it in a grid removed the guessing rather than improving it. */
+  margin: 0;
   color: #3d3c39;
   line-height: 1.6;
-  /* A share of the column rather than a character count. 76ch at this size is roughly 43% of the
-     78rem column, which read as a bunched block under the left of a much wider picker box. A
-     percentage keeps the relationship to the column explicit and survives the column changing width.
-
-     Wider than typographic guidance likes for a measure, deliberately: these are two or three
-     sentences of framing, not body copy somebody reads for minutes. */
-  max-width: 80%;
   font-size: 0.9375rem;
 }
 
@@ -820,6 +814,7 @@ main {
   border-radius: 8px;
   font-size: 0.875rem;
   max-width: 80%;
+  margin-inline: auto;
 }
 
 .reports-notice-failure {
@@ -911,11 +906,31 @@ main {
   color: #52514e;
 }
 
+/* The picker and the chosen report's description, side by side.
+   `auto` then `1fr`: the picker takes exactly the width its content needs and the description gets
+   the rest, so adding a longer report name widens the picker rather than wrapping the text. */
+.reports-chooser {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+/* Stacked below the width where two columns stop being two columns — at which point the description
+   goes under the picker rather than being squeezed into a channel too narrow to read. */
+@media (max-width: 48rem) {
+  .reports-chooser {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.875rem;
+  }
+}
+
 .reports-picker {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem 1rem;
-  margin: 1rem 0 0;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0;
   padding: 0.75rem 1rem;
   border: 1px solid #e1e0d9;
   border-radius: 10px;
