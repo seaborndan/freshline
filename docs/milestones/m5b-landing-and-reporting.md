@@ -78,7 +78,19 @@ it is a scoring rule, and tested against a published interval rather than agains
 Ingestion runs daily, so a report's answer is stable for a day. The map's answer changes with every
 pan. This is the difference that makes response caching worth having on one and not the other.
 
-Not yet implemented, and noted here so that it is a decision rather than an omission.
+Implemented in `web/src/reports/reportCache.ts`, prompted by exactly the case it was written for:
+leaving a filtered report for an establishment and pressing Back asked the API the same question
+again, for an answer that could not have changed in the intervening seconds — and a report is the
+most expensive thing this API answers, with the smallest rate-limit budget.
+
+Keyed on the request and held for the lifetime of the page. The *promise* is cached rather than only
+the value, so two components asking at once share one request — which also removes the duplicate
+React's StrictMode produces in development. A rejected request is evicted, so one bad moment does not
+break a report for the rest of the session.
+
+**The staleness this leaves, stated rather than discovered:** a tab left open across an ingestion run
+keeps showing the previous day's answer for any report it has already seen. Accepted, because a
+time-based expiry reintroduces the refetch at an arbitrary interval for data that moves once a day.
 
 ### Report endpoints need their own rate-limit policy
 
@@ -265,7 +277,6 @@ in any ranking report.
   rather than corrected; the correction is a clustered variance estimate and lands the wrong side of
   the explicability rule for the size of the error.
 - ~~**Report endpoints share the map's rate-limit bucket.**~~ — done, `RateLimiting:Reports`.
-- **Response caching for reports is decided and not implemented.**
 - **`/map` and `/reports` are paths, and a static host needs to serve `index.html` for both.** The
   dev server does this by default, which is exactly the kind of difference that shows up later rather
   than now.

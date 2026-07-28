@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readReportUrlState } from './reportUrlState'
+import { clearReportCache } from './reportCache'
 import type { EstablishmentReport } from '../api/contract'
 import { EstablishmentsReport } from './EstablishmentsReport'
 
@@ -67,6 +68,9 @@ const report: EstablishmentReport = {
 }
 
 beforeEach(() => {
+  // Answers are cached for the session, so without this one test's mocked response answers the
+  // next test's question.
+  clearReportCache()
   onChange.mockClear()
   onNavigate.mockClear()
   fetchEstablishmentReport.mockReset()

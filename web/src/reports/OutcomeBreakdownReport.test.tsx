@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readReportUrlState } from './reportUrlState'
+import { clearReportCache } from './reportCache'
 import type { OutcomeBreakdown } from '../api/contract'
 import { OutcomeBreakdownReport } from './OutcomeBreakdownReport'
 
@@ -44,6 +45,9 @@ const breakdown: OutcomeBreakdown = {
 }
 
 beforeEach(() => {
+  // Answers are cached for the session, so without this one test's mocked response answers the
+  // next test's question.
+  clearReportCache()
   onChange.mockClear()
   fetchOutcomeBreakdown.mockReset()
   fetchOutcomeBreakdown.mockResolvedValue(breakdown)

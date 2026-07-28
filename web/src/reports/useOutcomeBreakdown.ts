@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { fetchOutcomeBreakdown } from '../api/client'
 import type { OutcomeBreakdown, OutcomeBreakdownRequest } from '../api/contract'
 import { ApiProblemError, isAbortError } from '../api/errors'
+import { cachedReport } from './reportCache'
 
 export interface BreakdownView {
   breakdown: OutcomeBreakdown | null
@@ -34,19 +35,24 @@ export function useOutcomeBreakdown(request: OutcomeBreakdownRequest): Breakdown
   const key = JSON.stringify(request)
 
   useEffect(() => {
-    const controller = new AbortController()
+    // Guards the state update rather than the request: the request is shared, and abandoning it
+    // would reject the promise every other caller is waiting on.
+    let mounted = true
+
     const parsed = JSON.parse(key) as OutcomeBreakdownRequest
 
     // Previous rows are kept while loading rather than blanked. Swapping a table for a spinner on
     // every filter change makes the page flash and loses the reader's place in it.
     setView((previous) => ({ ...previous, isLoading: true }))
 
-    fetchOutcomeBreakdown(parsed, controller.signal)
-      .then((breakdown) =>
-        setView({ breakdown, isLoading: false, failure: null, retryAfterSeconds: null }),
-      )
+    cachedReport(key, () => fetchOutcomeBreakdown(parsed))
+      .then((breakdown) => {
+        if (mounted) {
+          setView({ breakdown, isLoading: false, failure: null, retryAfterSeconds: null })
+        }
+      })
       .catch((error: unknown) => {
-        if (isAbortError(error)) {
+        if (isAbortError(error) || !mounted) {
           return
         }
 
@@ -61,7 +67,9 @@ export function useOutcomeBreakdown(request: OutcomeBreakdownRequest): Breakdown
         })
       })
 
-    return () => controller.abort()
+    return () => {
+      mounted = false
+    }
   }, [key])
 
   return view
