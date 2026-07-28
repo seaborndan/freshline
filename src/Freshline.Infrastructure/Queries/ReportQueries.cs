@@ -169,6 +169,7 @@ internal sealed class ReportQueries(FreshlineDbContext dbContext) : IReportQueri
             e.AddressLine,
             e.Locality,
             e.Cuisine,
+            e.Phone,
             e.IsAwaitingFirstInspection,
             Latest = e.Inspections
                 .Where(i =>
@@ -216,6 +217,7 @@ internal sealed class ReportQueries(FreshlineDbContext dbContext) : IReportQueri
                 AddressLine = row.AddressLine,
                 Locality = row.Locality,
                 Cuisine = row.Cuisine,
+                Phone = row.Phone,
                 IsAwaitingFirstInspection = row.IsAwaitingFirstInspection,
                 Outcome = row.Latest == null ? null : row.Latest.Outcome,
                 InspectedOn = row.Latest == null ? null : row.Latest.InspectedOn,

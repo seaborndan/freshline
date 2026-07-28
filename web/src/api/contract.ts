@@ -330,6 +330,14 @@ export interface EstablishmentReportRow {
   cuisine: string | null
 
   /**
+   * The telephone number the city publishes, as digits.
+   *
+   * The only contactable detail in this data — no website is published, checked across all 99,050
+   * stored payloads.
+   */
+  phone: string | null
+
+  /**
    * The city lists it and has never inspected it.
    *
    * Distinct from having no result *in the selected period*. Both produce a null `outcome`, and a

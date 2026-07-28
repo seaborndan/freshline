@@ -28,6 +28,8 @@ import {
   sortEstablishmentRows,
   type EstablishmentSortColumn,
 } from './sorting'
+import type { Route } from '../routing/route'
+import { pathFromRoute } from '../routing/route'
 import { useEstablishmentReport } from './useEstablishmentReport'
 
 /** What this report is, in a sentence. Placed by the page — see the note on the other report's. */
@@ -37,7 +39,11 @@ export const establishmentsDescription =
   'the answer to “what is here”, and dropping it would turn a list of establishments into a list ' +
   'of inspections.'
 
-export function EstablishmentsReport() {
+export interface EstablishmentsReportProps {
+  onNavigate: (route: Route, search?: string) => void
+}
+
+export function EstablishmentsReport({ onNavigate }: EstablishmentsReportProps) {
   const options = useFilterOptions()
 
   const [locality, setLocality] = useState('')
@@ -123,6 +129,7 @@ export function EstablishmentsReport() {
           'Inspected on',
           'Grade',
           'Score',
+          'Phone',
           'Closed by authority',
           'Never inspected',
         ],
@@ -135,6 +142,7 @@ export function EstablishmentsReport() {
           row.inspectedOn ?? '',
           row.rawGrade ?? '',
           row.rawScore ?? '',
+          row.phone ?? '',
           row.closedByAuthority ? 'yes' : 'no',
           row.isAwaitingFirstInspection ? 'yes' : 'no',
         ]),
@@ -236,6 +244,7 @@ export function EstablishmentsReport() {
           rows={rows}
           sort={sort}
           onSort={(column) => setSort((current) => nextEstablishmentSort(current, column))}
+          onNavigate={onNavigate}
         />
       )}
     </>
@@ -273,10 +282,12 @@ function EstablishmentTable({
   rows,
   sort,
   onSort,
+  onNavigate,
 }: {
   rows: EstablishmentReportRow[]
   sort: { column: EstablishmentSortColumn; direction: 'ascending' | 'descending' }
   onSort: (column: EstablishmentSortColumn) => void
+  onNavigate: (route: Route, search?: string) => void
 }) {
   const columns: { key: EstablishmentSortColumn; label: string; numeric: boolean }[] = [
     { key: 'name', label: 'Establishment', numeric: false },
@@ -285,6 +296,7 @@ function EstablishmentTable({
     { key: 'outcome', label: 'Result', numeric: false },
     { key: 'inspectedOn', label: 'Inspected', numeric: false },
     { key: 'rawScore', label: 'Score', numeric: true },
+    { key: 'phone', label: 'Phone', numeric: false },
   ]
 
   return (
@@ -320,7 +332,35 @@ function EstablishmentTable({
           {rows.map((row) => (
             <tr key={row.id}>
               <th scope="row">
-                <span className="reports-name">{row.name}</span>
+                {/*
+                  A real anchor to the map, deep-linked at this establishment — the machinery for
+                  which already exists: `?id=` frames the camera on it and opens its record.
+
+                  An anchor rather than a button, so middle-click and "copy link address" work, and
+                  so the row can be shared. The click is intercepted for ordinary left clicks only,
+                  which keeps it a single-page navigation without taking the browser's own behaviour
+                  away from anyone who asked for it.
+                */}
+                <a
+                  className="reports-name"
+                  href={`${pathFromRoute('map')}?id=${row.id}`}
+                  onClick={(event) => {
+                    if (
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey ||
+                      event.button !== 0
+                    ) {
+                      return
+                    }
+
+                    event.preventDefault()
+                    onNavigate('map', `?id=${row.id}`)
+                  }}
+                >
+                  {row.name}
+                </a>
                 {row.addressLine === null ? null : (
                   <span className="reports-address">{row.addressLine}</span>
                 )}
@@ -332,6 +372,19 @@ function EstablishmentTable({
               </td>
               <td>{row.inspectedOn === null ? '—' : formatPlainDate(row.inspectedOn)}</td>
               <td className="numeric">{row.rawScore ?? '—'}</td>
+              <td>
+                {/*
+                  `tel:` because the source publishes a phone number and nothing else contactable —
+                  no website, no email, checked across all 99,050 stored payloads. It is a real
+                  digit string from the city rather than anything inferred, which is the only kind of
+                  contact detail this project is willing to put on screen.
+                */}
+                {row.phone === null ? (
+                  '—'
+                ) : (
+                  <a href={`tel:${row.phone}`}>{formatPhone(row.phone)}</a>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -369,4 +422,20 @@ function Result({ row }: { row: EstablishmentReportRow }) {
       {row.isAwaitingFirstInspection ? 'Never inspected' : 'Not in this period'}
     </span>
   )
+}
+
+/**
+ * A ten-digit NYC number as `(212) 555-0100`.
+ *
+ * The source publishes digits with no punctuation. Anything that is not ten digits is shown exactly
+ * as it arrived rather than forced into a shape it does not fit — the `tel:` link still works, and a
+ * number reformatted into something the city did not publish would be this project inventing a
+ * detail about a real business.
+ */
+function formatPhone(phone: string): string {
+  if (!/^\d{10}$/.test(phone)) {
+    return phone
+  }
+
+  return `(${phone.slice(0, 3)}) ${phone.slice(3, 6)}-${phone.slice(6)}`
 }

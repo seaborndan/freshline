@@ -63,6 +63,17 @@ public sealed record EstablishmentReportRow
     public string? Cuisine { get; init; }
 
     /// <summary>
+    /// The telephone number the city publishes, as digits.
+    ///
+    /// <para>The only contactable detail in this dataset. Checked across all 99,050 stored raw
+    /// payloads: not one contains a website, a URL, or the string <c>http</c>. A website column
+    /// would mean acquiring one from a second source, which the milestone's scope fence rules out
+    /// and which would join on name and address — fuzzy matching that fails by pointing a reader at
+    /// a different business rather than by failing loudly.</para>
+    /// </summary>
+    public string? Phone { get; init; }
+
+    /// <summary>
     /// True when the city lists this establishment and has never inspected it.
     ///
     /// <para>Distinct from having no result <em>in the selected period</em>, which is an

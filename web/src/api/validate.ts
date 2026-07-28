@@ -638,6 +638,7 @@ function readEstablishmentReportRow(value: unknown, path: string): Establishment
     addressLine: readNullableString(source.addressLine, `${path}.addressLine`),
     locality: readNullableString(source.locality, `${path}.locality`),
     cuisine: readNullableString(source.cuisine, `${path}.cuisine`),
+    phone: readNullableString(source.phone, `${path}.phone`),
     isAwaitingFirstInspection,
     outcome,
     inspectedOn,

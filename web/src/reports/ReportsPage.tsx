@@ -18,6 +18,7 @@
  */
 
 import { useState } from 'react'
+import type { Route } from '../routing/route'
 import { EstablishmentsReport, establishmentsDescription } from './EstablishmentsReport'
 import { OutcomeBreakdownReport, outcomeBreakdownDescription } from './OutcomeBreakdownReport'
 
@@ -43,7 +44,12 @@ const reports: {
   },
 ]
 
-export function ReportsPage() {
+export interface ReportsPageProps {
+  /** Passed down so a report row can send somebody to the map — see `EstablishmentsReport`. */
+  onNavigate: (route: Route, search?: string) => void
+}
+
+export function ReportsPage({ onNavigate }: ReportsPageProps) {
   const [report, setReport] = useState<ReportName>('outcome-breakdown')
 
   const current = reports.find((entry) => entry.name === report) ?? reports[0]
@@ -104,7 +110,7 @@ export function ReportsPage() {
       {current.name === 'outcome-breakdown' ? (
         <OutcomeBreakdownReport key="outcome-breakdown" />
       ) : (
-        <EstablishmentsReport key="establishments" />
+        <EstablishmentsReport key="establishments" onNavigate={onNavigate} />
       )}
     </div>
   )
