@@ -78,8 +78,12 @@ public static class IngressConfiguration
 
             // Deliberately empty. The addresses cannot be known on this platform, and an empty list
             // means the middleware does not require the connection to come from a listed proxy.
+            //
+            // KnownIPNetworks rather than KnownNetworks: the latter is obsolete in .NET 10
+            // (ASPDEPR005) and using it emits a warning that was missed on the way in, because the
+            // build that reported it was incremental and did not recompile this file.
             options.KnownProxies.Clear();
-            options.KnownNetworks.Clear();
+            options.KnownIPNetworks.Clear();
         });
 
         return services;

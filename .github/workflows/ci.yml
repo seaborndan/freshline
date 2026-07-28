@@ -80,5 +80,15 @@ jobs:
       - name: Test
         run: npm test
 
+      # VITE_API_BASE_URL is required by vite.config.ts for any production build, because a bundle
+      # built without it would ship a site that asks the visitor's own machine for data. CI's build
+      # is a compile-and-bundle check whose output is thrown away, never a deployed artifact, so it
+      # passes a reserved-by-RFC-2606 host that is guaranteed not to resolve. If this value ever
+      # reaches a browser, the requests fail against a name that cannot exist — which is a far
+      # louder failure than localhost, and points at this line.
+      #
+      # The real deploy build sets the real origin by hand. See docs/deployment.md.
       - name: Build
         run: npm run build
+        env:
+          VITE_API_BASE_URL: https://ci-build-is-not-deployed.invalid
