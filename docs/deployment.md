@@ -1,5 +1,116 @@
 # Deployment
 
+## Resume here — state as of 2026-07-27
+
+Deployment was started and deliberately paused. **Nothing is running and nothing is being billed.**
+
+**Done already:**
+
+- Azure account `joemama808cruiser@gmail.com`, free trial, subscription `Azure subscription 1`
+  (`7d5420b1-3191-42a2-bf57-fa3ad8433388`). An earlier account had already spent its trial, which is
+  why this one exists.
+- Resource providers registered: `Microsoft.App`, `Microsoft.OperationalInsights`, `Microsoft.Sql`.
+- **Resource group `freshline` created, in `eastus`.** Empty. An empty resource group costs nothing.
+
+**The plan, decided and not yet executed.** Every piece is chosen to sit inside a *permanent* free
+allowance rather than inside the trial credit, because the requirement is zero cost rather than low
+cost:
+
+| Piece | Choice | Why this one |
+|---|---|---|
+| Image registry | **ghcr.io**, public | Free for public repos, and `seaborndan/freshline` is public. Azure Container Registry has no free tier — Basic is ~$5/month, and it is the only piece that would have produced a bill. |
+| API | Container Apps, **scaled to zero** | Docs: *"When a revision is scaled to zero replicas, no resource consumption charges are incurred."* Health probes are not billable either. |
+| Environment logging | **`--logs-destination none`** | A Container Apps environment otherwise creates a Log Analytics workspace, which bills for ingestion separately. Costs queryable log history; worth it here. |
+| Database | Azure SQL **free offer**, via the portal only | 100,000 vCore-seconds and 32 GB per month, lifetime of the subscription. `az sql db create` would produce a normal billable database. |
+| Front end | Static Web Apps **Free** tier | Hosting, SSL and 100 GB bandwidth. |
+
+**The accepted trade:** scale-to-zero and database auto-pause are exactly what keeps this at zero, and
+exactly what makes the first visitor wait through a container start plus a database resume. That is a
+deliberate choice — zero cost was the requirement and latency was explicitly not.
+
+### Steps remaining, in order
+
+**1. Grant the package-push scope** (once, on the workstation):
+
+```bash
+gh auth refresh -s write:packages
+```
+
+**2. Create the database — in the portal, not the CLI.**
+
+The free offer only applies through this flow. Creating it any other way produces a billable database
+that looks identical afterwards.
+
+1. Go to **[aka.ms/azuresqlhub](https://aka.ms/azuresqlhub)** → **Create a database** pane → **Start free**
+2. **Confirm the green "Free offer applied!" banner is present.** If it is missing, stop — the
+   database being created is a paid one.
+3. Subscription `Azure subscription 1`; resource group `freshline`; database name `freshline`
+4. Server: create new, globally-unique name, **location East US**, SQL authentication, admin login and
+   password — **record them, the container app needs them**
+5. **Behavior when free limit reached → "Auto-pause the database until next month."** The other option
+   keeps it online and charges the overage.
+6. **Confirm the Cost summary card reads $0.00/month.** If it does not, stop.
+7. **Networking tab → "Allow Azure services and resources to access this server" → Yes.** The
+   container cannot connect otherwise.
+8. Review + create.
+
+**East US is not reversible.** The first free database pins the region for every free database in the
+subscription.
+
+**3. Everything after that is CLI work**, in this order — the ordering is forced, see "The ordering
+problem" below:
+
+```bash
+# a. push the image
+docker build -t ghcr.io/seaborndan/freshline-api:v1 .
+gh auth token | docker login ghcr.io -u seaborndan --password-stdin
+docker push ghcr.io/seaborndan/freshline-api:v1
+#    then mark the package public in GitHub → Packages → freshline-api → settings,
+#    so Container Apps can pull it without credentials
+
+# b. environment, with logging off so no Log Analytics workspace is created
+az containerapp env create -g freshline -n freshline-env -l eastus --logs-destination none
+
+# c. the app: scaled to zero, port 8080, one proxy hop, no CORS origin yet
+az containerapp create -g freshline -n freshline-api --environment freshline-env \
+  --image ghcr.io/seaborndan/freshline-api:v1 \
+  --target-port 8080 --ingress external \
+  --min-replicas 0 --max-replicas 1 \
+  --cpu 0.25 --memory 0.5Gi \
+  --env-vars "Ingress__ProxyHopCount=1" \
+             "ConnectionStrings__Freshline=<from step 2>"
+
+# d. tighten auto-pause from the 60-minute default to the 15-minute minimum
+az sql db update -g freshline -s <server> -n freshline --auto-pause-delay 15
+
+# e. front end, built against the API's real URL
+cd web && VITE_API_BASE_URL=https://<api-fqdn> npm run build
+
+# f. deploy web/dist to Static Web Apps (free tier), then — the step that looks
+#    optional and is not — set the API's CORS origin to the site's origin:
+az containerapp update -g freshline -n freshline-api \
+  --set-env-vars "Cors__AllowedOrigins__0=https://<web-origin>"
+```
+
+**4. Verify**, using the three checks in "Verify the deploy" below. The third — a forged
+`X-Forwarded-For` against the real ingress — is the only proof that `ProxyHopCount: 1` matches the
+real topology, and no test in this repository can establish it.
+
+**5. Measure the cold start.** Time a first request after the app has been idle long enough to scale
+to zero and pause. That number is unknown, is currently guessed from documentation as "on the order of
+one minute", and belongs in `docs/performance.md` **only once measured**.
+
+### Two things that will bite later if not written down
+
+- **A `$1` budget alert was attempted and not created.** `az consumption budget create` rejected it
+  (`Invalid budget configuration, please use filter interface with 2019-05-01-preview version`). Set
+  it in the portal instead: *Cost Management → Budgets → Add*. The design intends zero spend, so any
+  spend at all is worth an email.
+- **At day 30 the trial ends and Azure disables the resources rather than billing.** The URL goes dark
+  until the subscription is upgraded to pay-as-you-go. After upgrading, the free grants above still
+  apply — the upgrade puts a real card behind the account, it does not start a charge on its own.
+
+
 Deploying Freshline by hand, which is what M5 calls for. **M7 replaces all of this with Bicep and
 deploy-on-merge** — see `docs/roadmap.md`. Nothing here is meant to survive that milestone; it is
 meant to get a working URL and to record what the deploy actually needs, so the Bicep that replaces
