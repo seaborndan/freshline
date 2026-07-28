@@ -69,6 +69,7 @@ public static class ServiceCollectionExtensions
                 .EnableRetryOnFailure(maxRetryCount: 6, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null)));
 
         services.AddScoped<IEstablishmentQueries, EstablishmentQueries>();
+        services.AddScoped<IReportQueries, ReportQueries>();
         services.AddScoped<IReadinessProbe, ReadinessProbe>();
 
         return services;
