@@ -108,6 +108,54 @@ Check 3 has an integration test behind it (`ForwardedHeadersTests`), and the tes
 *middleware* behaves correctly. Only this check proves the **hop count matches the real topology**,
 which is the part no test in the repository can know.
 
+## If the database is Azure SQL serverless, the health probe is a trap
+
+Worth reading before configuring the container app, because the failure is silent, takes about two
+days, and looks like nothing at all until the database stops answering.
+
+Azure SQL's free offer is a **serverless** database: it auto-pauses when idle, and the free grant is
+100,000 vCore-seconds per month. While online it bills at least
+`max(minimum vCores, minimum memory GB ÷ 3)` every second — **0.7 vCore-seconds per second** at the
+0.5-vCore minimum — so the grant is worth roughly **40 hours of being awake per month**, not 40 hours
+of queries.
+
+Auto-pause requires zero sessions *and* zero user CPU for the whole delay window. A login is an
+auto-resume trigger.
+
+**`/health/ready` queries the database.** Point a Container Apps readiness probe at it and the
+database is logged into every few seconds forever: it never pauses, spends the grant in under two
+days, and then either pauses until the first of next month or starts billing, depending on the
+behaviour chosen at creation.
+
+So, on a serverless database:
+
+- **Liveness probe → `/health`.** It runs no checks and touches nothing.
+- **Readiness probe → `/health` as well, or leave it unset.** Not `/health/ready`.
+
+That is a real loss and it should be recorded as one. `/health/ready` exists to tell a load balancer
+that an instance cannot serve traffic, and it is the right endpoint on any always-on database. On a
+database that sleeps on purpose, "paused" and "unreachable" are indistinguishable to a prober, and
+probing to find out is what stops it sleeping. The endpoint stays in the API and stays useful — from
+a person's terminal, from a deploy script, from a monitor that runs a few times a day — it just
+cannot be the thing a platform polls continuously.
+
+Recommended settings when creating the database:
+
+| Setting | Value | Why |
+|---|---|---|
+| Auto-pause delay | **15 minutes** (the minimum) | The default of 60 spends ~2,520 vCore-seconds on a single visit, which is about 39 isolated visits a month. At 15 minutes it is ~630, or about 158. |
+| Minimum vCores | 0.5 | The floor for billing while awake. |
+| Behaviour at free limit | **Auto-pause until next month** | The other option keeps it online and bills you. This one cannot produce a surprise. |
+
+Even so, **the first visitor after a pause pays for the resume.** Microsoft documents the first
+connection as *failing* with error 40613 while it starts the resume, with the client expected to
+retry, and resume latency as "on the order of one minute". `AddFreshlinePersistence` enables EF
+Core's retry-on-failure so that failure is absorbed rather than returned — but absorbed is not
+instant, and a cold visitor waits.
+
+**This has not been measured.** It is read from documentation, and the number that matters — what a
+real first visit costs in seconds — can only come from the deployed thing.
+
 ## The web app
 
 ```bash

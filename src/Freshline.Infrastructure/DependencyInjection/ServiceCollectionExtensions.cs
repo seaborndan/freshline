@@ -49,7 +49,24 @@ public static class ServiceCollectionExtensions
                 "user secrets or the environment; in Azure it comes from Key Vault via managed identity.");
 
         services.AddDbContext<FreshlineDbContext>(builder =>
-            builder.UseSqlServer(connectionString, sqlServer => sqlServer.UseNetTopologySuite()));
+            builder.UseSqlServer(connectionString, sqlServer => sqlServer
+                .UseNetTopologySuite()
+
+                // Retry on transient faults, which on Azure SQL are ordinary rather than
+                // exceptional — a failover or a throttle closes connections and the platform expects
+                // the client to come back.
+                //
+                // The case that forced this is sharper than "the cloud is flaky". A serverless
+                // database auto-pauses when idle, and Microsoft documents the resume path exactly:
+                // the first connection attempt *fails* with error 40613, starts the resume, and the
+                // caller is expected to retry. Without this the first visitor after an idle period
+                // gets a 500 — which is precisely the visitor this project exists for, and precisely
+                // the moment ADR-0005 says a tab gets closed.
+                //
+                // Six attempts over up to 30 seconds, because a resume is documented as taking
+                // "on the order of one minute" at worst and a retry budget shorter than the event it
+                // exists to survive would only convert one failure into six.
+                .EnableRetryOnFailure(maxRetryCount: 6, maxRetryDelay: TimeSpan.FromSeconds(30), errorNumbersToAdd: null)));
 
         services.AddScoped<IEstablishmentQueries, EstablishmentQueries>();
         services.AddScoped<IReadinessProbe, ReadinessProbe>();

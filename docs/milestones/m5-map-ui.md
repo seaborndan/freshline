@@ -1038,6 +1038,15 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
 - **Nothing has been deployed yet.** The repository is deployable — image, build guard, documented
   steps — and no Azure resource exists. The forged-header check against a real ingress, which is the
   only way to confirm `ProxyHopCount` matches the real topology, is waiting on that.
+- **`/health/ready` cannot be a continuously-polled probe against a serverless database.** It logs
+  in, a login is an auto-resume trigger, and a database that never pauses spends Azure SQL's free
+  grant in under two days. The endpoint keeps its value for a human or an occasional monitor; it
+  loses it as a platform readiness probe. Written up in [`docs/deployment.md`](../deployment.md),
+  and it is a genuine loss rather than a workaround — on an always-on database it is the right
+  endpoint to poll.
+- **The cost of a cold visit is unmeasured.** EF Core retry now absorbs the documented 40613 that a
+  paused database returns to the first connection, but "absorbed" is not "instant", and how long a
+  first visitor actually waits can only be measured against a deployed instance.
 - **The rate limits are chosen, not load tested.** A real client panning a map is the first thing that
   will exercise them.
 - ~~**The `outcome` filter is unmeasured**~~ — measured in slice 4 against the live database, warm
