@@ -24,7 +24,7 @@ import {
   pinImageName,
 } from './layers'
 import { closedModifier, pinStates, pinStyles } from './pinStyle'
-import { pinImage } from './pinSprite'
+import { pinImage, pinPixelRatio } from './pinSprite'
 import {
   basemapAttribution,
   basemapRasterTiles,
@@ -122,11 +122,12 @@ const noFeatures = { type: 'FeatureCollection' as const, features: [] as PinFeat
 /**
  * Registers one pin sprite per state, and a closed variant of each.
  *
- * Twelve images, computed once at startup and held for the map's lifetime — 64×88 RGBA is 22 KB
- * each, so the whole set is under 270 KB and none of it is recomputed as the map moves.
+ * Twelve images, computed once at startup and held for the map's lifetime. Each is 204×276 RGBA —
+ * 225 KB — so the set is about 2.7 MB of texture, and none of it is recomputed as the map moves.
  *
- * `pixelRatio: 2` tells MapLibre the sprite is drawn at twice its logical size, which is what keeps
- * the pins sharp on a high-density display rather than upscaled and soft.
+ * That is a deliberate trade for sharpness. `pixelRatio: 6` tells MapLibre the sprite carries six
+ * device pixels per logical pixel, so every size the map draws — including a crowded point at 2.3×
+ * while hovered at 1.35× — is a downsample rather than an upsample.
  *
  * Guarded with `hasImage`, because a style reload re-fires `style.load` and re-registering an
  * existing name throws.
@@ -147,7 +148,7 @@ function registerPinImages(map: MapLibreMap): void {
 
       const rim = closed ? closedModifier.stroke : style.stroke
 
-      map.addImage(name, pinImage(style.fill, rim), { pixelRatio: 2 })
+      map.addImage(name, pinImage(style.fill, rim), { pixelRatio: pinPixelRatio })
     }
   }
 }

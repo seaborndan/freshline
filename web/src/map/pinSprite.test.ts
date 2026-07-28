@@ -35,11 +35,11 @@ describe('pinImage', () => {
       return count
     }
 
-    const head = widthAt(29)
-    const waist = widthAt(60)
-    const nearTip = widthAt(82)
+    const head = widthAt(96)
+    const waist = widthAt(200)
+    const nearTip = widthAt(255)
 
-    expect(head).toBeGreaterThan(40)
+    expect(head).toBeGreaterThan(150)
     expect(waist).toBeLessThan(head)
     expect(nearTip).toBeLessThan(waist)
     expect(nearTip).toBeGreaterThan(0)
@@ -47,7 +47,7 @@ describe('pinImage', () => {
 
   /** The tip is on the sprite's vertical centre line, which is what `icon-anchor: bottom` aligns. */
   it('puts the point on the centre line', () => {
-    const bottomRow = pinHeight - 4
+    const bottomRow = pinHeight - 16
     const covered: number[] = []
 
     for (let x = 0; x < pinWidth; x += 1) {
@@ -56,7 +56,7 @@ describe('pinImage', () => {
 
     const centreOfMass = covered.reduce((sum, x) => sum + x, 0) / covered.length
 
-    expect(Math.abs(centreOfMass - middle)).toBeLessThan(1.5)
+    expect(Math.abs(centreOfMass - middle)).toBeLessThan(2)
   })
 
   /** Corners are outside the silhouette — a pin must not sit on a visible tile of background. */
@@ -68,8 +68,8 @@ describe('pinImage', () => {
 
   /** The hole is what makes it read as a pin rather than a balloon. */
   it('punches a hole through the head', () => {
-    const centre = pixelAt(pin, middle, 29)
-    const head = pixelAt(pin, middle, 12)
+    const centre = pixelAt(pin, middle, 96)
+    const head = pixelAt(pin, middle, 40)
 
     // The hole is far lighter than the coloured head around it.
     expect(centre.r + centre.g + centre.b).toBeGreaterThan(head.r + head.g + head.b)
@@ -78,8 +78,8 @@ describe('pinImage', () => {
 
   /** Lit from the upper left, so the head has a near and a far side rather than one flat colour. */
   it('shades the head away from the light', () => {
-    const towards = pixelAt(pin, middle - 13, 20)
-    const away = pixelAt(pin, middle + 13, 38)
+    const towards = pixelAt(pin, middle - 45, 60)
+    const away = pixelAt(pin, middle + 45, 130)
 
     const brightness = (p: { r: number; g: number; b: number }) => p.r + p.g + p.b
 
@@ -88,7 +88,7 @@ describe('pinImage', () => {
 
   /** Feathered rather than a hard staircase, which is the tail's most visible failure mode. */
   it('feathers the tapering edge', () => {
-    const row = 70
+    const row = 220
     const partials: number[] = []
 
     for (let x = 0; x < pinWidth; x += 1) {
@@ -102,7 +102,7 @@ describe('pinImage', () => {
   it('takes its colour from the fill it was given', () => {
     const red = pinImage('#d03b3b', '#8f2020')
 
-    expect(pixelAt(red, middle, 12).r).toBeGreaterThan(pixelAt(pin, middle, 12).r)
+    expect(pixelAt(red, middle, 40).r).toBeGreaterThan(pixelAt(pin, middle, 40).r)
   })
 
   it('is deterministic', () => {

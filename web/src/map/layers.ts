@@ -89,12 +89,12 @@ const sizedRadius: Expression = ['*', stateRadius, countScale]
  * size, scaled by how many establishments share the point, grown while hovered, all interpolated
  * over zoom.
  *
- * Divided by the sprite's head radius, because the state sizes in `pinStyle.ts` are radii in pixels
- * and `icon-size` is a scale factor. Keeping the radii as the unit means the legend swatches and the
- * map still read from one table — a state whose radius is raised gets a bigger pin and a bigger
- * swatch, from one edit.
+ * Divided by 5, which is the radius of an ordinary state in `pinStyle.ts`, so a `Good` pin draws at
+ * the sprite's own logical size and the rest scale around it. Keeping those radii as the unit means
+ * the legend swatches and the map still read from one table — raise a state's radius and both its
+ * pin and its swatch grow, from one edit.
  */
-const iconScale: Expression = ['/', sizedRadius, 13]
+const iconScale: Expression = ['/', sizedRadius, 5]
 
 function sizeAcrossZoom(scale: Expression): Expression {
   return [
