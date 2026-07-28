@@ -38,7 +38,7 @@ function App() {
       <div className="app-content" id="content">
         {route === 'landing' ? <LandingPage onNavigate={navigate} /> : null}
         {route === 'map' ? <MapPage /> : null}
-        {route === 'reports' ? <ReportsPage /> : null}
+        {route === 'reports' ? <ReportsPage onNavigate={navigate} /> : null}
       </div>
     </div>
   )

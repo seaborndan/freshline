@@ -52,6 +52,9 @@ vi.mock('maplibre-gl', () => ({
       getWest: () => bounds.west,
       getEast: () => bounds.east,
     })
+    getContainer = () => ({ clientWidth: 800, clientHeight: 600 })
+    project = () => ({ x: 400, y: 300 })
+    off = vi.fn()
     on(event: string, handler: () => void) {
       handlers.set(event, handler)
     }
@@ -175,6 +178,54 @@ describe('MapPage', () => {
     expect(fetchMap).toHaveBeenCalledTimes(2)
   })
 
+  /**
+   * The camera control on the record.
+   *
+   * The property worth defending is that pressing it *again* works. The map's focus effect used to
+   * key on the coordinates alone, and asking to be taken to the same establishment twice — press,
+   * pan away, press again — is the same coordinates and would not have re-fired. A token per request
+   * is what makes a repeated ask a new ask.
+   */
+  describe('centring on the open establishment', () => {
+    async function openRecord() {
+      render(<MapPage />)
+      await showMap()
+
+      clicked = [{ properties: { id: 1328 } }]
+      await clickMap()
+
+      // The record is fetched before the panel can offer to centre on it.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+    }
+
+    it('takes the camera there when asked', async () => {
+      await openRecord()
+      easeTo.mockClear()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /centre on map/i }))
+      })
+
+      expect(easeTo).toHaveBeenCalledTimes(1)
+    })
+
+    it('takes it there again on a second press', async () => {
+      await openRecord()
+      easeTo.mockClear()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /centre on map/i }))
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /centre on map/i }))
+      })
+
+      expect(easeTo).toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('framing a borough', () => {
     /**
      * The reported problem: choosing a borough while looking at somewhere else leaves the map empty,
@@ -290,12 +341,11 @@ describe('MapPage', () => {
 
     const status = screen.getByRole('status')
     expect(status).toHaveTextContent('5 places')
-    expect(status).toHaveTextContent('at 5 points')
+    expect(status).toHaveTextContent('at 5 addresses')
   })
 
-  // Which rows a truncated response dropped is arbitrary, so a plain count would be a number the
-  // data does not support — and the point count is withheld entirely, since it would describe an
-  // arbitrary subset.
+  // A plain count would be a number the data does not support, and the address count is withheld
+  // entirely because it would describe a subset.
   it('never states a bare count from a truncated response', async () => {
     fetchMap.mockResolvedValue({ ...loaded, isTruncated: true })
 
@@ -305,7 +355,22 @@ describe('MapPage', () => {
     const status = screen.getByRole('status')
     expect(status).toHaveTextContent(/more than 5 places/i)
     expect(status).toHaveTextContent(/zoom in/i)
-    expect(status).not.toHaveTextContent(/points/i)
+    expect(status).not.toHaveTextContent(/addresses/i)
+  })
+
+  /**
+   * The subset a truncated view shows is *not* arbitrary — the API returns the most severe results
+   * first — and a reader has to be told, because at city zoom the map can be showing no `Good`
+   * establishments at all. Dropping them is right; letting somebody read the result as a picture of
+   * the city is not.
+   */
+  it('says a truncated map is showing the worst results, not a sample', async () => {
+    fetchMap.mockResolvedValue({ ...loaded, isTruncated: true })
+
+    render(<MapPage />)
+    await showMap()
+
+    expect(screen.getByRole('status')).toHaveTextContent(/worst results first/i)
   })
 
   it('distinguishes an empty view from a failure', async () => {

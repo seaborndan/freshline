@@ -17,11 +17,13 @@
  * than a row-level one.
  */
 
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import type { Route } from '../routing/route'
+import { readReportUrlState, writeReportUrlState, type ReportUrlState } from './reportUrlState'
 import { EstablishmentsReport, establishmentsDescription } from './EstablishmentsReport'
 import { OutcomeBreakdownReport, outcomeBreakdownDescription } from './OutcomeBreakdownReport'
 
-type ReportName = 'outcome-breakdown' | 'establishments'
+import type { ReportName } from './reportUrlState'
 
 const reports: {
   name: ReportName
@@ -43,8 +45,48 @@ const reports: {
   },
 ]
 
-export function ReportsPage() {
-  const [report, setReport] = useState<ReportName>('outcome-breakdown')
+export interface ReportsPageProps {
+  /** Passed down so a report row can send somebody to the map — see `EstablishmentsReport`. */
+  onNavigate: (route: Route, search?: string) => void
+}
+
+export function ReportsPage({ onNavigate }: ReportsPageProps) {
+  /**
+   * Read once, at mount.
+   *
+   * The page is remounted whenever the route becomes `reports` — including on Back out of the map —
+   * so mount is exactly when the address bar should be consulted. Re-reading it on every render
+   * would fight the writes below.
+   */
+  const initial = useRef(readReportUrlState(window.location.search)).current
+
+  const [report, setReport] = useState<ReportName>(initial.report)
+
+  /**
+   * The address bar follows the reports' own state.
+   *
+   * Held here rather than in each report, because the URL is one string and two components write to
+   * it. `replaceState`, not `pushState`: a history entry per filter change would turn Back into an
+   * undo-my-typing key, and what has to survive is the state at the moment somebody *leaves* — which
+   * replaceState preserves exactly.
+   */
+  const urlState = useRef<ReportUrlState>(initial)
+
+  const publish = useCallback((next: Partial<ReportUrlState>) => {
+    urlState.current = { ...urlState.current, ...next }
+
+    const query = writeReportUrlState(urlState.current)
+
+    window.history.replaceState(null, '', `${window.location.pathname}${query}`)
+  }, [])
+
+  const chooseReport = useCallback(
+    (name: ReportName) => {
+      setReport(name)
+      publish({ report: name })
+    },
+    [publish],
+  )
 
   const current = reports.find((entry) => entry.name === report) ?? reports[0]
 
@@ -81,7 +123,7 @@ export function ReportsPage() {
                   name="report"
                   value={entry.name}
                   checked={report === entry.name}
-                  onChange={() => setReport(entry.name)}
+                  onChange={() => chooseReport(entry.name)}
                 />
                 <span>
                   <strong>{entry.label}</strong>
@@ -102,9 +144,14 @@ export function ReportsPage() {
         establishments.
       */}
       {current.name === 'outcome-breakdown' ? (
-        <OutcomeBreakdownReport key="outcome-breakdown" />
+        <OutcomeBreakdownReport key="outcome-breakdown" initial={initial} onChange={publish} />
       ) : (
-        <EstablishmentsReport key="establishments" />
+        <EstablishmentsReport
+          key="establishments"
+          initial={initial}
+          onChange={publish}
+          onNavigate={onNavigate}
+        />
       )}
     </div>
   )

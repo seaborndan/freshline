@@ -1,11 +1,18 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readReportUrlState } from './reportUrlState'
+import { clearReportCache } from './reportCache'
 import type { OutcomeBreakdown } from '../api/contract'
 import { OutcomeBreakdownReport } from './OutcomeBreakdownReport'
 
 const fetchOutcomeBreakdown = vi.hoisted(() => vi.fn())
 const fetchFilterOptions = vi.hoisted(() => vi.fn())
+
+const onChange = vi.fn()
+
+/** What the address bar asked for. Defaults, unless a test says otherwise. */
+const urlState = readReportUrlState('')
 
 vi.mock('../api/client', () => ({ fetchOutcomeBreakdown, fetchFilterOptions }))
 
@@ -38,6 +45,10 @@ const breakdown: OutcomeBreakdown = {
 }
 
 beforeEach(() => {
+  // Answers are cached for the session, so without this one test's mocked response answers the
+  // next test's question.
+  clearReportCache()
+  onChange.mockClear()
   fetchOutcomeBreakdown.mockReset()
   fetchOutcomeBreakdown.mockResolvedValue(breakdown)
   fetchFilterOptions.mockReset()
@@ -50,7 +61,7 @@ beforeEach(() => {
 
 describe('OutcomeBreakdownReport', () => {
   it('shows a row per group with its counts', async () => {
-    render(<OutcomeBreakdownReport />)
+    render(<OutcomeBreakdownReport initial={urlState} onChange={onChange} />)
 
     expect(await screen.findByRole('row', { name: /Latin American/ })).toBeInTheDocument()
     expect(screen.getByRole('row', { name: /Pakistani/ })).toBeInTheDocument()
@@ -62,7 +73,7 @@ describe('OutcomeBreakdownReport', () => {
    * group of two. `n` beside the rate is how a reader can tell.
    */
   it('shows the sample size in the same row as the rate', async () => {
-    render(<OutcomeBreakdownReport />)
+    render(<OutcomeBreakdownReport initial={urlState} onChange={onChange} />)
 
     const basque = await screen.findByRole('row', { name: /Basque/ })
     const cells = within(basque).getAllByRole('cell')
@@ -76,7 +87,7 @@ describe('OutcomeBreakdownReport', () => {
 
   /** The interface must not present the first row as a verdict. */
   it('warns in the table itself that a small group can sit at the top', async () => {
-    render(<OutcomeBreakdownReport />)
+    render(<OutcomeBreakdownReport initial={urlState} onChange={onChange} />)
 
     await screen.findByRole('row', { name: /Basque/ })
 
@@ -89,7 +100,7 @@ describe('OutcomeBreakdownReport', () => {
    * A reader who cannot see the arrow still needs to know which column decides the order.
    */
   it('announces which column is sorted', async () => {
-    render(<OutcomeBreakdownReport />)
+    render(<OutcomeBreakdownReport initial={urlState} onChange={onChange} />)
 
     await screen.findByRole('row', { name: /Basque/ })
 
@@ -106,7 +117,7 @@ describe('OutcomeBreakdownReport', () => {
   it('re-sorts when a column header is activated', async () => {
     const user = userEvent.setup()
 
-    render(<OutcomeBreakdownReport />)
+    render(<OutcomeBreakdownReport initial={urlState} onChange={onChange} />)
     await screen.findByRole('row', { name: /Basque/ })
 
     await user.click(screen.getByRole('button', { name: /Poor %/ }))
@@ -122,7 +133,7 @@ describe('OutcomeBreakdownReport', () => {
    * the report has lost 3,605 establishments.
    */
   it('says how many establishments are in no row at all', async () => {
-    render(<OutcomeBreakdownReport />)
+    render(<OutcomeBreakdownReport initial={urlState} onChange={onChange} />)
 
     expect(await screen.findByText(/3,605 establishments are not in any row/)).toBeInTheDocument()
   })
@@ -132,7 +143,7 @@ describe('OutcomeBreakdownReport', () => {
    * that spends one of the report budget's tokens.
    */
   it('refuses a backwards date range without asking the API', async () => {
-    render(<OutcomeBreakdownReport />)
+    render(<OutcomeBreakdownReport initial={urlState} onChange={onChange} />)
     await screen.findByRole('row', { name: /Basque/ })
 
     // fireEvent rather than userEvent.type: typing into a date input commits a value per keystroke,
@@ -156,7 +167,7 @@ describe('OutcomeBreakdownReport', () => {
   it("reports the API's own sentence when the report cannot be run", async () => {
     fetchOutcomeBreakdown.mockRejectedValue(new Error('This API allows 10 report requests every 60 seconds.'))
 
-    render(<OutcomeBreakdownReport />)
+    render(<OutcomeBreakdownReport initial={urlState} onChange={onChange} />)
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent('10 report requests every 60 seconds')
@@ -165,7 +176,7 @@ describe('OutcomeBreakdownReport', () => {
   it('cannot export a report that has not loaded', () => {
     fetchOutcomeBreakdown.mockReturnValue(new Promise(() => {}))
 
-    render(<OutcomeBreakdownReport />)
+    render(<OutcomeBreakdownReport initial={urlState} onChange={onChange} />)
 
     expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled()
   })

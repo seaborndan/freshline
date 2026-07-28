@@ -61,10 +61,12 @@ is also why the scope is one area rather than many: the interesting problems are
   filterable by cuisine, borough, outcome and never-inspected, and a detail panel carrying the full
   inspection history. Coloured by *outcome* rather than by score, because the scoring above is still
   planned and a colour has to mean something today.
-- **Reports** on the data in aggregate — how results distribute across boroughs or cuisines, filtered
-  by area and date range, sortable, exportable to CSV. Rankings sort by what the evidence supports
-  rather than by raw percentage, so a cuisine with two establishments does not outrank one with four
-  hundred; see [ADR-0007](docs/adr/0007-reports-assert-conclusions.md).
+- **Reports** on the data — how results distribute across boroughs or cuisines, and which
+  establishments those are, filtered by area, result and date range, sortable, exportable to CSV.
+  Rankings sort by what the evidence supports rather than by raw percentage, so a cuisine with two
+  establishments does not outrank one with four hundred; see
+  [ADR-0007](docs/adr/0007-reports-assert-conclusions.md). Every row links through to that
+  establishment on the map, and the report you were reading survives coming back to it.
 - **Saves territories** so a user can return to a filtered geographic slice, and get told what changed in it
   since last time. _(planned)_
 
@@ -279,7 +281,7 @@ _(The web app is still the M0 scaffold; it arrives at M5.)_
 
 ## The API
 
-Seven endpoints under `/api/v1`, documented by an OpenAPI document served in **every** environment —
+Eight endpoints under `/api/v1`, documented by an OpenAPI document served in **every** environment —
 not just development — because the read paths are public by design and the document describes nothing
 a caller could not discover by using it. A browsable UI is at `/scalar/v1`.
 
@@ -291,6 +293,7 @@ a caller could not discover by using it. A browsable UI is at `/scalar/v1`.
 | `GET /establishments/filter-options` | The values the filters can match, and where each borough is |
 | `GET /establishments/summary` | Counts describing the dataset, for the landing page |
 | `GET /reports/outcome-breakdown` | Results by borough or cuisine, with sample sizes |
+| `GET /reports/establishments` | The establishments themselves, filtered, with their latest result |
 | `GET /me` | The claims on your bearer token — the only endpoint needing one |
 
 Plus `/health` (liveness, runs no checks) and `/health/ready` (readiness, reaches the database).

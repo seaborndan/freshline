@@ -120,6 +120,7 @@ export const establishmentSortColumns = [
   'outcome',
   'inspectedOn',
   'rawScore',
+  'phone',
 ] as const
 
 export type EstablishmentSortColumn = (typeof establishmentSortColumns)[number]

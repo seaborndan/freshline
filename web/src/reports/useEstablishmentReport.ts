@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
 import { fetchEstablishmentReport } from '../api/client'
 import type { EstablishmentReport, EstablishmentReportRequest } from '../api/contract'
 import { ApiProblemError, isAbortError } from '../api/errors'
+import { cachedReport } from './reportCache'
 
 export interface EstablishmentReportView {
   report: EstablishmentReport | null
@@ -33,17 +34,22 @@ export function useEstablishmentReport(
   const key = JSON.stringify(request)
 
   useEffect(() => {
-    const controller = new AbortController()
+    // Guards the state update rather than the request: the request is shared, and abandoning it
+    // would reject the promise every other caller is waiting on.
+    let mounted = true
+
     const parsed = JSON.parse(key) as EstablishmentReportRequest
 
     setView((previous) => ({ ...previous, isLoading: true }))
 
-    fetchEstablishmentReport(parsed, controller.signal)
-      .then((report) =>
-        setView({ report, isLoading: false, failure: null, retryAfterSeconds: null }),
-      )
+    cachedReport(key, () => fetchEstablishmentReport(parsed))
+      .then((report) => {
+        if (mounted) {
+          setView({ report, isLoading: false, failure: null, retryAfterSeconds: null })
+        }
+      })
       .catch((error: unknown) => {
-        if (isAbortError(error)) {
+        if (isAbortError(error) || !mounted) {
           return
         }
 
@@ -55,7 +61,9 @@ export function useEstablishmentReport(
         })
       })
 
-    return () => controller.abort()
+    return () => {
+      mounted = false
+    }
   }, [key])
 
   return view

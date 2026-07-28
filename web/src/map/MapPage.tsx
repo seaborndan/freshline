@@ -103,7 +103,36 @@ export function MapPage() {
    * and never recomputed. The viewport is read through a ref for the same reason: as a dependency it
    * would re-arm this on every pan.
    */
-  const [focusOn, setFocusOn] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [focusOn, setFocusOn] = useState<{
+    latitude: number
+    longitude: number
+    token: number
+  } | null>(null)
+
+  /**
+   * Rises once per camera request.
+   *
+   * The map's focus effect keys on this rather than on the coordinates, so asking to be taken to the
+   * same establishment twice — pan away, press the button again — is two requests rather than one.
+   * A counter rather than a timestamp: deterministic, and a test can assert it.
+   */
+  const focusToken = useRef(0)
+
+  /** Takes the camera to the open establishment. Bound to the panel's button. */
+  const centreOnSelection = useCallback(() => {
+    const record = detail.detail
+
+    if (record === null || record.latitude === null || record.longitude === null) {
+      return
+    }
+
+    focusToken.current += 1
+    setFocusOn({
+      latitude: record.latitude,
+      longitude: record.longitude,
+      token: focusToken.current,
+    })
+  }, [detail.detail])
 
   /**
    * The borough to frame, or null.
@@ -164,6 +193,29 @@ export function MapPage() {
     })
   }, [filters.locality, options])
 
+  /**
+   * The selected establishment as the map needs it: where it is, and what colour it is.
+   *
+   * Derived from the loaded record rather than looked up among the pins, because the two answer
+   * different questions — a `?id=` link selects something that is very often nowhere near the
+   * current view, and an establishment inside a cluster is not among the drawn features at all.
+   */
+  const selection = useMemo(() => {
+    const record = detail.detail
+
+    if (record === null || record.latitude === null || record.longitude === null) {
+      return null
+    }
+
+    return {
+      latitude: record.latitude,
+      longitude: record.longitude,
+      state: record.isAwaitingFirstInspection
+        ? ('NeverInspected' as const)
+        : (record.inspections[0]?.outcome ?? ('NeverInspected' as const)),
+    }
+  }, [detail.detail])
+
   const viewportRef = useRef(viewport)
   viewportRef.current = viewport
 
@@ -181,7 +233,12 @@ export function MapPage() {
       return
     }
 
-    setFocusOn({ latitude: record.latitude, longitude: record.longitude })
+    focusToken.current += 1
+    setFocusOn({
+      latitude: record.latitude,
+      longitude: record.longitude,
+      token: focusToken.current,
+    })
   }, [detail.detail])
 
   // The address bar follows the state, at the point the state settles. replaceState rather than
@@ -205,6 +262,8 @@ export function MapPage() {
           onViewportChange={handleViewportChange}
           onSelect={handleSelect}
           focusOn={focusOn}
+          selection={selection}
+          onRecentre={centreOnSelection}
           frameBounds={frameBounds}
         />
 
@@ -237,6 +296,7 @@ export function MapPage() {
           view={detail}
           selectedId={selectedId}
           onSelect={setSelectedId}
+          onCentre={centreOnSelection}
           onClose={handleClose}
         />
       </main>
@@ -264,15 +324,22 @@ function Status({ view, filters }: { view: EstablishmentsView; filters: Establis
 
   const { items, isTruncated } = result
 
-  // Nothing derived from a truncated response may be stated as a fact about the area: which rows
-  // were dropped is arbitrary, so "1,000 places here" would be a number the data does not support.
-  // "More than" is the strongest true claim available, and the point count is withheld entirely —
-  // it would describe an arbitrary subset.
+  /*
+   * Nothing derived from a truncated response may be stated as a fact about the area: "1,000 places
+   * here" is a number the data does not support, so "more than" is the strongest true claim
+   * available and the address count is withheld entirely — it would describe a subset.
+   *
+   * **And the subset is no longer arbitrary, which the reader has to be told.** The API returns the
+   * most severe results first, so a truncated view keeps the failed inspections and drops the good
+   * ones — at city zoom it can be showing no `Good` establishments at all. That is the right thing
+   * to drop, and it makes the map look worse than the city is. Saying so is the difference between
+   * a deliberate bias and a misleading picture.
+   */
   if (isTruncated) {
     return (
       <p role="status">
-        More than {items.length.toLocaleString('en-GB')} places here — too many to show at once. Zoom
-        in to see all of them.
+        More than {items.length.toLocaleString('en-GB')} places here — too many to show at once, so
+        this is the worst results first. Zoom in to see everything, good and bad.
       </p>
     )
   }
@@ -292,10 +359,15 @@ function Status({ view, filters }: { view: EstablishmentsView; filters: Establis
   // Both numbers, because they differ a lot and only one of them is countable on screen. Saying
   // "518 places" over about three hundred dots invites the reader to count and conclude the map is
   // wrong — see distinctPointCount.
+  //
+  // "addresses" rather than "points", and the sentence about zoom, because the dot count is now
+  // lower than either number: nearby establishments share a dot until the camera is close enough to
+  // separate them. Saying "points" would once again name a number a reader cannot count on screen,
+  // which is the thing this line was rewritten to stop doing.
   return (
     <p role="status">
-      {items.length.toLocaleString('en-GB')} places at {points.toLocaleString('en-GB')} points —
-      some addresses hold dozens.
+      {items.length.toLocaleString('en-GB')} places at {points.toLocaleString('en-GB')} addresses —
+      nearby ones share a dot until you zoom in.
       {isLoading ? ' Updating…' : ''}
     </p>
   )

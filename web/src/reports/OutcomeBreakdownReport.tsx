@@ -21,7 +21,15 @@ import { useMemo, useRef, useState } from 'react'
 import type { OutcomeBreakdownRow, ReportDimension } from '../api/contract'
 import { useFilterOptions } from '../filters/useFilterOptions'
 import { toCsv, downloadCsv } from './csv'
-import { defaultSort, nextSort, sortRows, type SortColumn, type SortState } from './sorting'
+import {
+  defaultSort,
+  nextSort,
+  sortRows,
+  sortableColumns,
+  type SortColumn,
+  type SortState,
+} from './sorting'
+import { sortFor, type ReportUrlState } from './reportUrlState'
 import { useOutcomeBreakdown } from './useOutcomeBreakdown'
 
 /**
@@ -43,15 +51,23 @@ const dimensionLabels: Record<ReportDimension, string> = {
   Cuisine: 'Cuisine',
 }
 
-export function OutcomeBreakdownReport() {
+export interface OutcomeBreakdownReportProps {
+  /** The state the address bar asked for, read once by the page. */
+  initial: ReportUrlState
+
+  /** Reports each change so the page can write it back to the address bar. */
+  onChange: (next: Partial<ReportUrlState>) => void
+}
+
+export function OutcomeBreakdownReport({ initial, onChange }: OutcomeBreakdownReportProps) {
   const options = useFilterOptions()
 
-  const [dimension, setDimension] = useState<ReportDimension>('Locality')
-  const [locality, setLocality] = useState('')
-  const [cuisine, setCuisine] = useState('')
-  const [inspectedFrom, setInspectedFrom] = useState('')
-  const [inspectedTo, setInspectedTo] = useState('')
-  const [sort, setSort] = useState<SortState>(defaultSort)
+  const [dimension, setDimension] = useState<ReportDimension>(initial.dimension)
+  const [locality, setLocality] = useState(initial.locality)
+  const [cuisine, setCuisine] = useState(initial.cuisine)
+  const [inspectedFrom, setInspectedFrom] = useState(initial.inspectedFrom)
+  const [inspectedTo, setInspectedTo] = useState(initial.inspectedTo)
+  const [sort, setSort] = useState<SortState>(sortFor(initial, sortableColumns, defaultSort))
 
   // A backwards range is refused by the API with a 400, and refusing it here as well means the user
   // is told immediately rather than after a round trip that spends a report token.
@@ -162,7 +178,11 @@ export function OutcomeBreakdownReport() {
           Group by
           <select
             value={dimension}
-            onChange={(event) => setDimension(event.target.value as ReportDimension)}
+            onChange={(event) => {
+              const next = event.target.value as ReportDimension
+              setDimension(next)
+              onChange({ dimension: next })
+            }}
           >
             <option value="Locality">Borough</option>
             <option value="Cuisine">Cuisine</option>
@@ -173,7 +193,10 @@ export function OutcomeBreakdownReport() {
           Borough
           <select
             value={locality}
-            onChange={(event) => setLocality(event.target.value)}
+            onChange={(event) => {
+              setLocality(event.target.value)
+              onChange({ locality: event.target.value })
+            }}
             disabled={options === null}
           >
             <option value="">All boroughs</option>
@@ -189,7 +212,10 @@ export function OutcomeBreakdownReport() {
           Cuisine
           <select
             value={cuisine}
-            onChange={(event) => setCuisine(event.target.value)}
+            onChange={(event) => {
+              setCuisine(event.target.value)
+              onChange({ cuisine: event.target.value })
+            }}
             disabled={options === null}
           >
             <option value="">All cuisines</option>
@@ -206,7 +232,10 @@ export function OutcomeBreakdownReport() {
           <input
             type="date"
             value={inspectedFrom}
-            onChange={(event) => setInspectedFrom(event.target.value)}
+            onChange={(event) => {
+              setInspectedFrom(event.target.value)
+              onChange({ inspectedFrom: event.target.value })
+            }}
           />
         </label>
 
@@ -215,7 +244,10 @@ export function OutcomeBreakdownReport() {
           <input
             type="date"
             value={inspectedTo}
-            onChange={(event) => setInspectedTo(event.target.value)}
+            onChange={(event) => {
+              setInspectedTo(event.target.value)
+              onChange({ inspectedTo: event.target.value })
+            }}
           />
         </label>
 
@@ -251,7 +283,13 @@ export function OutcomeBreakdownReport() {
           rows={rows}
           dimension={dimension}
           sort={sort}
-          onSort={(column) => setSort((current) => nextSort(current, column))}
+          onSort={(column) =>
+            setSort((current) => {
+              const next = nextSort(current, column)
+              onChange({ sort: next.column, direction: next.direction })
+              return next
+            })
+          }
         />
       )}
     </>

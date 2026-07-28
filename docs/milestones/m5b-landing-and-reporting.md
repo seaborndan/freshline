@@ -78,7 +78,19 @@ it is a scoring rule, and tested against a published interval rather than agains
 Ingestion runs daily, so a report's answer is stable for a day. The map's answer changes with every
 pan. This is the difference that makes response caching worth having on one and not the other.
 
-Not yet implemented, and noted here so that it is a decision rather than an omission.
+Implemented in `web/src/reports/reportCache.ts`, prompted by exactly the case it was written for:
+leaving a filtered report for an establishment and pressing Back asked the API the same question
+again, for an answer that could not have changed in the intervening seconds — and a report is the
+most expensive thing this API answers, with the smallest rate-limit budget.
+
+Keyed on the request and held for the lifetime of the page. The *promise* is cached rather than only
+the value, so two components asking at once share one request — which also removes the duplicate
+React's StrictMode produces in development. A rejected request is evicted, so one bad moment does not
+break a report for the rest of the session.
+
+**The staleness this leaves, stated rather than discovered:** a tab left open across an ingestion run
+keeps showing the previous day's answer for any report it has already seen. Accepted, because a
+time-based expiry reintroduces the refetch at an arbitrary interval for data that moves once a day.
 
 ### Report endpoints need their own rate-limit policy
 
@@ -249,10 +261,100 @@ found by the tests it broke.
 | 4 | Report endpoints, with their own rate-limit policy | **done** |
 | 5 | Reporting UI — selection, sortable table, CSV export | **done** |
 | 7 | Second report — the establishments themselves | **done** |
+| 8 | Clickable rows, report state in the URL, response caching | **done** |
+| 9 | Map: clustering, prominent selection, off-screen indicator | **done** |
 | 6 | Consolidation — ADR on report statistics, README, log | **done** |
 
 **Needs line-by-line human review before merge:** any new dependency, and the small-sample handling
 in any ranking report.
+
+### Clickable rows, and a report that survives being left
+
+**Websites were asked for and are not available.** Checked rather than assumed: across all 99,050
+stored raw payloads, **zero** contain a website, a URL, or the string `http`. Adding one means a
+second source — an API key, a bill, a connector — against a scope fence that says one source, and a
+join on name plus address that is fuzzy: `DUNKIN` appears 307 times, and a wrong match does not fail
+loudly, it points a reader at a different business.
+
+So rows are clickable from data already held. The name links to that establishment **on the map**,
+deep-linked at `?id=`, which is the first thing connecting the two halves of the product — the
+machinery already existed. The phone is a `tel:` link; 23,485 of 23,528 have one, and it is the only
+contactable detail the city publishes.
+
+**The reports page keeps its state in the address bar** (`reports/reportUrlState.ts`). Clicking
+through to an establishment and pressing Back used to land on a default view, because the report, the
+filters and the sort lived in React state — which does not survive a navigation. The map settled this
+in M5 and the reasoning is unchanged. A side effect is that a filtered report is now shareable.
+
+**And a report's answer is cached for the session** (`reports/reportCache.ts`), which is the decision
+booked above finally implemented. A test found a real bug in the date validation on the way:
+JavaScript does not refuse an impossible date, it rolls it over — `new Date('2026-02-31')` is 3 March
+with no `NaN` and no error, so a `Number.isNaN` check accepted it.
+
+### The map: clustering, and what survives a cap
+
+**Reported:** a dot holding eighteen establishments looked barely larger than one holding a single
+establishment. True — nothing scaled with the count, so the only size difference on the map was
+between states, 6.5 pixels for `Poor` against 4 for `Good`.
+
+Clustering is MapLibre's own, and that is what makes consolidation vary with zoom: `clusterRadius` is
+a **screen** distance, so what it covers on the ground changes with the camera for free, with no
+zoom-dependent code and nothing recomputed per frame.
+
+**28 pixels**, chosen from the dots rather than by taste: the largest pin is 6.5 and grows to 1.8× at
+zoom 19, so two dots closer than about 24 pixels hide one another. Well short of MapLibre's default of
+50, which is tuned for markers far larger than these. Nothing clusters above zoom 16. Size runs 7 to
+26 pixels — a factor of four in radius, fifteen in area — which is steeper than the square root that
+makes area proportional to count, deliberately: proportional area is right for a chart somebody reads
+values from, and this is a map somebody scans.
+
+#### The bug clustering exposed
+
+Zooming out made red dots vanish. Measured over one area:
+
+| viewport | items | truncated | `Poor` |
+|---|---|---|---|
+| tight | 564 | no | 2 |
+| wider | 1,000 | **yes** | 8 |
+| widest | 1,000 | **yes** | **3** |
+
+**Zooming out showed fewer failed inspections than zooming in.** The map endpoint caps at 1,000 and
+ordered by id, which correlates with nothing — so the rows it dropped were arbitrary, and `Poor` is 93
+rows out of 23,528.
+
+A cap is unavoidable; its *contents* are a choice. Ordered worst-first, the widest viewport returns
+**87 of the city's 93** `Poor` establishments instead of 3, and drops `Good` ones — of which there are
+12,861. Measured warm on this workstation: **80 ms** at the widest viewport against about 45 ms
+before, and 31 ms at a tight one.
+
+One bug on the way, found by measuring rather than by a test: `FirstOrDefault` over an `int` returns
+**0** when an establishment has no inspections, and 0 was `Poor`'s rank — so every never-inspected
+establishment sorted as a failure. The widest viewport came back with 920 of them and not one `Good`.
+
+At city zoom the map can now show no `Good` establishments at all. That is the right thing to drop and
+it makes the city look worse than it is, so the status line says so: *"the worst results first. Zoom
+in to see everything, good and bad."*
+
+### Finding what is selected
+
+The selected establishment is drawn in a source of its own above every cluster and pin — a wide soft
+halo for visibility, a hard white-ringed core for precision. A separate source because below zoom 16
+the selection is frequently *inside a cluster* and has no feature to restyle.
+
+When it is off screen, a button on the edge of the map points at its true bearing and returns you to
+it. The angle needs no bearing arithmetic at all: `map.project` already accounts for bearing, pitch
+and zoom, so the angle from the container's centre to the projected pixel is the angle on screen.
+Written straight to the DOM rather than through React state, because it updates on every frame of a
+gesture.
+
+Tested on the **sign** of the angle rather than on the arrow appearing: screen `y` grows downwards, so
+down-right is +45° and straight up is −90°. The tempting "correction" points the arrow at the
+reflection of its target and passes any test that only checks visibility.
+
+The record's own "Centre on map" button needed a request token. The focus effect keyed on the
+coordinates, which is right for a `?id=` link and wrong for a button: press, pan away, press again is
+the same coordinates, so the effect would not re-run and the button would appear broken exactly when
+somebody wanted it.
 
 ---
 
@@ -265,7 +367,6 @@ in any ranking report.
   rather than corrected; the correction is a clustered variance estimate and lands the wrong side of
   the explicability rule for the size of the error.
 - ~~**Report endpoints share the map's rate-limit bucket.**~~ — done, `RateLimiting:Reports`.
-- **Response caching for reports is decided and not implemented.**
 - **`/map` and `/reports` are paths, and a static host needs to serve `index.html` for both.** The
   dev server does this by default, which is exactly the kind of difference that shows up later rather
   than now.

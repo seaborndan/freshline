@@ -24,10 +24,14 @@ import { pinStyles } from '../map/pinStyle'
 import { downloadCsv, toCsv } from './csv'
 import {
   defaultEstablishmentSort,
+  establishmentSortColumns,
   nextEstablishmentSort,
   sortEstablishmentRows,
   type EstablishmentSortColumn,
 } from './sorting'
+import { sortFor, type ReportUrlState } from './reportUrlState'
+import type { Route } from '../routing/route'
+import { pathFromRoute } from '../routing/route'
 import { useEstablishmentReport } from './useEstablishmentReport'
 
 /** What this report is, in a sentence. Placed by the page — see the note on the other report's. */
@@ -37,16 +41,34 @@ export const establishmentsDescription =
   'the answer to “what is here”, and dropping it would turn a list of establishments into a list ' +
   'of inspections.'
 
-export function EstablishmentsReport() {
+export interface EstablishmentsReportProps {
+  /** The state the address bar asked for, read once by the page. */
+  initial: ReportUrlState
+
+  /** Reports each change so the page can write it back to the address bar. */
+  onChange: (next: Partial<ReportUrlState>) => void
+
+  onNavigate: (route: Route, search?: string) => void
+}
+
+export function EstablishmentsReport({
+  initial,
+  onChange,
+  onNavigate,
+}: EstablishmentsReportProps) {
   const options = useFilterOptions()
 
-  const [locality, setLocality] = useState('')
-  const [cuisine, setCuisine] = useState('')
-  const [outcome, setOutcome] = useState<InspectionOutcome | ''>('')
-  const [neverInspected, setNeverInspected] = useState<'' | 'true' | 'false'>('')
-  const [inspectedFrom, setInspectedFrom] = useState('')
-  const [inspectedTo, setInspectedTo] = useState('')
-  const [sort, setSort] = useState(defaultEstablishmentSort)
+  const [locality, setLocality] = useState(initial.locality)
+  const [cuisine, setCuisine] = useState(initial.cuisine)
+  const [outcome, setOutcome] = useState<InspectionOutcome | ''>(initial.outcome)
+  const [neverInspected, setNeverInspected] = useState<'' | 'true' | 'false'>(
+    initial.neverInspected,
+  )
+  const [inspectedFrom, setInspectedFrom] = useState(initial.inspectedFrom)
+  const [inspectedTo, setInspectedTo] = useState(initial.inspectedTo)
+  const [sort, setSort] = useState(
+    sortFor(initial, establishmentSortColumns, defaultEstablishmentSort),
+  )
 
   const rangeIsBackwards =
     inspectedFrom !== '' && inspectedTo !== '' && inspectedFrom > inspectedTo
@@ -123,6 +145,7 @@ export function EstablishmentsReport() {
           'Inspected on',
           'Grade',
           'Score',
+          'Phone',
           'Closed by authority',
           'Never inspected',
         ],
@@ -135,6 +158,7 @@ export function EstablishmentsReport() {
           row.inspectedOn ?? '',
           row.rawGrade ?? '',
           row.rawScore ?? '',
+          row.phone ?? '',
           row.closedByAuthority ? 'yes' : 'no',
           row.isAwaitingFirstInspection ? 'yes' : 'no',
         ]),
@@ -147,7 +171,10 @@ export function EstablishmentsReport() {
       <form className="reports-controls" onSubmit={(event) => event.preventDefault()}>
         <label>
           Borough
-          <select value={locality} onChange={(e) => setLocality(e.target.value)} disabled={options === null}>
+          <select value={locality} onChange={(e) => {
+              setLocality(e.target.value)
+              onChange({ locality: e.target.value })
+            }} disabled={options === null}>
             <option value="">All boroughs</option>
             {options?.localities.map((name) => (
               <option key={name} value={name}>{name}</option>
@@ -157,7 +184,10 @@ export function EstablishmentsReport() {
 
         <label>
           Cuisine
-          <select value={cuisine} onChange={(e) => setCuisine(e.target.value)} disabled={options === null}>
+          <select value={cuisine} onChange={(e) => {
+              setCuisine(e.target.value)
+              onChange({ cuisine: e.target.value })
+            }} disabled={options === null}>
             <option value="">All cuisines</option>
             {options?.cuisines.map((name) => (
               <option key={name} value={name}>{name}</option>
@@ -167,7 +197,11 @@ export function EstablishmentsReport() {
 
         <label>
           Result
-          <select value={outcome} onChange={(e) => setOutcome(e.target.value as InspectionOutcome | '')}>
+          <select value={outcome} onChange={(e) => {
+              const next = e.target.value as InspectionOutcome | ''
+              setOutcome(next)
+              onChange({ outcome: next })
+            }}>
             <option value="">Any result</option>
             {inspectionOutcomes.map((value) => (
               <option key={value} value={value}>{pinStyles[value].label}</option>
@@ -179,7 +213,11 @@ export function EstablishmentsReport() {
           Never inspected
           <select
             value={neverInspected}
-            onChange={(e) => setNeverInspected(e.target.value as '' | 'true' | 'false')}
+            onChange={(e) => {
+              const next = e.target.value as '' | 'true' | 'false'
+              setNeverInspected(next)
+              onChange({ neverInspected: next })
+            }}
           >
             <option value="">Include</option>
             <option value="true">Only these</option>
@@ -189,12 +227,18 @@ export function EstablishmentsReport() {
 
         <label>
           Inspected from
-          <input type="date" value={inspectedFrom} onChange={(e) => setInspectedFrom(e.target.value)} />
+          <input type="date" value={inspectedFrom} onChange={(e) => {
+              setInspectedFrom(e.target.value)
+              onChange({ inspectedFrom: e.target.value })
+            }} />
         </label>
 
         <label>
           Inspected to
-          <input type="date" value={inspectedTo} onChange={(e) => setInspectedTo(e.target.value)} />
+          <input type="date" value={inspectedTo} onChange={(e) => {
+              setInspectedTo(e.target.value)
+              onChange({ inspectedTo: e.target.value })
+            }} />
         </label>
 
         <button
@@ -235,7 +279,14 @@ export function EstablishmentsReport() {
         <EstablishmentTable
           rows={rows}
           sort={sort}
-          onSort={(column) => setSort((current) => nextEstablishmentSort(current, column))}
+          onSort={(column) =>
+            setSort((current) => {
+              const next = nextEstablishmentSort(current, column)
+              onChange({ sort: next.column, direction: next.direction })
+              return next
+            })
+          }
+          onNavigate={onNavigate}
         />
       )}
     </>
@@ -273,10 +324,12 @@ function EstablishmentTable({
   rows,
   sort,
   onSort,
+  onNavigate,
 }: {
   rows: EstablishmentReportRow[]
   sort: { column: EstablishmentSortColumn; direction: 'ascending' | 'descending' }
   onSort: (column: EstablishmentSortColumn) => void
+  onNavigate: (route: Route, search?: string) => void
 }) {
   const columns: { key: EstablishmentSortColumn; label: string; numeric: boolean }[] = [
     { key: 'name', label: 'Establishment', numeric: false },
@@ -285,6 +338,7 @@ function EstablishmentTable({
     { key: 'outcome', label: 'Result', numeric: false },
     { key: 'inspectedOn', label: 'Inspected', numeric: false },
     { key: 'rawScore', label: 'Score', numeric: true },
+    { key: 'phone', label: 'Phone', numeric: false },
   ]
 
   return (
@@ -320,7 +374,35 @@ function EstablishmentTable({
           {rows.map((row) => (
             <tr key={row.id}>
               <th scope="row">
-                <span className="reports-name">{row.name}</span>
+                {/*
+                  A real anchor to the map, deep-linked at this establishment — the machinery for
+                  which already exists: `?id=` frames the camera on it and opens its record.
+
+                  An anchor rather than a button, so middle-click and "copy link address" work, and
+                  so the row can be shared. The click is intercepted for ordinary left clicks only,
+                  which keeps it a single-page navigation without taking the browser's own behaviour
+                  away from anyone who asked for it.
+                */}
+                <a
+                  className="reports-name"
+                  href={`${pathFromRoute('map')}?id=${row.id}`}
+                  onClick={(event) => {
+                    if (
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey ||
+                      event.button !== 0
+                    ) {
+                      return
+                    }
+
+                    event.preventDefault()
+                    onNavigate('map', `?id=${row.id}`)
+                  }}
+                >
+                  {row.name}
+                </a>
                 {row.addressLine === null ? null : (
                   <span className="reports-address">{row.addressLine}</span>
                 )}
@@ -332,6 +414,19 @@ function EstablishmentTable({
               </td>
               <td>{row.inspectedOn === null ? '—' : formatPlainDate(row.inspectedOn)}</td>
               <td className="numeric">{row.rawScore ?? '—'}</td>
+              <td>
+                {/*
+                  `tel:` because the source publishes a phone number and nothing else contactable —
+                  no website, no email, checked across all 99,050 stored payloads. It is a real
+                  digit string from the city rather than anything inferred, which is the only kind of
+                  contact detail this project is willing to put on screen.
+                */}
+                {row.phone === null ? (
+                  '—'
+                ) : (
+                  <a href={`tel:${row.phone}`}>{formatPhone(row.phone)}</a>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -369,4 +464,20 @@ function Result({ row }: { row: EstablishmentReportRow }) {
       {row.isAwaitingFirstInspection ? 'Never inspected' : 'Not in this period'}
     </span>
   )
+}
+
+/**
+ * A ten-digit NYC number as `(212) 555-0100`.
+ *
+ * The source publishes digits with no punctuation. Anything that is not ten digits is shown exactly
+ * as it arrived rather than forced into a shape it does not fit — the `tel:` link still works, and a
+ * number reformatted into something the city did not publish would be this project inventing a
+ * detail about a real business.
+ */
+function formatPhone(phone: string): string {
+  if (!/^\d{10}$/.test(phone)) {
+    return phone
+  }
+
+  return `(${phone.slice(0, 3)}) ${phone.slice(3, 6)}-${phone.slice(6)}`
 }

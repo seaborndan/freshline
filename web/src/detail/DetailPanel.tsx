@@ -33,10 +33,26 @@ export interface DetailPanelProps {
   selectedId: number | null
 
   onSelect: (id: number) => void
+
+  /**
+   * Takes the camera to this establishment.
+   *
+   * Here rather than on the map, because it belongs to the record: it is only ever wanted while
+   * something is open, and the panel is the only part of the page that knows that.
+   */
+  onCentre: () => void
+
   onClose: () => void
 }
 
-export function DetailPanel({ candidates, view, selectedId, onSelect, onClose }: DetailPanelProps) {
+export function DetailPanel({
+  candidates,
+  view,
+  selectedId,
+  onSelect,
+  onCentre,
+  onClose,
+}: DetailPanelProps) {
   // Gated on the selection as well as the candidates, not on the candidates alone. A link opened at
   // `?id=` names an establishment that is very often nowhere near the opening view — its pin is not
   // on screen and never was — and gating on candidates hid the panel entirely for exactly the case
@@ -86,7 +102,7 @@ export function DetailPanel({ candidates, view, selectedId, onSelect, onClose }:
       {selectedId === null ? (
         <Chooser candidates={candidates} onSelect={onSelect} />
       ) : (
-        <Detail view={view} />
+        <Detail view={view} onCentre={onCentre} />
       )}
     </section>
   )
@@ -136,7 +152,7 @@ function Chooser({
   )
 }
 
-function Detail({ view }: { view: DetailView }) {
+function Detail({ view, onCentre }: { view: DetailView; onCentre: () => void }) {
   const { detail, isLoading, failure } = view
 
   if (failure !== null) {
@@ -164,6 +180,17 @@ function Detail({ view }: { view: DetailView }) {
       <p className="detail-address">
         {[detail.addressLine, detail.locality, detail.postalCode].filter(Boolean).join(', ')}
       </p>
+
+      {/*
+        Only when there is somewhere to go. 511 establishments in this data have no coordinates —
+        the city publishes zeroes for them and the mapper drops both components together — and a
+        button that silently did nothing would be worse than no button.
+      */}
+      {detail.latitude === null || detail.longitude === null ? null : (
+        <button type="button" className="detail-centre" onClick={onCentre}>
+          Centre on map
+        </button>
+      )}
 
       <dl className="detail-facts">
         {detail.cuisine === null ? null : (
