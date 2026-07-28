@@ -142,6 +142,11 @@ RouteGroupBuilder api = app
 api.MapEstablishmentEndpoints();
 api.MapIdentityEndpoints();
 
+// Reports carry their own rate-limit policy, applied on their own sub-group. RequireRateLimiting
+// there overrides the group policy above it, which is the intent: a report costs many times what a
+// viewport query costs and is asked for far less often, so the two want different budgets.
+api.MapReportEndpoints();
+
 app.Run();
 
 // Exposes the implicitly-generated Program class to the test project so

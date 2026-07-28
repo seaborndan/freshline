@@ -86,8 +86,14 @@ ADR-0005 put every data endpoint in **one bucket**, sized against what a person 
 produces. A report is far more expensive per request than a pan and is requested far less often.
 Sharing the bucket means a few reports can exhaust a map user's allowance and vice versa.
 
-This is an amendment to ADR-0005 rather than a configuration tweak, and it is due when the first
-report endpoint lands.
+Done: `RateLimiting:Reports` is its own bucket — 15 burst, 10 per 60 seconds — with a partition key
+prefixed so a caller's report allowance and map allowance cannot collide. Chosen, not measured, and
+sized against the shape of the interaction rather than the cost of the query: somebody opens a report,
+changes a filter two or three times, reads the table.
+
+The 429 message is policy-aware, because a rejection quoting the map's numbers would send a caller
+away to wait the wrong amount of time. Tested by exhausting the report budget and confirming the map
+still answers.
 
 ---
 
@@ -177,8 +183,8 @@ honours the viewport, because the sender already said where to look.
 |---|---|---|
 | 1 | App shell, routing, landing page, summary endpoint | **done** |
 | 2 | Camera moves to a chosen borough | **done** |
-| 3 | Report query layer in Core and Infrastructure | not started |
-| 4 | Report endpoints, with their own rate-limit policy | not started |
+| 3 | Report query layer in Core and Infrastructure | **done** |
+| 4 | Report endpoints, with their own rate-limit policy | **done** |
 | 5 | Reporting UI — selection, sortable table, CSV export | not started |
 | 6 | Consolidation — ADR on report statistics, README, log | not started |
 
@@ -195,8 +201,7 @@ in any ranking report.
   not independent. Intervals are therefore slightly narrower than they should be. Stated in ADR-0007
   rather than corrected; the correction is a clustered variance estimate and lands the wrong side of
   the explicability rule for the size of the error.
-- **Report endpoints share the map's rate-limit bucket.** An amendment to ADR-0005 is due with the
-  first report endpoint.
+- ~~**Report endpoints share the map's rate-limit bucket.**~~ — done, `RateLimiting:Reports`.
 - **Response caching for reports is decided and not implemented.**
 - **`/map` and `/reports` are paths, and a static host needs to serve `index.html` for both.** The
   dev server does this by default, which is exactly the kind of difference that shows up later rather
