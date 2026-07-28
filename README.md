@@ -57,8 +57,14 @@ is also why the scope is one area rather than many: the interesting problems are
   field was mapped from.
 - **Scores** each establishment on inspection trend and critical-violation recency, so a salesperson can sort
   by "worth a call" rather than by distance. _(planned)_
-- **Maps** the results — clickable establishments coloured by score tier, with a legend, filterable by
-  cuisine, grade, and score band. _(planned)_
+- **Maps** the results — clickable establishments coloured by inspection outcome, with a legend,
+  filterable by cuisine, borough, outcome and never-inspected, and a detail panel carrying the full
+  inspection history. Coloured by *outcome* rather than by score, because the scoring above is still
+  planned and a colour has to mean something today.
+- **Reports** on the data in aggregate — how results distribute across boroughs or cuisines, filtered
+  by area and date range, sortable, exportable to CSV. Rankings sort by what the evidence supports
+  rather than by raw percentage, so a cuisine with two establishments does not outrank one with four
+  hundred; see [ADR-0007](docs/adr/0007-reports-assert-conclusions.md).
 - **Saves territories** so a user can return to a filtered geographic slice, and get told what changed in it
   since last time. _(planned)_
 
@@ -273,7 +279,7 @@ _(The web app is still the M0 scaffold; it arrives at M5.)_
 
 ## The API
 
-Four endpoints under `/api/v1`, documented by an OpenAPI document served in **every** environment —
+Seven endpoints under `/api/v1`, documented by an OpenAPI document served in **every** environment —
 not just development — because the read paths are public by design and the document describes nothing
 a caller could not discover by using it. A browsable UI is at `/scalar/v1`.
 
@@ -282,9 +288,17 @@ a caller could not discover by using it. A browsable UI is at `/scalar/v1`.
 | `GET /establishments` | Filtered list, ordered by name, paged by cursor |
 | `GET /establishments/map` | Everything inside a viewport, not paged |
 | `GET /establishments/{id}` | One establishment with its full inspection history |
+| `GET /establishments/filter-options` | The values the filters can match, and where each borough is |
+| `GET /establishments/summary` | Counts describing the dataset, for the landing page |
+| `GET /reports/outcome-breakdown` | Results by borough or cuisine, with sample sizes |
 | `GET /me` | The claims on your bearer token — the only endpoint needing one |
 
 Plus `/health` (liveness, runs no checks) and `/health/ready` (readiness, reaches the database).
+
+**The report endpoint has its own rate-limit budget**, separate from the rest. A report aggregates
+over a large share of the table and is asked for rarely; a map query is small and constant. Sharing
+one bucket meant a handful of reports could lock somebody out of the map, and brisk panning could
+lock them out of the reports.
 
 **The three establishment endpoints are anonymous and stay that way.** The data is NYC's published
 record and the value of this API is that it can simply be opened and used. What bounds open use is a

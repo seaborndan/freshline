@@ -175,6 +175,28 @@ to frame with, and then found itself already handled when the data arrived. Both
 tested: a bare `?locality=` link frames the borough, and a link carrying a viewport *and* a borough
 honours the viewport, because the sender already said where to look.
 
+### The reporting page
+
+`web/src/reports/` — `ReportsPage.tsx`, `sorting.ts`, `csv.ts`, `useOutcomeBreakdown.ts`.
+
+**The table shows `n` beside every rate**, and the caption says in words that a small group can sit at
+the top. That was a nicety in ADR-0007 until the measurement made it load-bearing.
+
+**Sorting by the percentage column is allowed**, and gives the naive ranking. A column header that
+does not sort by its own column would be an interface lying about itself; the defensible order is the
+default, and the sample size is what makes the alternative readable.
+
+**CSV rather than `.xlsx`.** "Export to Excel" almost always means CSV and Excel opens it; a real
+`.xlsx` needs a library, and a dependency is a decision. Every export carries its filters, row count,
+ungrouped count, sort order and source as comment lines — numbers that leave the page without their
+context are precisely what this project's rules exist to prevent. Fields beginning with `=`, `+`, `-`
+or `@` are neutralised, because an export hands source data to a program that executes some of it.
+
+Two bugs found by writing the tests rather than after shipping: a backwards date range dropped both
+dates and re-ran, so the table quietly reloaded as the *unfiltered* report underneath an error message
+about the range; and the table omitted `noInspectionInPeriod`, so its columns did not reconcile
+against its own total.
+
 ---
 
 ## Slices
@@ -186,7 +208,7 @@ honours the viewport, because the sender already said where to look.
 | 3 | Report query layer in Core and Infrastructure | **done** |
 | 4 | Report endpoints, with their own rate-limit policy | **done** |
 | 5 | Reporting UI — selection, sortable table, CSV export | **done** |
-| 6 | Consolidation — ADR on report statistics, README, log | not started |
+| 6 | Consolidation — ADR on report statistics, README, log | **done** |
 
 **Needs line-by-line human review before merge:** any new dependency, and the small-sample handling
 in any ranking report.
@@ -206,4 +228,12 @@ in any ranking report.
 - **`/map` and `/reports` are paths, and a static host needs to serve `index.html` for both.** The
   dev server does this by default, which is exactly the kind of difference that shows up later rather
   than now.
-- **No report has been measured.** Every query cost in `docs/performance.md` is from M3 and M4.
+- **No report has been measured.** Every query cost in `docs/performance.md` is from M3 and M4. The
+  outcome breakdown runs a correlated subquery per establishment across the whole table; it returns
+  quickly against a warm local database, and nobody has looked at the plan.
+- **The cuisine vocabulary is the source's, uncurated.** 89 values, assigned by the city, never
+  examined by this project. Every per-cuisine report inherits whatever inconsistency is in that
+  field, which is a caveat that belongs beside any conclusion drawn from one.
+- **`ProportionEstimate` assumes independent observations.** Inspections of the same establishment are
+  not independent, so intervals are slightly narrower — slightly over-confident — than they should
+  be. Stated in ADR-0007 rather than corrected.
