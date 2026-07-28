@@ -52,6 +52,9 @@ vi.mock('maplibre-gl', () => ({
       getWest: () => bounds.west,
       getEast: () => bounds.east,
     })
+    getContainer = () => ({ clientWidth: 800, clientHeight: 600 })
+    project = () => ({ x: 400, y: 300 })
+    off = vi.fn()
     on(event: string, handler: () => void) {
       handlers.set(event, handler)
     }

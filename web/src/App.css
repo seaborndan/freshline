@@ -1025,3 +1025,34 @@ main {
   color: #8a2f2f;
   font-weight: 550;
 }
+
+/* Which way the selected establishment is, when it has been panned off screen.
+   Positioned entirely by MapView's effect — this rule owns appearance and nothing else, because the
+   position changes every frame and a stylesheet cannot know it. */
+.map-offscreen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: #0b0b0b;
+  color: #fcfcfb;
+  box-shadow: 0 2px 8px rgb(11 11 11 / 35%);
+
+  /* No transition. The transform is rewritten every frame of a gesture, and interpolating between
+     frames would make the arrow lag behind the map it is describing. */
+  pointer-events: none;
+}
+
+.map-offscreen svg {
+  fill: none;
+  stroke: currentcolor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

@@ -14,9 +14,13 @@ import type { GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { MapEstablishment } from '../api/contract'
 import type { Viewport } from '../api/viewport'
-import { toFeatureCollection } from './geoJson'
+import { toFeatureCollection, type PinFeature } from './geoJson'
+import type { PinState } from './pinStyle'
 import {
   circleColour,
+  selectionColour,
+  selectionHaloRadius,
+  selectionRingRadius,
   circleRadius,
   circleStrokeColour,
   circleStrokeWidth,
@@ -113,6 +117,12 @@ const priorityLayerId = 'establishments-priority'
 const clusterOrdinaryLayerId = 'establishments-cluster-ordinary'
 const clusterPriorityLayerId = 'establishments-cluster-priority'
 
+const selectionSourceId = 'establishment-selection'
+const selectionHaloLayerId = 'establishment-selection-halo'
+const selectionRingLayerId = 'establishment-selection-ring'
+
+const noSelection = { type: 'FeatureCollection' as const, features: [] as PinFeature[] }
+
 /** Every layer a click should consider. */
 const clickableLayerIds = [
   clusterOrdinaryLayerId,
@@ -167,6 +177,14 @@ export interface MapViewProps {
    * amount of city on a phone than on a monitor.
    */
   frameBounds?: Viewport | null
+
+  /**
+   * The establishment currently open, or null.
+   *
+   * Drawn as its own source on top of everything — see `selectionHaloRadius` for why a separate
+   * source rather than a style on the existing one — and used to aim the off-screen indicator.
+   */
+  selection?: { latitude: number; longitude: number; state: PinState } | null
 }
 
 export function MapView({
@@ -176,6 +194,7 @@ export function MapView({
   onSelect,
   focusOn,
   frameBounds,
+  selection,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | null>(null)
@@ -504,6 +523,49 @@ export function MapView({
           paint,
         } as Parameters<typeof created.addLayer>[0])
       }
+
+      created.addSource(selectionSourceId, { type: 'geojson', data: noSelection })
+
+      /*
+       * Two layers for one dot: a wide, soft halo and a hard white-ringed core over it.
+       *
+       * One circle cannot do both jobs. A big flat disc hides its neighbours, and a small ringed one
+       * does not read as *selected* at a glance across a screen of similar dots. The halo carries
+       * the visibility and the ring carries the precision — the core stays close to the size of an
+       * ordinary pin, so the thing being pointed at is not covered by the pointing.
+       *
+       * Added last, so the selection sits above every cluster and pin. It is deliberately absent
+       * from `clickableLayerIds`: it is a drawing of something already selected, and clicking it
+       * should hit the establishment underneath rather than return the same point twice.
+       */
+      created.addLayer({
+        id: selectionHaloLayerId,
+        type: 'circle',
+        source: selectionSourceId,
+        paint: {
+          'circle-color': selectionColour,
+          'circle-radius': selectionHaloRadius,
+          'circle-opacity': 0.22,
+          'circle-stroke-color': selectionColour,
+          'circle-stroke-width': 1,
+          'circle-stroke-opacity': 0.5,
+        },
+      } as Parameters<typeof created.addLayer>[0])
+
+      created.addLayer({
+        id: selectionRingLayerId,
+        type: 'circle',
+        source: selectionSourceId,
+        paint: {
+          'circle-color': selectionColour,
+          'circle-radius': selectionRingRadius,
+          // White, and thick. The basemap is pale and covered in coloured dots; the one thing none
+          // of them has is a heavy light outline, which is what makes this one findable.
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': 3.5,
+        },
+      } as Parameters<typeof created.addLayer>[0])
+
     })
 
     map.current = created
@@ -563,6 +625,155 @@ export function MapView({
     )
   }, [frameSouth, frameNorth, frameWest, frameEast])
 
+  /**
+   * The selected establishment, written into its own source.
+   *
+   * Keyed on the coordinates and the state rather than on object identity, so a re-render carrying
+   * an equal selection does not rewrite the source. One feature either way — this is the cheapest
+   * write the map takes.
+   */
+  const selectedLatitude = selection?.latitude ?? null
+  const selectedLongitude = selection?.longitude ?? null
+  const selectedState = selection?.state ?? null
+
+  useEffect(() => {
+    const target = map.current
+    const source = target?.getSource(selectionSourceId) as GeoJSONSource | undefined
+
+    if (source === undefined) {
+      return
+    }
+
+    if (selectedLatitude === null || selectedLongitude === null || selectedState === null) {
+      source.setData(noSelection)
+      return
+    }
+
+    source.setData({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          id: 0,
+          geometry: { type: 'Point', coordinates: [selectedLongitude, selectedLatitude] },
+          properties: {
+            id: 0,
+            name: '',
+            state: selectedState,
+            closed: false,
+            severity: 0,
+          },
+        },
+      ],
+    })
+  }, [selectedLatitude, selectedLongitude, selectedState])
+
+  /**
+   * The off-screen indicator: where the selection is, when it is not on screen.
+   *
+   * ## Why this is written to the DOM directly rather than through React state
+   *
+   * It has to update on every frame of a pan or a rotate. Putting the position in state would run a
+   * React render per frame during exactly the gesture this project has spent the most effort keeping
+   * smooth. Writing one `transform` to one node costs nothing and cannot cascade.
+   *
+   * ## Why the angle is right for a rotated map
+   *
+   * `map.project` converts a coordinate to a pixel in the container, and it already accounts for
+   * bearing, pitch and zoom. So the angle from the container's centre to that pixel is the angle on
+   * screen — rotate the map and the arrow follows, with no bearing arithmetic here at all.
+   *
+   * The indicator is then placed where that ray leaves the container: scale the direction until it
+   * meets whichever edge it reaches first, which is the smaller of the two axis ratios.
+   */
+  const indicator = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const target = map.current
+
+    if (target === null) {
+      return
+    }
+
+    const node = indicator.current
+
+    if (node === null) {
+      return
+    }
+
+    const update = () => {
+      if (selectedLatitude === null || selectedLongitude === null) {
+        node.style.display = 'none'
+        return
+      }
+
+      const container = target.getContainer()
+      const width = container.clientWidth
+      const height = container.clientHeight
+
+      if (width === 0 || height === 0) {
+        node.style.display = 'none'
+        return
+      }
+
+      const point = target.project([selectedLongitude, selectedLatitude])
+
+      // On screen: the dot itself is doing the pointing, and an arrow as well would be noise.
+      const margin = 8
+      if (
+        point.x >= margin &&
+        point.x <= width - margin &&
+        point.y >= margin &&
+        point.y <= height - margin
+      ) {
+        node.style.display = 'none'
+        return
+      }
+
+      const centreX = width / 2
+      const centreY = height / 2
+      const dx = point.x - centreX
+      const dy = point.y - centreY
+
+      if (dx === 0 && dy === 0) {
+        node.style.display = 'none'
+        return
+      }
+
+      // Far enough in that the whole badge stays inside the map rather than half-clipped by it.
+      const inset = 44
+      const halfWidth = Math.max(1, centreX - inset)
+      const halfHeight = Math.max(1, centreY - inset)
+
+      const scale = Math.min(
+        dx === 0 ? Infinity : halfWidth / Math.abs(dx),
+        dy === 0 ? Infinity : halfHeight / Math.abs(dy),
+      )
+
+      const x = centreX + dx * scale
+      const y = centreY + dy * scale
+
+      // Screen y grows downwards, which atan2 handles as long as it is not "corrected" — the angle
+      // that comes out is already the one to rotate the arrow by.
+      const angle = (Math.atan2(dy, dx) * 180) / Math.PI
+
+      node.style.display = 'flex'
+      node.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%) rotate(${angle}deg)`
+    }
+
+    update()
+
+    // `move` fires per frame during a gesture; the rest cover the cases where nothing is moving but
+    // the projection has changed anyway.
+    target.on('move', update)
+    target.on('resize', update)
+
+    return () => {
+      target.off('move', update)
+      target.off('resize', update)
+    }
+  }, [selectedLatitude, selectedLongitude])
+
   // Pushes new pins into the existing source, unless the user is mid-gesture — see `setOrDefer`.
   // Guarded because the pins usually arrive *before* the style has loaded, in which case there is no
   // source to push them into yet, and the `style.load` handler picks them up from the ref instead.
@@ -583,6 +794,20 @@ export function MapView({
           twice. Keyboard reach into the pins themselves is slice 6's problem, and the answer there
           is the list rather than the canvas. */}
       <div ref={container} className="map-canvas" />
+
+      {/*
+        Which way the selected establishment is, when it is off screen.
+
+        Inside the map's own stacking context and positioned by the effect above, which writes one
+        transform per frame. `aria-hidden` because it is a restatement of something already on the
+        page in words — the detail panel names the establishment and the results list carries it — and
+        a rotating arrow announced on every frame of a pan would be unusable to a screen reader.
+      */}
+      <div ref={indicator} className="map-offscreen" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="18" height="18">
+          <path d="M2 12h16m0 0-6-6m6 6-6 6" />
+        </svg>
+      </div>
 
       {mapFailure === null ? null : (
         <p role="alert" className="map-failure">

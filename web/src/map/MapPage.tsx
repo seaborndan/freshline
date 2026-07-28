@@ -164,6 +164,29 @@ export function MapPage() {
     })
   }, [filters.locality, options])
 
+  /**
+   * The selected establishment as the map needs it: where it is, and what colour it is.
+   *
+   * Derived from the loaded record rather than looked up among the pins, because the two answer
+   * different questions — a `?id=` link selects something that is very often nowhere near the
+   * current view, and an establishment inside a cluster is not among the drawn features at all.
+   */
+  const selection = useMemo(() => {
+    const record = detail.detail
+
+    if (record === null || record.latitude === null || record.longitude === null) {
+      return null
+    }
+
+    return {
+      latitude: record.latitude,
+      longitude: record.longitude,
+      state: record.isAwaitingFirstInspection
+        ? ('NeverInspected' as const)
+        : (record.inspections[0]?.outcome ?? ('NeverInspected' as const)),
+    }
+  }, [detail.detail])
+
   const viewportRef = useRef(viewport)
   viewportRef.current = viewport
 
@@ -205,6 +228,7 @@ export function MapPage() {
           onViewportChange={handleViewportChange}
           onSelect={handleSelect}
           focusOn={focusOn}
+          selection={selection}
           frameBounds={frameBounds}
         />
 

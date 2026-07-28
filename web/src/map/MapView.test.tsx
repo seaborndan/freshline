@@ -22,11 +22,34 @@ import { MapView } from './MapView'
 const handlers = new Map<string, () => void>()
 const addSource = vi.fn()
 const addLayer = vi.fn()
-const setData = vi.fn()
+/**
+ * One spy per source, because there are two now: the establishments and the selected establishment.
+ * A single shared spy made `deliveredFeatures` read whichever source was written last, which is the
+ * selection — so a test about pins started asserting against an empty selection.
+ */
+const setDataBySource = new Map<string, ReturnType<typeof vi.fn>>()
+
+function setDataFor(sourceId: string) {
+  const existing = setDataBySource.get(sourceId)
+
+  if (existing !== undefined) {
+    return existing
+  }
+
+  const spy = vi.fn()
+  setDataBySource.set(sourceId, spy)
+
+  return spy
+}
+
+const setData = setDataFor('establishments')
 let sourceExists = false
 
 /** Whether the fake map says the camera is in motion. The test decides. */
 let moving = false
+
+/** Where the fake map says the selected establishment lands, in container pixels. */
+let projected = { x: 400, y: 300 }
 
 /** A cut-down Positron: two symbol layers, one of which stops below the label threshold. */
 const styleLayers = [
@@ -58,11 +81,18 @@ vi.mock('maplibre-gl', () => ({
       addLayer(...args)
     }
     removeLayer = removeLayer
-    getSource = () => (sourceExists ? { setData } : undefined)
+    getSource = (id: string) =>
+      id === 'establishments' && !sourceExists ? undefined : { setData: setDataFor(id) }
     isMoving = () => moving
     getStyle = () => ({ layers: styleLayers })
     setLayerZoomRange = setLayerZoomRange
     setLayoutProperty = setLayoutProperty
+    // The off-screen indicator projects the selection into container pixels every frame.
+    // A fixed 800x600 container and a projection the test controls, so the arithmetic is
+    // assertable — see `projected`.
+    getContainer = () => ({ clientWidth: 800, clientHeight: 600 })
+    project = () => projected
+    off = vi.fn()
     on(event: string, handler: () => void) {
       handlers.set(event, handler)
     }
@@ -114,7 +144,10 @@ function deliveredFeatures(): unknown[] {
     return fromSetData.features
   }
 
-  const fromSource = addSource.mock.calls.at(-1)?.[1] as
+  // By name, not by position. There are two sources now and the selection is added last, so
+  // `at(-1)` read the wrong one — the same mistake this helper already made once when the hover
+  // source existed.
+  const fromSource = addSource.mock.calls.find((call) => call[0] === 'establishments')?.[1] as
     | { data: { features: unknown[] } }
     | undefined
 
@@ -125,9 +158,10 @@ beforeEach(() => {
   handlers.clear()
   addSource.mockClear()
   addLayer.mockClear()
-  setData.mockClear()
+  setDataBySource.forEach((spy) => spy.mockClear())
   sourceExists = false
   moving = false
+  projected = { x: 400, y: 300 }
   setLayerZoomRange.mockClear()
   setLayoutProperty.mockClear()
   removeLayer.mockClear()
@@ -345,5 +379,114 @@ describe('MapView', () => {
 
     expect(removeLayer.mock.calls.map((call) => call[0])).not.toContain('place-label')
     expect(setLayerZoomRange).toHaveBeenCalledWith('place-label', 14, 24)
+  })
+})
+
+/**
+ * The selected establishment, and the arrow that points at it once it has been panned off screen.
+ *
+ * The angle is the part worth testing. It comes from `map.project`, which already accounts for
+ * bearing and pitch — so rotating the map moves the arrow with no bearing arithmetic anywhere, and
+ * what can go wrong is the sign of an axis rather than the trigonometry. Screen `y` grows downwards,
+ * and "correcting" for that is exactly how an arrow ends up pointing at the mirror image of its
+ * target.
+ */
+describe('the selected establishment', () => {
+  const selection = { latitude: 40.757, longitude: -73.986, state: 'Poor' as const }
+
+  function renderWithSelection() {
+    const result = render(
+      <MapView establishments={[pin]} initialViewport={viewport} selection={selection} />,
+    )
+    loadStyle()
+
+    return result
+  }
+
+  it('draws it in a source of its own, above everything else', () => {
+    renderWithSelection()
+
+    const ids = addedLayers.map((call) => (call[0] as { id: string }).id)
+    const sources = addedSources.map((call) => call[0])
+
+    expect(sources).toContain('establishment-selection')
+
+    // Last two, so nothing is drawn over the selection.
+    expect(ids.slice(-2)).toEqual([
+      'establishment-selection-halo',
+      'establishment-selection-ring',
+    ])
+  })
+
+  it('writes the selected point, with the colour of its state', () => {
+    renderWithSelection()
+
+    const written = setDataFor('establishment-selection').mock.calls.at(-1)?.[0] as {
+      features: { geometry: { coordinates: number[] }; properties: { state: string } }[]
+    }
+
+    expect(written.features).toHaveLength(1)
+    expect(written.features[0].geometry.coordinates).toEqual([-73.986, 40.757])
+    expect(written.features[0].properties.state).toBe('Poor')
+  })
+
+  /** On screen, the dot is already the pointer and a second one would be noise. */
+  it('hides the arrow while the selection is visible', () => {
+    projected = { x: 400, y: 300 }
+
+    const { container } = renderWithSelection()
+    const arrow = container.querySelector('.map-offscreen') as HTMLElement
+
+    expect(arrow.style.display).toBe('none')
+  })
+
+  /**
+   * Off to the right: the arrow sits on the right edge pointing at 0°, which is what `atan2(0, +x)`
+   * gives and what "east on screen" means.
+   */
+  it('points along the exact angle to an off-screen selection', () => {
+    projected = { x: 2000, y: 300 }
+
+    const { container } = renderWithSelection()
+    const arrow = container.querySelector('.map-offscreen') as HTMLElement
+
+    expect(arrow.style.display).toBe('flex')
+    expect(arrow.style.transform).toContain('rotate(0deg)')
+  })
+
+  /**
+   * Below and to the right, on the diagonal — 45°, and *positive*, because screen y grows downwards.
+   * A sign flip here would send the arrow to the reflection of its target and pass any test that
+   * only checked the arrow was visible.
+   */
+  it('uses screen coordinates, so down-right is a positive angle', () => {
+    projected = { x: 400 + 1000, y: 300 + 1000 }
+
+    const { container } = renderWithSelection()
+    const arrow = container.querySelector('.map-offscreen') as HTMLElement
+
+    expect(arrow.style.transform).toContain('rotate(45deg)')
+  })
+
+  /** Straight up is −90°, not 90°. The other half of the same trap. */
+  it('points upwards for a selection above the view', () => {
+    projected = { x: 400, y: -500 }
+
+    const { container } = renderWithSelection()
+    const arrow = container.querySelector('.map-offscreen') as HTMLElement
+
+    expect(arrow.style.transform).toContain('rotate(-90deg)')
+  })
+
+  it('shows no arrow when nothing is selected', () => {
+    projected = { x: 2000, y: 300 }
+
+    const { container } = render(
+      <MapView establishments={[pin]} initialViewport={viewport} selection={null} />,
+    )
+    loadStyle()
+
+    const arrow = container.querySelector('.map-offscreen') as HTMLElement
+    expect(arrow.style.display).toBe('none')
   })
 })

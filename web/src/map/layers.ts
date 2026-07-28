@@ -207,3 +207,42 @@ export const clusterOrdinaryFilter: Expression = [
 
 /** A point that stands alone at this zoom, drawn by the per-state expressions above. */
 export const unclusteredFilter: Expression = ['!', ['has', 'point_count']]
+
+/**
+ * The selected establishment, drawn on top of everything as its own source.
+ *
+ * ## Why a separate source rather than a style on the existing one
+ *
+ * A selected establishment is frequently *inside a cluster* — at any zoom below 16 it may not be
+ * drawn individually at all — so there is no feature to restyle. A source holding exactly the
+ * selected point renders it regardless of what clustering did with the original, and puts it above
+ * every other layer without competing for draw order.
+ *
+ * It also means selecting something writes one feature instead of re-tiling the whole viewport.
+ */
+export const selectionHaloRadius: Expression = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  12,
+  16,
+  16,
+  26,
+  19,
+  40,
+]
+
+export const selectionRingRadius: Expression = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  12,
+  9,
+  16,
+  14,
+  19,
+  21,
+]
+
+/** The colour of whatever is selected, from the one table the legend also reads. */
+export const selectionColour: Expression = matchOnState((state) => pinStyles[state].fill)
