@@ -292,10 +292,15 @@ function Status({ view, filters }: { view: EstablishmentsView; filters: Establis
   // Both numbers, because they differ a lot and only one of them is countable on screen. Saying
   // "518 places" over about three hundred dots invites the reader to count and conclude the map is
   // wrong — see distinctPointCount.
+  //
+  // "addresses" rather than "points", and the sentence about zoom, because the dot count is now
+  // lower than either number: nearby establishments share a dot until the camera is close enough to
+  // separate them. Saying "points" would once again name a number a reader cannot count on screen,
+  // which is the thing this line was rewritten to stop doing.
   return (
     <p role="status">
-      {items.length.toLocaleString('en-GB')} places at {points.toLocaleString('en-GB')} points —
-      some addresses hold dozens.
+      {items.length.toLocaleString('en-GB')} places at {points.toLocaleString('en-GB')} addresses —
+      nearby ones share a dot until you zoom in.
       {isLoading ? ' Updating…' : ''}
     </p>
   )

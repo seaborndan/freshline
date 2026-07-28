@@ -16,7 +16,7 @@
  */
 
 import type { MapEstablishment } from '../api/contract'
-import { isClosed, pinStateOf, type PinState } from './pinStyle'
+import { isClosed, pinSeverity, pinStateOf, type PinState } from './pinStyle'
 
 /**
  * What each feature carries. Kept to what the layer paints with plus what a click needs — every
@@ -27,6 +27,12 @@ export interface PinProperties {
   name: string
   state: PinState
   closed: boolean
+
+  /**
+   * `state` as a number, so a cluster can take the minimum and colour itself by the worst thing
+   * under it. See `pinSeverity` — clustering accumulators are arithmetic and cannot compare names.
+   */
+  severity: number
 }
 
 export interface PinFeature {
@@ -81,6 +87,7 @@ export function toFeatureCollection(
         name: establishment.name,
         state: pinStateOf(establishment),
         closed: isClosed(establishment),
+        severity: pinSeverity[pinStateOf(establishment)],
       },
     })),
   }

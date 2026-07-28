@@ -6,7 +6,7 @@
  * one table means a colour cannot be changed in one place only.
  */
 
-import { closedModifier, pinStates, pinStyles } from './pinStyle'
+import { closedModifier, pinSeverity, pinStates, pinStyles } from './pinStyle'
 
 /** MapLibre expressions are nested JSON arrays; this is as much type as they need here. */
 type Expression = unknown[]
@@ -96,3 +96,114 @@ export const priorityFilter: Expression = [
 ]
 
 export const ordinaryFilter: Expression = ['!', priorityFilter]
+
+/**
+ * How far apart, in screen pixels, two establishments can be and still share a dot.
+ *
+ * ## Why this is measured in pixels, and why that is the answer to "variable with zoom"
+ *
+ * A pixel radius is a *distance on screen*, so what it means on the ground changes with the camera
+ * for free: at zoom 12 it covers a couple of streets, at zoom 18 it covers a shopfront. Zooming in
+ * therefore breaks clusters apart and zooming out merges them, with no zoom-dependent logic to write
+ * and nothing to recompute per frame — MapLibre rebuilds the index per zoom level once.
+ *
+ * ## Why 28
+ *
+ * The largest pin has a radius of 6.5 and grows to 1.8× at zoom 19, so two dots closer than about
+ * 24 pixels overlap enough to hide one another. 28 is just past that: it merges the pairs that would
+ * have obscured each other and leaves alone the ones that are legibly separate. Deliberately short of
+ * MapLibre's default of 50, which is tuned for markers far larger than these and would swallow a
+ * whole block.
+ */
+export const clusterRadius = 28
+
+/**
+ * The zoom above which nothing is clustered.
+ *
+ * 16 is roughly where a single block fills the screen. Past it a reader is looking at specific
+ * buildings and wants the actual establishments, not a summary of them — and the dots are far enough
+ * apart in screen terms that grouping would be inventing crowding that is not there.
+ */
+export const clusterMaxZoom = 16
+
+/**
+ * The size of a cluster, by how many establishments are under it.
+ *
+ * **Deliberately dramatic.** The complaint that produced this was that a point holding eighteen
+ * establishments looked barely larger than one holding a single establishment — which was true, and
+ * was because nothing scaled with the count at all: the only size difference on the map was between
+ * states, 6.5 pixels for `Poor` against 4 for `Good`.
+ *
+ * The stops below take a dot from 7 to 26 pixels across that range, which is a factor of nearly four
+ * in radius and fifteen in area. Steeper than the square-root scaling that makes area proportional to
+ * count, and chosen over it on purpose: proportional area is the honest choice for a chart somebody
+ * reads values from, and this is a map somebody scans. What the size has to do here is *catch an
+ * eye*, and the exact number is one hover and one click away.
+ *
+ * Capped at 60. Above that the dot competes with the district it sits in, and the busiest cluster
+ * in the city would otherwise cover its own neighbours — the thing a bigger dot must never do.
+ */
+const countRadius: Expression = [
+  'interpolate',
+  ['linear'],
+  ['get', 'point_count'],
+  2,
+  7,
+  5,
+  11,
+  12,
+  16,
+  30,
+  21,
+  60,
+  26,
+]
+
+export const clusterCircleRadius: Expression = [
+  'interpolate',
+  ['linear'],
+  ['zoom'],
+  12,
+  ['*', 0.6, countRadius],
+  16,
+  countRadius,
+  19,
+  ['*', 1.8, countRadius],
+]
+
+/**
+ * A cluster's colour: the worst state under it.
+ *
+ * Keyed on the accumulated minimum severity rather than on a state name, because that is what a
+ * clustering accumulator can produce. The fallback is the same deliberately-wrong magenta the
+ * per-state expression uses — an unreachable branch should be obvious rather than plausible.
+ */
+export const clusterColour: Expression = [
+  'match',
+  ['get', 'severity'],
+  ...pinStates.flatMap((state) => [pinSeverity[state], pinStyles[state].fill]),
+  unreachableColour,
+]
+
+export const clusterStrokeColour: Expression = [
+  'match',
+  ['get', 'severity'],
+  ...pinStates.flatMap((state) => [pinSeverity[state], pinStyles[state].stroke]),
+  unreachableColour,
+]
+
+/** Clusters holding something failed are drawn above the rest, like individual pins are. */
+export const clusterPriorityFilter: Expression = [
+  'all',
+  ['has', 'point_count'],
+  ['==', ['get', 'severity'], pinSeverity.Poor],
+]
+
+export const clusterOrdinaryFilter: Expression = [
+  'all',
+  ['has', 'point_count'],
+  ['!=', ['get', 'severity'], pinSeverity.Poor],
+]
+
+/** A point that stands alone at this zoom, drawn by the per-state expressions above. */
+export const unclusteredFilter: Expression = ['!', ['has', 'point_count']]

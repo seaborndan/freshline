@@ -164,3 +164,30 @@ export function pinStateOf(establishment: MapEstablishment): PinState {
 export function isClosed(establishment: MapEstablishment): boolean {
   return establishment.latestInspection?.closedByAuthority === true
 }
+
+
+/**
+ * How severe each state is, as a number a clustering accumulator can take a minimum of.
+ *
+ * ## Why a number, and why the minimum
+ *
+ * A cluster has to answer "what is the most important thing under this dot" from an expression that
+ * MapLibre evaluates while it builds the cluster. Those accumulators are arithmetic — `+`, `min`,
+ * `max` — so severity has to be a number, and "worst wins" has to be the smallest of them.
+ *
+ * **`Poor` is 0**, so a cluster containing one is red however many good results are stacked with it.
+ * That is the direction to fail in: a dot that hides a failed inspection is worse than one that
+ * over-warns, and the count on it plus the chooser behind it are what qualify the claim.
+ *
+ * The three states that are not a graded result sit *below* `Good`, because they are absences of
+ * information rather than bad news — one ungraded establishment among forty-eight good ones should
+ * not turn a dot grey.
+ */
+export const pinSeverity: Record<PinState, number> = {
+  Poor: 0,
+  PendingReinspection: 1,
+  Fair: 2,
+  Good: 3,
+  Ungraded: 4,
+  NeverInspected: 5,
+}

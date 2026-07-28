@@ -290,7 +290,7 @@ describe('MapPage', () => {
 
     const status = screen.getByRole('status')
     expect(status).toHaveTextContent('5 places')
-    expect(status).toHaveTextContent('at 5 points')
+    expect(status).toHaveTextContent('at 5 addresses')
   })
 
   // Which rows a truncated response dropped is arbitrary, so a plain count would be a number the
@@ -305,7 +305,7 @@ describe('MapPage', () => {
     const status = screen.getByRole('status')
     expect(status).toHaveTextContent(/more than 5 places/i)
     expect(status).toHaveTextContent(/zoom in/i)
-    expect(status).not.toHaveTextContent(/points/i)
+    expect(status).not.toHaveTextContent(/addresses/i)
   })
 
   it('distinguishes an empty view from a failure', async () => {

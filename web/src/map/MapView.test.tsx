@@ -164,15 +164,52 @@ describe('MapView', () => {
     expect(deliveredFeatures()).toHaveLength(1)
   })
 
-  it('adds two layers over one source, so the rare pins are not painted over', () => {
+  /**
+   * Four layers over one source, in draw order: the two cluster layers first and largest, then the
+   * individual pins that survive at this zoom on top of them. Within each pair, the ordinary ones
+   * before the ones that must not be hidden — a layer draws its features in whatever order the
+   * source hands them over, so "on top" is something only a second layer can promise.
+   */
+  it('adds cluster and pin layers over one source, clusters underneath', () => {
     render(<MapView establishments={[pin]} initialViewport={viewport} />)
 
     loadStyle()
 
-    const pinLayers = addedLayers.filter(
-      (call) => (call[0] as { source?: string }).source === 'establishments',
-    )
-    expect(pinLayers).toHaveLength(2)
+    const ids = addedLayers
+      .filter((call) => (call[0] as { source?: string }).source === 'establishments')
+      .map((call) => (call[0] as { id: string }).id)
+
+    expect(ids).toEqual([
+      'establishments-cluster-ordinary',
+      'establishments-cluster-priority',
+      'establishments-ordinary',
+      'establishments-priority',
+    ])
+  })
+
+  /**
+   * Clustering is MapLibre's, configured on the source. `clusterRadius` is a *screen* distance, so
+   * what it covers on the ground changes with the camera for free — which is what makes consolidation
+   * vary with zoom without a line of zoom-dependent code.
+   */
+  it('clusters on the source, by a pixel radius', () => {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+
+    loadStyle()
+
+    const source = addedSources.find((call) => call[0] === 'establishments')?.[1] as {
+      cluster?: boolean
+      clusterRadius?: number
+      clusterMaxZoom?: number
+      clusterProperties?: Record<string, unknown>
+    }
+
+    expect(source.cluster).toBe(true)
+    expect(source.clusterRadius).toBe(28)
+    expect(source.clusterMaxZoom).toBe(16)
+
+    // The worst state under a cluster, as a minimum — see pinSeverity.
+    expect(source.clusterProperties?.severity).toEqual(['min', ['get', 'severity']])
   })
 
   it('says so when the map itself fails, rather than leaving a blank rectangle', () => {

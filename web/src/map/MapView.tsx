@@ -20,8 +20,16 @@ import {
   circleRadius,
   circleStrokeColour,
   circleStrokeWidth,
+  clusterCircleRadius,
+  clusterColour,
+  clusterMaxZoom,
+  clusterOrdinaryFilter,
+  clusterPriorityFilter,
+  clusterRadius,
+  clusterStrokeColour,
   ordinaryFilter,
   priorityFilter,
+  unclusteredFilter,
 } from './layers'
 import {
   basemapAttribution,
@@ -102,6 +110,16 @@ function quietenLabelsWhenZoomedOut(map: MapLibreMap): void {
 const sourceId = 'establishments'
 const ordinaryLayerId = 'establishments-ordinary'
 const priorityLayerId = 'establishments-priority'
+const clusterOrdinaryLayerId = 'establishments-cluster-ordinary'
+const clusterPriorityLayerId = 'establishments-cluster-priority'
+
+/** Every layer a click should consider. */
+const clickableLayerIds = [
+  clusterOrdinaryLayerId,
+  clusterPriorityLayerId,
+  ordinaryLayerId,
+  priorityLayerId,
+]
 
 export interface MapViewProps {
   /** The pins to draw. */
@@ -313,19 +331,61 @@ export function MapView({
     // 238 points in the opening view carry more than one establishment and the busiest carries 18,
     // so answering with the first would be answering arbitrarily.
     created.on('click', (event) => {
-      const features = created.queryRenderedFeatures(event.point, {
-        layers: [ordinaryLayerId, priorityLayerId],
-      })
+      const features = created.queryRenderedFeatures(event.point, { layers: clickableLayerIds })
 
-      const ids = features
+      // A lone pin carries its establishment's id directly.
+      const direct = features
         .map((feature) => feature.properties?.id)
         .filter((id): id is number => typeof id === 'number')
 
-      latestOnSelect.current?.([...new Set(ids)])
+      /*
+       * A cluster carries a count, not the things it counted, so what is under it has to be asked
+       * for — `getClusterLeaves` is the source's own answer and is callback-based, hence the
+       * promises.
+       *
+       * The limit is deliberately generous. A cluster that reported only some of its establishments
+       * would produce a chooser quietly missing rows, which is the failure this map has already been
+       * caught making once with stacked pins: an answer that looks complete and is not.
+       */
+      const clusters = features.filter(
+        (feature) => typeof feature.properties?.cluster_id === 'number',
+      )
+
+      if (clusters.length === 0) {
+        latestOnSelect.current?.([...new Set(direct)])
+        return
+      }
+
+      const source = created.getSource(sourceId) as GeoJSONSource | undefined
+
+      if (source === undefined) {
+        return
+      }
+
+      Promise.all(
+        clusters.map((feature) =>
+          source
+            .getClusterLeaves(feature.properties.cluster_id as number, Number.MAX_SAFE_INTEGER, 0)
+            .then((leaves) =>
+              leaves
+                .map((leaf) => leaf.properties?.id)
+                .filter((id): id is number => typeof id === 'number'),
+            ),
+        ),
+      )
+        .then((fromClusters) => {
+          latestOnSelect.current?.([...new Set([...direct, ...fromClusters.flat()])])
+        })
+        .catch(() => {
+          // The cluster could not be opened. Falling back to whatever was clicked directly is
+          // better than an unresponsive dot, and worse than the real answer — which is why it is a
+          // fallback rather than the path.
+          latestOnSelect.current?.([...new Set(direct)])
+        })
     })
 
     // A dot that can be clicked should say so before it is clicked.
-    for (const layerId of [ordinaryLayerId, priorityLayerId]) {
+    for (const layerId of clickableLayerIds) {
       created.on('mouseenter', layerId, () => {
         created.getCanvas().style.cursor = 'pointer'
       })
@@ -367,25 +427,81 @@ export function MapView({
       created.addSource(sourceId, {
         type: 'geojson',
         data: toFeatureCollection(latestEstablishments.current),
+
+        /*
+         * Clustering, and the reason it is MapLibre's rather than something written here.
+         *
+         * `clusterRadius` is a screen distance, so what it means on the ground changes with the
+         * camera automatically — zooming in separates dots, zooming out merges them, with no
+         * zoom-dependent code and nothing recomputed per frame. Supercluster builds one index per
+         * zoom level when the data arrives and answers from it afterwards.
+         *
+         * `severity` accumulates as a minimum, which makes a cluster take the colour of the worst
+         * thing under it. See `pinSeverity`: `Poor` is zero, so a cluster containing a failed
+         * inspection is red however much good news is stacked with it.
+         */
+        cluster: true,
+        clusterRadius,
+        clusterMaxZoom,
+        clusterProperties: { severity: ['min', ['get', 'severity']] },
       })
 
-      // Two layers over one source. The ordinary pins first, then the ones that must not be hidden
-      // by them — see `priorityFilter`.
-      for (const [id, filter] of [
-        [ordinaryLayerId, ordinaryFilter],
-        [priorityLayerId, priorityFilter],
+      /*
+       * Four layers over one source, added in the order they must draw.
+       *
+       * Clusters first and largest, so the individual pins that survive at this zoom sit on top of
+       * them rather than under. Within each of clusters and pins, the ordinary ones come before the
+       * ones that must not be hidden — a layer draws its features in whatever order the source hands
+       * them over, so "on top" is something only a second layer can promise.
+       */
+      for (const [id, filter, paint] of [
+        [
+          clusterOrdinaryLayerId,
+          clusterOrdinaryFilter,
+          {
+            'circle-color': clusterColour,
+            'circle-radius': clusterCircleRadius,
+            'circle-stroke-color': clusterStrokeColour,
+            'circle-stroke-width': 1.5,
+          },
+        ],
+        [
+          clusterPriorityLayerId,
+          clusterPriorityFilter,
+          {
+            'circle-color': clusterColour,
+            'circle-radius': clusterCircleRadius,
+            'circle-stroke-color': clusterStrokeColour,
+            'circle-stroke-width': 1.5,
+          },
+        ],
+        [
+          ordinaryLayerId,
+          ['all', unclusteredFilter, ordinaryFilter],
+          {
+            'circle-color': circleColour,
+            'circle-radius': circleRadius,
+            'circle-stroke-color': circleStrokeColour,
+            'circle-stroke-width': circleStrokeWidth,
+          },
+        ],
+        [
+          priorityLayerId,
+          ['all', unclusteredFilter, priorityFilter],
+          {
+            'circle-color': circleColour,
+            'circle-radius': circleRadius,
+            'circle-stroke-color': circleStrokeColour,
+            'circle-stroke-width': circleStrokeWidth,
+          },
+        ],
       ] as const) {
         created.addLayer({
           id,
           type: 'circle',
           source: sourceId,
           filter,
-          paint: {
-            'circle-color': circleColour,
-            'circle-radius': circleRadius,
-            'circle-stroke-color': circleStrokeColour,
-            'circle-stroke-width': circleStrokeWidth,
-          },
+          paint,
         } as Parameters<typeof created.addLayer>[0])
       }
     })
