@@ -416,25 +416,33 @@ export function MapView({
         hovered = feature.id
 
         /*
-         * Rebuilt as a plain object rather than passed through.
+         * Rebuilt as plain objects, all the way down.
          *
-         * `queryRenderedFeatures` returns MapLibre's own Feature class, and `setData` sends its
-         * argument to a web worker — which can only carry things the worker knows how to serialise.
-         * Handing it the class instance produced
+         * `setData` sends its argument to a web worker, and MapLibre serialises by reading
+         * `input.constructor._classRegistryKey`. That breaks twice over on a queried feature:
          *
-         *   can't serialize object of unregistered class Pv
+         * - the feature is MapLibre's own `Feature` class, which is not in the registry —
+         *   *"can't serialize object of unregistered class Pv"*;
+         * - and its `properties` and `geometry` come back with a **null prototype**, so
+         *   `constructor` is `undefined` and reading a key off it throws
+         *   *"Cannot read properties of undefined (reading '_classRegistryKey')"*.
          *
-         * on every hover, as an error the map surfaced while otherwise working perfectly. Copying
-         * out the three fields the sprite needs is both the fix and the whole of what is required.
+         * The first fix copied the fields but kept the same nested objects, which traded the first
+         * error for the second. Both are errors on a map that draws perfectly otherwise, which is
+         * exactly the kind that survives a green test suite.
+         *
+         * Spreading gives every level an ordinary `Object` prototype.
          */
+        const geometry = feature.geometry as PinFeature['geometry']
+
         ;(created.getSource(hoverSourceId) as GeoJSONSource | undefined)?.setData({
           type: 'FeatureCollection',
           features: [
             {
               type: 'Feature',
-              id: feature.id,
-              geometry: feature.geometry as PinFeature['geometry'],
-              properties: feature.properties as PinFeature['properties'],
+              id: feature.id as number,
+              geometry: { type: 'Point', coordinates: [...geometry.coordinates] },
+              properties: { ...feature.properties } as PinFeature['properties'],
             },
           ],
         })

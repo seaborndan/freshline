@@ -20,7 +20,7 @@ import { pinStates } from './pinStyle'
  * So this double never fires anything by itself. The test decides when the style loads, and both
  * orderings are asserted.
  */
-const handlers = new Map<string, () => void>()
+const handlers = new Map<string, (event?: unknown) => void>()
 const addSource = vi.fn()
 const addLayer = vi.fn()
 const addImage = vi.fn()
@@ -69,8 +69,16 @@ vi.mock('maplibre-gl', () => ({
     getStyle = () => ({ layers: styleLayers })
     setLayerZoomRange = setLayerZoomRange
     setLayoutProperty = setLayoutProperty
-    on(event: string, handler: () => void) {
-      handlers.set(event, handler)
+    /**
+     * MapLibre's `on` takes either `(event, handler)` or `(event, layerId, handler)`, and the
+     * layer-scoped form is how hover is registered. Storing the second argument blindly recorded a
+     * layer id as though it were a handler, which is why no test could reach the hover path.
+     */
+    on(event: string, layerOrHandler: unknown, maybeHandler?: unknown) {
+      const handler = (maybeHandler ?? layerOrHandler) as (event?: unknown) => void
+      const key = maybeHandler === undefined ? event : `${event}:${layerOrHandler as string}`
+
+      handlers.set(key, handler)
     }
   },
   LngLatBounds: class {},
@@ -81,6 +89,28 @@ function loadStyle() {
   act(() => {
     handlers.get('style.load')?.()
   })
+}
+
+/**
+ * A feature shaped the way `queryRenderedFeatures` really returns one: **null prototypes** on the
+ * nested objects, which is what MapLibre's vector-tile reader produces and what broke serialisation
+ * twice.
+ */
+function queriedFeature() {
+  const properties = Object.assign(Object.create(null), {
+    ids: '1328',
+    count: 1,
+    name: 'RAISING CANES #888',
+    state: 'Good',
+    closed: false,
+  })
+
+  const geometry = Object.assign(Object.create(null), {
+    type: 'Point',
+    coordinates: [-73.986193424352, 40.7570962405],
+  })
+
+  return { id: 0, type: 'Feature', geometry, properties }
 }
 
 function endMovement() {
@@ -369,5 +399,49 @@ describe('MapView', () => {
 
     expect(removeLayer.mock.calls.map((call) => call[0])).not.toContain('place-label')
     expect(setLayerZoomRange).toHaveBeenCalledWith('place-label', 14, 24)
+  })
+})
+
+/**
+ * Hover writes into a source of its own, and what it writes crosses a worker boundary.
+ *
+ * MapLibre serialises by reading `input.constructor._classRegistryKey`, which fails on its own
+ * `Feature` class (*"can't serialize object of unregistered class"*) and fails differently on an
+ * object with a null prototype, where `constructor` is `undefined` (*"Cannot read properties of
+ * undefined"*). Both were reported from a browser on a map that drew perfectly; neither could be
+ * seen here, because the double never serialises anything.
+ *
+ * So the property is asserted directly: everything handed to `setData` has an ordinary prototype.
+ */
+describe('the hovered marker', () => {
+  function hover() {
+    render(<MapView establishments={[pin]} initialViewport={viewport} />)
+    loadStyle()
+    setData.mockClear()
+
+    act(() => {
+      handlers.get('mousemove:establishments-ordinary')?.({ features: [queriedFeature()] })
+    })
+
+    return setData.mock.calls.at(-1)?.[0] as {
+      features: { geometry: unknown; properties: unknown }[]
+    }
+  }
+
+  it('writes only plain objects, which is what can cross a worker boundary', () => {
+    const written = hover()
+
+    expect(written).toBeDefined()
+
+    const [feature] = written.features
+    expect(Object.getPrototypeOf(feature)).toBe(Object.prototype)
+    expect(Object.getPrototypeOf(feature.geometry)).toBe(Object.prototype)
+    expect(Object.getPrototypeOf(feature.properties)).toBe(Object.prototype)
+  })
+
+  it('carries the state the sprite is chosen from', () => {
+    const [feature] = hover().features
+
+    expect((feature.properties as { state: string }).state).toBe('Good')
   })
 })
