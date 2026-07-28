@@ -94,6 +94,20 @@ public sealed class ApiFixture : IAsyncLifetime
         {
             ["RateLimiting:BurstSize"] = "100000",
             ["RateLimiting:TokensPerPeriod"] = "100000",
+
+            // The report policy is a second bucket and needs raising for the same reason, which was
+            // learned the noisy way: adding the row-level report's tests took this collection past
+            // the report budget of 15, and four unrelated report tests began failing with 429s in
+            // the full run while passing in isolation.
+            //
+            // Worth keeping as a comment rather than a silent line, because it is the one failure
+            // mode a per-file test run cannot reproduce.
+            // 10,000 rather than the 100,000 above, because ReportRateLimitOptions caps these at
+            // 10,000 and ValidateOnStart refuses the host outright above it — which took down every
+            // test in the collection, not just the report ones. The validation working is the point;
+            // the number here just has to be inside it.
+            ["RateLimiting:Reports:BurstSize"] = "10000",
+            ["RateLimiting:Reports:TokensPerPeriod"] = "10000",
         });
     }
 
