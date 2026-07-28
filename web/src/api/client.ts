@@ -17,6 +17,8 @@ import type {
   DatasetSummary,
   OutcomeBreakdown,
   OutcomeBreakdownRequest,
+  EstablishmentReport,
+  EstablishmentReportRequest,
   EstablishmentDetail,
   EstablishmentFilter,
   EstablishmentFilterOptions,
@@ -32,6 +34,7 @@ import {
 import {
   readDatasetSummary,
   readOutcomeBreakdown,
+  readEstablishmentReport,
   readEstablishmentDetail,
   readFilterOptions,
   readMapResult,
@@ -205,6 +208,37 @@ export async function fetchOutcomeBreakdown(
 
   return readOutcomeBreakdown(
     await requestJson(`${apiRoot}/reports/outcome-breakdown?${params}`, signal),
+  )
+}
+
+/**
+ * The establishments themselves, filtered — the row-level report.
+ *
+ * Spends the report budget, like the breakdown. Bounded rather than paged, so a wide filter comes
+ * back truncated and the caller is told.
+ */
+export async function fetchEstablishmentReport(
+  request: EstablishmentReportRequest,
+  signal?: AbortSignal,
+): Promise<EstablishmentReport> {
+  const params = new URLSearchParams()
+
+  if (request.locality) params.set('locality', request.locality)
+  if (request.cuisine) params.set('cuisine', request.cuisine)
+  if (request.outcome) params.set('outcome', request.outcome)
+  if (request.inspectedFrom) params.set('inspectedFrom', request.inspectedFrom)
+  if (request.inspectedTo) params.set('inspectedTo', request.inspectedTo)
+
+  // Explicitly compared to undefined: false is a meaningful value here — "exclude never-inspected"
+  // — and a truthiness check would drop it.
+  if (request.awaitingFirstInspection !== undefined) {
+    params.set('awaitingFirstInspection', String(request.awaitingFirstInspection))
+  }
+
+  const query = params.toString()
+
+  return readEstablishmentReport(
+    await requestJson(`${apiRoot}/reports/establishments${query === '' ? '' : `?${query}`}`, signal),
   )
 }
 

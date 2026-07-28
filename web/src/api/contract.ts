@@ -319,3 +319,56 @@ export interface OutcomeBreakdownRequest {
   inspectedFrom?: string
   inspectedTo?: string
 }
+
+
+/** One establishment, as a row in a report. */
+export interface EstablishmentReportRow {
+  id: number
+  name: string
+  addressLine: string | null
+  locality: string | null
+  cuisine: string | null
+
+  /**
+   * The city lists it and has never inspected it.
+   *
+   * Distinct from having no result *in the selected period*. Both produce a null `outcome`, and a
+   * reader needs to tell them apart.
+   */
+  isAwaitingFirstInspection: boolean
+
+  outcome: InspectionOutcome | null
+
+  /** Null exactly when `outcome` is. */
+  inspectedOn: string | null
+
+  rawGrade: string | null
+  rawScore: number | null
+
+  /** A separate fact from the result — a place can be closed at an inspection with no letter. */
+  closedByAuthority: boolean
+}
+
+export interface EstablishmentReport {
+  rows: EstablishmentReportRow[]
+
+  /**
+   * More matched than were returned.
+   *
+   * Which rows were dropped is arbitrary, so nothing derived from a truncated result may be stated
+   * as a fact about the whole set.
+   */
+  isTruncated: boolean
+
+  hasDateRange: boolean
+}
+
+/** The parameters the establishment report accepts. Undefined means "do not send this". */
+export interface EstablishmentReportRequest {
+  locality?: string
+  cuisine?: string
+  outcome?: InspectionOutcome
+  awaitingFirstInspection?: boolean
+  inspectedFrom?: string
+  inspectedTo?: string
+}

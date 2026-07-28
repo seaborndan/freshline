@@ -197,6 +197,46 @@ dates and re-ran, so the table quietly reloaded as the *unfiltered* report under
 about the range; and the table omitted `noInspectionInPeriod`, so its columns did not reconcile
 against its own total.
 
+### A second report: the establishments themselves
+
+Asked why a report showed no individual establishments, the honest answer was that only one report
+existed and it happened to be the aggregate one. **A suite that can only aggregate cannot be drilled
+into**, and a group-level CSV is far less useful than a row-level one.
+
+`GET /reports/establishments`, on the same report budget.
+
+**Not served by the existing list endpoint**, for two reasons. A cursor is a position in one
+particular order — name — which is right for walking the dataset and wrong for a table somebody
+wants sorted by worst result or most recent inspection. And adding a date range to that filter would
+change what its `outcome` filter means.
+
+**Bounded rather than paged.** Offset paging would allow server-side sorting, and M3 measured it
+degrading with depth: 307 logical reads at page 461 against 9 for keyset. So up to 1,000 rows with
+`isTruncated` — the trade the map already makes — and the client sorts every column. Truncation is
+*observed* by taking one row more than the limit, because a page that is exactly full is otherwise
+indistinguishable from the whole answer.
+
+**Establishments with no inspection in the period are still listed**, with a null result. Dropping
+them would quietly turn a list of establishments into a list of inspections. The row keeps its
+`isAwaitingFirstInspection` flag, so "never inspected" stays distinguishable from "not inspected in
+this period" — two different facts that a single blank cell would merge.
+
+Verified against real data rather than only the fixture: **Queens + Poor returns 34 rows, and the
+outcome breakdown independently reports 34.** The two compute "latest counted inspection" through
+different code paths, so their agreement is the check worth having.
+
+#### What the tests caught
+
+The eleven new endpoint tests passed in isolation and **four failed in the full suite**. Every report
+test shares one host and one limiter partition, and the additions took the collection past the report
+budget of 15 — a failure mode a per-file run cannot reproduce. The fixture already raised the *main*
+limiter's ceiling for exactly this reason; the second bucket added earlier in this milestone had not
+been matched.
+
+Raising it to 100,000 then failed **every** test in the collection, because `ReportRateLimitOptions`
+caps these at 10,000 and `ValidateOnStart` refuses the host above it. The validation doing its job,
+found by the tests it broke.
+
 ---
 
 ## Slices
@@ -208,6 +248,7 @@ against its own total.
 | 3 | Report query layer in Core and Infrastructure | **done** |
 | 4 | Report endpoints, with their own rate-limit policy | **done** |
 | 5 | Reporting UI — selection, sortable table, CSV export | **done** |
+| 7 | Second report — the establishments themselves | **done** |
 | 6 | Consolidation — ADR on report statistics, README, log | **done** |
 
 **Needs line-by-line human review before merge:** any new dependency, and the small-sample handling

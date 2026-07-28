@@ -893,3 +893,87 @@ main {
 .reports-table td.supported {
   color: #52514e;
 }
+
+.reports-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  margin: 1rem 0 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #e1e0d9;
+  border-radius: 10px;
+  background: #fcfcfb;
+}
+
+.reports-picker legend {
+  padding: 0 0.375rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6d6b66;
+}
+
+.reports-picker label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.reports-picker label:hover {
+  background: #f4f3ee;
+}
+
+.reports-picker label > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  font-size: 0.875rem;
+}
+
+.reports-question {
+  font-size: 0.8125rem;
+  color: #52514e;
+}
+
+/* The establishment name and its address share one cell, so a row identifies a place rather than
+   just naming one — several hundred establishments in this data share a name. */
+.reports-name {
+  display: block;
+}
+
+.reports-address {
+  display: block;
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: #6d6b66;
+}
+
+.reports-result {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  white-space: nowrap;
+}
+
+.reports-result-absent {
+  color: #6d6b66;
+  font-style: italic;
+}
+
+.reports-grade,
+.reports-closed {
+  font-size: 0.6875rem;
+  padding: 0.0625rem 0.3125rem;
+  border-radius: 4px;
+  background: #ecebe4;
+  color: #52514e;
+}
+
+.reports-closed {
+  background: #f6e4e4;
+  color: #8a2f2f;
+  font-weight: 550;
+}

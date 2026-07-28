@@ -16,7 +16,11 @@
  * in it.
  */
 
-import type { OutcomeBreakdownRow } from '../api/contract'
+import type {
+  EstablishmentReportRow,
+  InspectionOutcome,
+  OutcomeBreakdownRow,
+} from '../api/contract'
 
 export const sortableColumns = [
   'group',
@@ -100,4 +104,112 @@ export function nextSort(current: SortState, column: SortColumn): SortState {
   }
 
   return { column, direction: column === 'group' ? 'ascending' : 'descending' }
+}
+
+/**
+ * The row-level report's columns.
+ *
+ * A separate union from `SortColumn` rather than one shared list, because the two reports have
+ * genuinely different columns and a combined type would let a component sort a breakdown by
+ * "address" — accepted by the compiler, meaningless at runtime.
+ */
+export const establishmentSortColumns = [
+  'name',
+  'locality',
+  'cuisine',
+  'outcome',
+  'inspectedOn',
+  'rawScore',
+] as const
+
+export type EstablishmentSortColumn = (typeof establishmentSortColumns)[number]
+
+export interface EstablishmentSortState {
+  column: EstablishmentSortColumn
+  direction: SortDirection
+}
+
+/** Alphabetical by name — the order the API returns, so the first paint does not reshuffle. */
+export const defaultEstablishmentSort: EstablishmentSortState = {
+  column: 'name',
+  direction: 'ascending',
+}
+
+/**
+ * Worst first when sorting by outcome, rather than alphabetically.
+ *
+ * `Poor` before `Good` is the only ordering anybody wants from this column, and it is not the one
+ * the words give: alphabetically, Fair, Good, PendingReinspection, Poor, Ungraded — which puts the
+ * best result second and the worst fourth, for no reason a reader could infer.
+ */
+const outcomeSeverity: Record<InspectionOutcome, number> = {
+  Poor: 0,
+  Fair: 1,
+  PendingReinspection: 2,
+  Ungraded: 3,
+  Good: 4,
+}
+
+function establishmentValueOf(
+  row: EstablishmentReportRow,
+  column: EstablishmentSortColumn,
+): string | number | null {
+  if (column === 'outcome') {
+    return row.outcome === null ? null : outcomeSeverity[row.outcome]
+  }
+
+  return row[column]
+}
+
+/**
+ * A new copy, sorted, with nulls last in both directions.
+ *
+ * **Nulls last regardless of direction**, which is deliberate rather than an oversight. A null here
+ * means "no inspection in this period" — an absence of information, not a value at one end of the
+ * scale. Sorting it to the top of an ascending list would put the least informative rows first and
+ * push the answer off the screen.
+ */
+export function sortEstablishmentRows(
+  rows: EstablishmentReportRow[],
+  sort: EstablishmentSortState,
+): EstablishmentReportRow[] {
+  const factor = sort.direction === 'ascending' ? 1 : -1
+
+  return [...rows].sort((left, right) => {
+    const a = establishmentValueOf(left, sort.column)
+    const b = establishmentValueOf(right, sort.column)
+
+    if (a === null && b === null) return left.name.localeCompare(right.name)
+    if (a === null) return 1
+    if (b === null) return -1
+
+    if (a === b) return left.name.localeCompare(right.name)
+
+    if (typeof a === 'string' || typeof b === 'string') {
+      return factor * String(a).localeCompare(String(b))
+    }
+
+    return factor * (a - b)
+  })
+}
+
+export function nextEstablishmentSort(
+  current: EstablishmentSortState,
+  column: EstablishmentSortColumn,
+): EstablishmentSortState {
+  if (current.column === column) {
+    return {
+      column,
+      direction: current.direction === 'descending' ? 'ascending' : 'descending',
+    }
+  }
+
+  // Text reads A–Z; a date and a score read most-significant first, and outcome ascending is
+  // worst-first because that is what its severity order encodes.
+  return {
+    column,
+    direction: column === 'name' || column === 'locality' || column === 'cuisine' || column === 'outcome'
+      ? 'ascending'
+      : 'descending',
+  }
 }

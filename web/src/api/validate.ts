@@ -28,6 +28,8 @@ import {
   type LocalityBounds,
   type OutcomeBreakdown,
   type OutcomeBreakdownRow,
+  type EstablishmentReport,
+  type EstablishmentReportRow,
   type ProportionEstimate,
   type ReportDimension,
   type LatestInspectionSummary,
@@ -573,4 +575,74 @@ function readProportion(value: unknown, path: string): ProportionEstimate {
   }
 
   return { count, total, observed, supportedAtLeast }
+}
+
+
+/**
+ * `GET /reports/establishments`.
+ *
+ * The relationship checked here is the one no type can express: a null `outcome` and a null
+ * `inspectedOn` must travel together. One without the other means a row claiming a result with no
+ * date, or a date with no result — and a table would render either without complaint.
+ */
+export function readEstablishmentReport(body: unknown): EstablishmentReport {
+  const source = readObject(body, 'response')
+
+  return {
+    rows: readArray(source.rows, 'rows').map((entry, index) =>
+      readEstablishmentReportRow(entry, `rows[${index}]`),
+    ),
+    isTruncated: readBoolean(source.isTruncated, 'isTruncated'),
+    hasDateRange: readBoolean(source.hasDateRange, 'hasDateRange'),
+  }
+}
+
+function readEstablishmentReportRow(value: unknown, path: string): EstablishmentReportRow {
+  const source = readObject(value, path)
+
+  const outcome =
+    source.outcome === null ? null : readOutcome(source.outcome, `${path}.outcome`)
+  const inspectedOn =
+    source.inspectedOn === null
+      ? null
+      : readPlainDateString(source.inspectedOn, `${path}.inspectedOn`)
+
+  if ((outcome === null) !== (inspectedOn === null)) {
+    fail(
+      path,
+      `outcome is ${outcome === null ? 'null' : JSON.stringify(outcome)} but inspectedOn is ` +
+        `${inspectedOn === null ? 'null' : JSON.stringify(inspectedOn)}. They describe the same ` +
+        'inspection and cannot disagree about whether it exists.',
+    )
+  }
+
+  const isAwaitingFirstInspection = readBoolean(
+    source.isAwaitingFirstInspection,
+    `${path}.isAwaitingFirstInspection`,
+  )
+
+  // An establishment awaiting its first inspection cannot have a result. The reverse is not an
+  // error: a place with inspections outside the selected period also has no result, which is the
+  // distinction this row exists to preserve.
+  if (isAwaitingFirstInspection && outcome !== null) {
+    fail(
+      path,
+      `isAwaitingFirstInspection is true but outcome is ${JSON.stringify(outcome)}. An ` +
+        'establishment that has never been inspected cannot have an inspection result.',
+    )
+  }
+
+  return {
+    id: readNumber(source.id, `${path}.id`),
+    name: readString(source.name, `${path}.name`),
+    addressLine: readNullableString(source.addressLine, `${path}.addressLine`),
+    locality: readNullableString(source.locality, `${path}.locality`),
+    cuisine: readNullableString(source.cuisine, `${path}.cuisine`),
+    isAwaitingFirstInspection,
+    outcome,
+    inspectedOn,
+    rawGrade: readNullableString(source.rawGrade, `${path}.rawGrade`),
+    rawScore: readNullableNumber(source.rawScore, `${path}.rawScore`),
+    closedByAuthority: readBoolean(source.closedByAuthority, `${path}.closedByAuthority`),
+  }
 }

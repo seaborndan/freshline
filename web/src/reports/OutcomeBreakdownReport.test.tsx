@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OutcomeBreakdown } from '../api/contract'
-import { ReportsPage } from './ReportsPage'
+import { OutcomeBreakdownReport } from './OutcomeBreakdownReport'
 
 const fetchOutcomeBreakdown = vi.hoisted(() => vi.fn())
 const fetchFilterOptions = vi.hoisted(() => vi.fn())
@@ -48,9 +48,9 @@ beforeEach(() => {
   })
 })
 
-describe('ReportsPage', () => {
+describe('OutcomeBreakdownReport', () => {
   it('shows a row per group with its counts', async () => {
-    render(<ReportsPage />)
+    render(<OutcomeBreakdownReport />)
 
     expect(await screen.findByRole('row', { name: /Latin American/ })).toBeInTheDocument()
     expect(screen.getByRole('row', { name: /Pakistani/ })).toBeInTheDocument()
@@ -62,7 +62,7 @@ describe('ReportsPage', () => {
    * group of two. `n` beside the rate is how a reader can tell.
    */
   it('shows the sample size in the same row as the rate', async () => {
-    render(<ReportsPage />)
+    render(<OutcomeBreakdownReport />)
 
     const basque = await screen.findByRole('row', { name: /Basque/ })
     const cells = within(basque).getAllByRole('cell')
@@ -76,7 +76,7 @@ describe('ReportsPage', () => {
 
   /** The interface must not present the first row as a verdict. */
   it('warns in the table itself that a small group can sit at the top', async () => {
-    render(<ReportsPage />)
+    render(<OutcomeBreakdownReport />)
 
     await screen.findByRole('row', { name: /Basque/ })
 
@@ -89,7 +89,7 @@ describe('ReportsPage', () => {
    * A reader who cannot see the arrow still needs to know which column decides the order.
    */
   it('announces which column is sorted', async () => {
-    render(<ReportsPage />)
+    render(<OutcomeBreakdownReport />)
 
     await screen.findByRole('row', { name: /Basque/ })
 
@@ -106,7 +106,7 @@ describe('ReportsPage', () => {
   it('re-sorts when a column header is activated', async () => {
     const user = userEvent.setup()
 
-    render(<ReportsPage />)
+    render(<OutcomeBreakdownReport />)
     await screen.findByRole('row', { name: /Basque/ })
 
     await user.click(screen.getByRole('button', { name: /Poor %/ }))
@@ -122,7 +122,7 @@ describe('ReportsPage', () => {
    * the report has lost 3,605 establishments.
    */
   it('says how many establishments are in no row at all', async () => {
-    render(<ReportsPage />)
+    render(<OutcomeBreakdownReport />)
 
     expect(await screen.findByText(/3,605 establishments are not in any row/)).toBeInTheDocument()
   })
@@ -132,7 +132,7 @@ describe('ReportsPage', () => {
    * that spends one of the report budget's tokens.
    */
   it('refuses a backwards date range without asking the API', async () => {
-    render(<ReportsPage />)
+    render(<OutcomeBreakdownReport />)
     await screen.findByRole('row', { name: /Basque/ })
 
     // fireEvent rather than userEvent.type: typing into a date input commits a value per keystroke,
@@ -156,7 +156,7 @@ describe('ReportsPage', () => {
   it("reports the API's own sentence when the report cannot be run", async () => {
     fetchOutcomeBreakdown.mockRejectedValue(new Error('This API allows 10 report requests every 60 seconds.'))
 
-    render(<ReportsPage />)
+    render(<OutcomeBreakdownReport />)
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent('10 report requests every 60 seconds')
@@ -165,7 +165,7 @@ describe('ReportsPage', () => {
   it('cannot export a report that has not loaded', () => {
     fetchOutcomeBreakdown.mockReturnValue(new Promise(() => {}))
 
-    render(<ReportsPage />)
+    render(<OutcomeBreakdownReport />)
 
     expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled()
   })
