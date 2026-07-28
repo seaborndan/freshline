@@ -3,6 +3,7 @@ using Freshline.Api.Authentication;
 using Freshline.Api.Cors;
 using Freshline.Api.Endpoints;
 using Freshline.Api.Health;
+using Freshline.Api.Hosting;
 using Freshline.Api.OpenApi;
 using Freshline.Api.RateLimiting;
 using Freshline.Infrastructure.DependencyInjection;
@@ -34,6 +35,7 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     // establishments. Those are facts about the data and the response should state them.
 });
 
+builder.Services.AddFreshlineForwardedHeaders(builder.Configuration);
 builder.Services.AddFreshlineCors(builder.Configuration, builder.Environment);
 builder.Services.AddPublicApiRateLimiting(builder.Configuration);
 builder.Services.AddFreshlineJwtAuthentication(builder.Configuration);
@@ -45,6 +47,17 @@ builder.Services
     .AddCheck<ReadinessHealthCheck>("database", tags: [ReadinessHealthCheck.ReadyTag]);
 
 var app = builder.Build();
+
+// First, before anything reads the client's address or the request's scheme.
+//
+// It rewrites RemoteIpAddress from X-Forwarded-For and the scheme from X-Forwarded-Proto, and every
+// later decision depends on those being right: the rate limiter partitions on the address, and
+// UseHttpsRedirection would otherwise redirect a request that already arrived over TLS at the
+// ingress, which is a loop rather than an inconvenience.
+//
+// Registered only when a proxy is actually declared — see IngressConfiguration for why believing
+// this header without one would be worse than ignoring it.
+app.UseFreshlineForwardedHeaders(builder.Configuration);
 
 // Turns an unhandled exception into a 500 ProblemDetails with no stack trace, rather than into a
 // developer exception page. Registered first so it wraps everything after it.
