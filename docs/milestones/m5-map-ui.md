@@ -385,7 +385,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | 4 | Filter panel | **done** |
 | 5 | Detail panel with inspection history | **done** |
 | 6 | Loading, error, empty states and keyboard navigation | **done** |
-| 7 | Deployment, and the URL | not started |
+| 7 | Deployment, and the URL | **in progress** — ingress blocker cleared, deploy not started |
 | 8 | Consolidation — ADR, README, roadmap, log | not started |
 
 **Needs line-by-line human review before merge:** any new dependency, and anything touching
@@ -844,6 +844,72 @@ be true before anything else loads.
 And the tab said **"web"** — the Vite starter's title, on the page whose whole purpose is to be
 opened by a stranger.
 
+### Slice 7, part one: the client's address from behind the ingress
+
+`src/Freshline.Api/Hosting/IngressConfiguration.cs`, wired in `Program.cs` before anything that reads
+the address or the scheme. This clears the deploy-time blocker carried out of M4; **the deployment
+itself is still to do**, along with `VITE_API_BASE_URL` and the production CORS origin, which cannot
+be chosen until the front end has a URL.
+
+The problem, restated: the rate limiter partitions on `RemoteIpAddress`, which behind any ingress is
+the *proxy's* address. Every caller collapses into one bucket, so the first visitor to exhaust it
+locks out everybody — the limiter becomes the outage it exists to prevent. The fix is to read
+`X-Forwarded-For`, and that header is caller-supplied, so believing it unconditionally is worse than
+ignoring it: anyone could then put a fresh value in it on every request and never be limited at all.
+
+#### This does not use `KnownProxies`, which is what the open item above prescribed
+
+Stated plainly because it reverses a decision written down earlier in this document, and because it is
+the security-relevant part.
+
+`KnownProxies`/`KnownNetworks` cannot be populated here. On the Container Apps consumption profile the
+ingress addresses are managed by the platform, are not published, and change without notice. A list
+of them would be a list of guesses that fails closed one day without warning — traffic rejected in
+production for a reason nothing in the repository explains.
+
+What bounds the trust instead is `ForwardLimit`. `X-Forwarded-For` is a list and each proxy
+**appends** to it; ASP.NET Core reads that list right to left and `ForwardLimit` caps how many entries
+it will walk. With a limit of one, only the rightmost entry is read — the one the ingress itself
+appended. A caller who sends `X-Forwarded-For: 1.2.3.4` produces `1.2.3.4, their-real-address` by the
+time it arrives, and the forged value is never reached.
+
+The residual risk, not glossed: Microsoft's own documentation calls `ForwardLimit` "a precaution, but
+not a guarantee". Clearing `KnownProxies` removes the check that the connection came from a trusted
+address, so what is left is the assumption that **nothing can reach this container except through the
+ingress**. On Container Apps with external ingress that holds — the container's port is not routable
+from the internet. It is an assumption about network topology rather than about caller behaviour,
+which is the better of the two to be left with, and it is verifiable against the deployed URL rather
+than only arguable. That check is listed below and has **not** been run yet.
+
+`ProxyHopCount` defaults to **zero**, and at zero the middleware is not registered at all rather than
+registered with a limit of zero. Locally there is no proxy, so a machine that believed the header
+would let any caller mint a bucket per request; not registering it means no configuration mistake can
+switch that on by accident. A deployment that genuinely has a proxy says so explicitly — one, for
+Container Apps, which puts a single Envoy ingress in front of the container and nothing else.
+
+`XForwardedProto` is forwarded as well as `XForwardedFor`. The ingress terminates TLS, so without it
+every request looks like plain HTTP to this process and `UseHttpsRedirection` would redirect a request
+that already arrived over HTTPS — a loop, not an inconvenience.
+
+#### How it is tested
+
+There is no endpoint that reports the address the API decided you have, and adding one to make this
+testable would mean adding a way to ask the API about its own internals. So the question is asked
+through the component whose whole behaviour turns on the answer: **did these two requests share a
+bucket?** Three tests, against a host configured with a two-request bucket that never refills:
+
+- two callers behind the proxy get separate buckets — the failure this exists to prevent;
+- a forged leading entry, different on every request, does not buy a fresh bucket — the security
+  property;
+- with no proxy declared, the header is ignored entirely — what makes the default safe.
+
+144 backend tests pass, 0 warnings.
+
+**Still to verify, on the deployed URL rather than here:** a request with a forged `X-Forwarded-For`
+against the real ingress, confirming the limiter still counts it against the caller's real address.
+The tests above prove the middleware's behaviour; only that check proves the hop count matches the
+deployment.
+
 ## Standing requirements
 
 Not specific to M5. Repeated because a milestone brief that omits them reads as if they were optional.
@@ -868,11 +934,12 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
   6. The map now takes a camera instruction, and the caller sends one only when the chosen
   establishment is outside the current view.
 
-- **The rate limiter partitions on `RemoteIpAddress`, which becomes the proxy's address behind any
-  ingress.** Every caller then shares one bucket and a per-client limit becomes a global one that
-  locks everybody out together. The fix is `UseForwardedHeaders` with `KnownProxies` or
-  `KnownNetworks` populated with that proxy's real addresses — and only that way round, because
-  `X-Forwarded-For` is caller-supplied. **This is a deploy-time blocker for slice 7**, not a cleanup.
+- ~~**The rate limiter partitions on `RemoteIpAddress`, which becomes the proxy's address behind any
+  ingress.**~~ — answered in slice 7. Not the way this item prescribed: `KnownProxies` cannot be
+  populated on Container Apps, so the trust is bounded by `ForwardLimit` and the middleware is not
+  registered at all unless a proxy is declared. The reversal, the residual risk it leaves, and the
+  one check that still has to run against the deployed URL are written up in "Slice 7, part one"
+  above.
 - **The API's CORS policy has no production origin configured**, and cannot have one until the front
   end has a deployed URL. Slice 7 work, and the failure mode is a browser console error rather than
   anything server-side.
