@@ -1046,7 +1046,13 @@ main {
 
   /* No transition. The transform is rewritten every frame of a gesture, and interpolating between
      frames would make the arrow lag behind the map it is describing. */
-  pointer-events: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.map-offscreen:hover {
+  background: #2a78d6;
 }
 
 .map-offscreen svg {
@@ -1075,4 +1081,18 @@ main {
 .detail-centre:hover {
   border-color: #2a78d6;
   color: #2a78d6;
+}
+
+
+/* Present to assistive technology, absent to everyone else. Used where an icon carries the meaning
+   visually and a control still needs a name. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

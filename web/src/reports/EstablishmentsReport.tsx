@@ -24,10 +24,12 @@ import { pinStyles } from '../map/pinStyle'
 import { downloadCsv, toCsv } from './csv'
 import {
   defaultEstablishmentSort,
+  establishmentSortColumns,
   nextEstablishmentSort,
   sortEstablishmentRows,
   type EstablishmentSortColumn,
 } from './sorting'
+import { sortFor, type ReportUrlState } from './reportUrlState'
 import type { Route } from '../routing/route'
 import { pathFromRoute } from '../routing/route'
 import { useEstablishmentReport } from './useEstablishmentReport'
@@ -40,19 +42,33 @@ export const establishmentsDescription =
   'of inspections.'
 
 export interface EstablishmentsReportProps {
+  /** The state the address bar asked for, read once by the page. */
+  initial: ReportUrlState
+
+  /** Reports each change so the page can write it back to the address bar. */
+  onChange: (next: Partial<ReportUrlState>) => void
+
   onNavigate: (route: Route, search?: string) => void
 }
 
-export function EstablishmentsReport({ onNavigate }: EstablishmentsReportProps) {
+export function EstablishmentsReport({
+  initial,
+  onChange,
+  onNavigate,
+}: EstablishmentsReportProps) {
   const options = useFilterOptions()
 
-  const [locality, setLocality] = useState('')
-  const [cuisine, setCuisine] = useState('')
-  const [outcome, setOutcome] = useState<InspectionOutcome | ''>('')
-  const [neverInspected, setNeverInspected] = useState<'' | 'true' | 'false'>('')
-  const [inspectedFrom, setInspectedFrom] = useState('')
-  const [inspectedTo, setInspectedTo] = useState('')
-  const [sort, setSort] = useState(defaultEstablishmentSort)
+  const [locality, setLocality] = useState(initial.locality)
+  const [cuisine, setCuisine] = useState(initial.cuisine)
+  const [outcome, setOutcome] = useState<InspectionOutcome | ''>(initial.outcome)
+  const [neverInspected, setNeverInspected] = useState<'' | 'true' | 'false'>(
+    initial.neverInspected,
+  )
+  const [inspectedFrom, setInspectedFrom] = useState(initial.inspectedFrom)
+  const [inspectedTo, setInspectedTo] = useState(initial.inspectedTo)
+  const [sort, setSort] = useState(
+    sortFor(initial, establishmentSortColumns, defaultEstablishmentSort),
+  )
 
   const rangeIsBackwards =
     inspectedFrom !== '' && inspectedTo !== '' && inspectedFrom > inspectedTo
@@ -155,7 +171,10 @@ export function EstablishmentsReport({ onNavigate }: EstablishmentsReportProps) 
       <form className="reports-controls" onSubmit={(event) => event.preventDefault()}>
         <label>
           Borough
-          <select value={locality} onChange={(e) => setLocality(e.target.value)} disabled={options === null}>
+          <select value={locality} onChange={(e) => {
+              setLocality(e.target.value)
+              onChange({ locality: e.target.value })
+            }} disabled={options === null}>
             <option value="">All boroughs</option>
             {options?.localities.map((name) => (
               <option key={name} value={name}>{name}</option>
@@ -165,7 +184,10 @@ export function EstablishmentsReport({ onNavigate }: EstablishmentsReportProps) 
 
         <label>
           Cuisine
-          <select value={cuisine} onChange={(e) => setCuisine(e.target.value)} disabled={options === null}>
+          <select value={cuisine} onChange={(e) => {
+              setCuisine(e.target.value)
+              onChange({ cuisine: e.target.value })
+            }} disabled={options === null}>
             <option value="">All cuisines</option>
             {options?.cuisines.map((name) => (
               <option key={name} value={name}>{name}</option>
@@ -175,7 +197,11 @@ export function EstablishmentsReport({ onNavigate }: EstablishmentsReportProps) 
 
         <label>
           Result
-          <select value={outcome} onChange={(e) => setOutcome(e.target.value as InspectionOutcome | '')}>
+          <select value={outcome} onChange={(e) => {
+              const next = e.target.value as InspectionOutcome | ''
+              setOutcome(next)
+              onChange({ outcome: next })
+            }}>
             <option value="">Any result</option>
             {inspectionOutcomes.map((value) => (
               <option key={value} value={value}>{pinStyles[value].label}</option>
@@ -187,7 +213,11 @@ export function EstablishmentsReport({ onNavigate }: EstablishmentsReportProps) 
           Never inspected
           <select
             value={neverInspected}
-            onChange={(e) => setNeverInspected(e.target.value as '' | 'true' | 'false')}
+            onChange={(e) => {
+              const next = e.target.value as '' | 'true' | 'false'
+              setNeverInspected(next)
+              onChange({ neverInspected: next })
+            }}
           >
             <option value="">Include</option>
             <option value="true">Only these</option>
@@ -197,12 +227,18 @@ export function EstablishmentsReport({ onNavigate }: EstablishmentsReportProps) 
 
         <label>
           Inspected from
-          <input type="date" value={inspectedFrom} onChange={(e) => setInspectedFrom(e.target.value)} />
+          <input type="date" value={inspectedFrom} onChange={(e) => {
+              setInspectedFrom(e.target.value)
+              onChange({ inspectedFrom: e.target.value })
+            }} />
         </label>
 
         <label>
           Inspected to
-          <input type="date" value={inspectedTo} onChange={(e) => setInspectedTo(e.target.value)} />
+          <input type="date" value={inspectedTo} onChange={(e) => {
+              setInspectedTo(e.target.value)
+              onChange({ inspectedTo: e.target.value })
+            }} />
         </label>
 
         <button
@@ -243,7 +279,13 @@ export function EstablishmentsReport({ onNavigate }: EstablishmentsReportProps) 
         <EstablishmentTable
           rows={rows}
           sort={sort}
-          onSort={(column) => setSort((current) => nextEstablishmentSort(current, column))}
+          onSort={(column) =>
+            setSort((current) => {
+              const next = nextEstablishmentSort(current, column)
+              onChange({ sort: next.column, direction: next.direction })
+              return next
+            })
+          }
           onNavigate={onNavigate}
         />
       )}

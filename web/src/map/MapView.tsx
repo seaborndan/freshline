@@ -190,6 +190,14 @@ export interface MapViewProps {
    * source rather than a style on the existing one — and used to aim the off-screen indicator.
    */
   selection?: { latitude: number; longitude: number; state: PinState } | null
+
+  /**
+   * Called when the off-screen indicator is activated.
+   *
+   * The arrow says where the selection is; pressing it should take you there, because an indicator
+   * that only points is a thing to look at rather than a thing to use.
+   */
+  onRecentre?: () => void
 }
 
 export function MapView({
@@ -200,6 +208,7 @@ export function MapView({
   focusOn,
   frameBounds,
   selection,
+  onRecentre,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | null>(null)
@@ -695,7 +704,7 @@ export function MapView({
    * The indicator is then placed where that ray leaves the container: scale the direction until it
    * meets whichever edge it reaches first, which is the smaller of the two axis ratios.
    */
-  const indicator = useRef<HTMLDivElement>(null)
+  const indicator = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     const target = map.current
@@ -805,18 +814,28 @@ export function MapView({
       <div ref={container} className="map-canvas" />
 
       {/*
-        Which way the selected establishment is, when it is off screen.
+        Which way the selected establishment is, when it is off screen — and a way back to it.
 
-        Inside the map's own stacking context and positioned by the effect above, which writes one
-        transform per frame. `aria-hidden` because it is a restatement of something already on the
-        page in words — the detail panel names the establishment and the results list carries it — and
-        a rotating arrow announced on every frame of a pan would be unusable to a screen reader.
+        A button rather than a decoration: it is the only thing on screen that knows where the
+        selection went, and pointing without offering to go there makes it something to look at
+        rather than something to use.
+
+        Its accessible name is static while the arrow itself rotates, which is the right split — the
+        direction is a visual affordance, and "return to the selected establishment" is what the
+        control actually does. The arrow graphic is hidden from assistive technology because a
+        rotation announced on every frame of a pan would be unusable.
       */}
-      <div ref={indicator} className="map-offscreen" aria-hidden="true">
-        <svg viewBox="0 0 24 24" width="18" height="18">
+      <button
+        ref={indicator}
+        type="button"
+        className="map-offscreen"
+        onClick={() => onRecentre?.()}
+      >
+        <span className="visually-hidden">Return to the selected establishment</span>
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
           <path d="M2 12h16m0 0-6-6m6 6-6 6" />
         </svg>
-      </div>
+      </button>
 
       {mapFailure === null ? null : (
         <p role="alert" className="map-failure">

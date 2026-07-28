@@ -263,6 +263,7 @@ export function MapPage() {
           onSelect={handleSelect}
           focusOn={focusOn}
           selection={selection}
+          onRecentre={centreOnSelection}
           frameBounds={frameBounds}
         />
 

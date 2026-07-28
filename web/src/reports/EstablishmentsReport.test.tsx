@@ -1,12 +1,18 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { readReportUrlState } from './reportUrlState'
 import type { EstablishmentReport } from '../api/contract'
 import { EstablishmentsReport } from './EstablishmentsReport'
 
 const fetchEstablishmentReport = vi.hoisted(() => vi.fn())
 const fetchFilterOptions = vi.hoisted(() => vi.fn())
 const onNavigate = vi.fn()
+
+const onChange = vi.fn()
+
+/** What the address bar asked for. Defaults, unless a test says otherwise. */
+const urlState = readReportUrlState('')
 
 vi.mock('../api/client', () => ({ fetchEstablishmentReport, fetchFilterOptions }))
 
@@ -61,6 +67,7 @@ const report: EstablishmentReport = {
 }
 
 beforeEach(() => {
+  onChange.mockClear()
   onNavigate.mockClear()
   fetchEstablishmentReport.mockReset()
   fetchEstablishmentReport.mockResolvedValue(report)
@@ -74,7 +81,7 @@ beforeEach(() => {
 
 describe('EstablishmentsReport', () => {
   it('lists establishments with their latest result', async () => {
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     const row = await screen.findByRole('row', { name: /ADDA GHOR/ })
 
@@ -89,7 +96,7 @@ describe('EstablishmentsReport', () => {
    * one is a published state, the other a consequence of the selected dates.
    */
   it('tells never-inspected apart from not-inspected-in-this-period', async () => {
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     const never = await screen.findByRole('row', { name: /PARTNERS COFFEE/ })
     const quiet = screen.getByRole('row', { name: /QUIET DINER/ })
@@ -103,7 +110,7 @@ describe('EstablishmentsReport', () => {
    * DUNKIN alone appears 307 times. A name alone does not identify a place.
    */
   it('identifies a place by address as well as name', async () => {
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     const row = await screen.findByRole('row', { name: /ADDA GHOR/ })
 
@@ -111,7 +118,7 @@ describe('EstablishmentsReport', () => {
   })
 
   it('announces which column is sorted', async () => {
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     await screen.findByRole('row', { name: /ADDA GHOR/ })
 
@@ -124,7 +131,7 @@ describe('EstablishmentsReport', () => {
   it('re-sorts when a column header is activated', async () => {
     const user = userEvent.setup()
 
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
     await screen.findByRole('row', { name: /ADDA GHOR/ })
 
     await user.click(screen.getByRole('button', { name: /Result/ }))
@@ -142,7 +149,7 @@ describe('EstablishmentsReport', () => {
   it('explains the filter combination that cannot match anything', async () => {
     const user = userEvent.setup()
 
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
     await screen.findByRole('row', { name: /ADDA GHOR/ })
 
     await user.selectOptions(screen.getByLabelText(/^result$/i), 'Good')
@@ -158,13 +165,13 @@ describe('EstablishmentsReport', () => {
   it('does not state a bare count from a truncated result', async () => {
     fetchEstablishmentReport.mockResolvedValue({ ...report, isTruncated: true })
 
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     expect(await screen.findByText(/More than 3 establishments match/)).toBeInTheDocument()
   })
 
   it('states a plain count when the result is complete', async () => {
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     expect(await screen.findByText('3 establishments.')).toBeInTheDocument()
   })
@@ -174,7 +181,7 @@ describe('EstablishmentsReport', () => {
       new Error('This API allows 10 report requests every 60 seconds.'),
     )
 
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument())
     expect(screen.getByRole('alert')).toHaveTextContent('10 report requests every 60 seconds')
@@ -189,7 +196,7 @@ describe('EstablishmentsReport', () => {
    * shared. Asserted by role for that reason: `getByRole('link')` fails against a button.
    */
   it('links each row to that establishment on the map', async () => {
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     const link = await screen.findByRole('link', { name: 'ADDA GHOR' })
 
@@ -199,7 +206,7 @@ describe('EstablishmentsReport', () => {
   it('navigates in-page on an ordinary click rather than reloading', async () => {
     const user = userEvent.setup()
 
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
     await screen.findByRole('link', { name: 'ADDA GHOR' })
 
     await user.click(screen.getByRole('link', { name: 'ADDA GHOR' }))
@@ -213,7 +220,7 @@ describe('EstablishmentsReport', () => {
    * only kind of contact detail worth putting on screen.
    */
   it('makes a published phone number callable', async () => {
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     const link = await screen.findByRole('link', { name: '(718) 555-0100' })
 
@@ -222,7 +229,7 @@ describe('EstablishmentsReport', () => {
 
   /** No number published is a dash, not an empty cell pretending the column does not apply. */
   it('says nothing rather than guessing when no number is published', async () => {
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     const row = await screen.findByRole('row', { name: /PARTNERS COFFEE/ })
 
@@ -231,7 +238,7 @@ describe('EstablishmentsReport', () => {
 
   /** Phone is a column of its own, not something tucked into another cell. */
   it('gives the phone its own sortable column', async () => {
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     await screen.findByRole('row', { name: /ADDA GHOR/ })
 
@@ -245,10 +252,45 @@ describe('EstablishmentsReport', () => {
     expect(cells[5]).toHaveTextContent('(718) 555-0100')
   })
 
+  /**
+   * The reported problem, at the level it was reported: leave a filtered report for an establishment
+   * and come back, and the report is as you left it. What the browser preserves across a navigation
+   * is the URL, so the filters have to be in it.
+   */
+  it('opens on the report the address bar asks for', async () => {
+    render(
+      <EstablishmentsReport
+        initial={readReportUrlState('?locality=Queens&outcome=Poor&sort=rawScore&dir=ascending')}
+        onChange={onChange}
+        onNavigate={onNavigate}
+      />,
+    )
+
+    await screen.findByRole('row', { name: /ADDA GHOR/ })
+
+    expect(screen.getByLabelText(/^borough$/i)).toHaveValue('Queens')
+    expect(screen.getByLabelText(/^result$/i)).toHaveValue('Poor')
+    expect(screen.getByRole('columnheader', { name: /Score/ })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    )
+  })
+
+  it('reports every change so the address bar can follow', async () => {
+    const user = userEvent.setup()
+
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
+    await screen.findByRole('row', { name: /ADDA GHOR/ })
+
+    await user.selectOptions(screen.getByLabelText(/^borough$/i), 'Queens')
+
+    expect(onChange).toHaveBeenCalledWith({ locality: 'Queens' })
+  })
+
   it('cannot export a report that has not loaded', () => {
     fetchEstablishmentReport.mockReturnValue(new Promise(() => {}))
 
-    render(<EstablishmentsReport onNavigate={onNavigate} />)
+    render(<EstablishmentsReport initial={urlState} onChange={onChange} onNavigate={onNavigate} />)
 
     expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled()
   })

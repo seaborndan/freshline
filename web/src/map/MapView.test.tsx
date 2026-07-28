@@ -478,6 +478,43 @@ describe('the selected establishment', () => {
     expect(arrow.style.transform).toContain('rotate(-90deg)')
   })
 
+  /**
+   * An indicator that only points is a thing to look at. This one is the only control on screen that
+   * knows where the selection went, so pressing it goes there.
+   */
+  it('takes you back to the selection when the arrow is pressed', () => {
+    projected = { x: 2000, y: 300 }
+    const onRecentre = vi.fn()
+
+    const { container } = render(
+      <MapView
+        establishments={[pin]}
+        initialViewport={viewport}
+        selection={selection}
+        onRecentre={onRecentre}
+      />,
+    )
+    loadStyle()
+
+    const arrow = container.querySelector('.map-offscreen') as HTMLButtonElement
+    arrow.click()
+
+    expect(onRecentre).toHaveBeenCalled()
+  })
+
+  /** A control needs a name; the rotation is a visual affordance and is hidden from a reader. */
+  it('names the arrow for assistive technology while hiding the rotation', () => {
+    projected = { x: 2000, y: 300 }
+
+    const { container, getByRole } = render(
+      <MapView establishments={[pin]} initialViewport={viewport} selection={selection} />,
+    )
+    loadStyle()
+
+    expect(getByRole('button', { name: /return to the selected establishment/i })).toBeInTheDocument()
+    expect(container.querySelector('.map-offscreen svg')).toHaveAttribute('aria-hidden', 'true')
+  })
+
   it('shows no arrow when nothing is selected', () => {
     projected = { x: 2000, y: 300 }
 
