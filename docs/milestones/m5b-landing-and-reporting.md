@@ -67,9 +67,11 @@ and a real problem. The table will look precise and mean nothing.
 This is where `CLAUDE.md`'s "never invent a number" stops being a documentation rule and becomes a
 product rule, because **a report does not display data, it asserts a conclusion.**
 
-The handling is deferred to an ADR written alongside the first ranking report, because the choice
-between a minimum-sample threshold, a Wilson score interval, and simply refusing to rank is a
-decision that outlives this milestone.
+Settled in [ADR-0007](../adr/0007-reports-assert-conclusions.md): every group states its `n`,
+rankings sort by the lower bound of a 95% Wilson score interval, and the percentage displayed stays
+the observed one. Small samples sink under their own uncertainty rather than being excluded by a
+threshold nobody can defend. Implemented as a pure function in Core — `ProportionEstimate` — because
+it is a scoring rule, and tested against a published interval rather than against its own output.
 
 ### Reports are cacheable and the map is not
 
@@ -187,8 +189,12 @@ in any ranking report.
 
 ## Open items
 
-- **The reporting statistics ADR is not written.** Due with the first ranking report. Until it
-  exists, no report that ranks anything should merge.
+- ~~**The reporting statistics ADR is not written.**~~ — written as ADR-0007 before any report
+  existed to use it, which was the point.
+- **The interval assumes independent observations**, and inspections of the same establishment are
+  not independent. Intervals are therefore slightly narrower than they should be. Stated in ADR-0007
+  rather than corrected; the correction is a clustered variance estimate and lands the wrong side of
+  the explicability rule for the size of the error.
 - **Report endpoints share the map's rate-limit bucket.** An amendment to ADR-0005 is due with the
   first report endpoint.
 - **Response caching for reports is decided and not implemented.**

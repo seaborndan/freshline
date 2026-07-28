@@ -146,6 +146,11 @@ Full set in [`docs/adr/`](docs/adr/).
   caller, why the number of proxies is the safer thing to configure than a list of their addresses,
   and what assumption that leaves standing.
 
+- [ADR-0007](docs/adr/0007-reports-assert-conclusions.md) — why a report is held to a higher standard
+  than a map: it asserts a conclusion rather than drawing data. How a ranking avoids putting a
+  two-establishment cuisine above a four-hundred-establishment one, why the fix sorts rows without
+  changing the percentage printed in them, and what it still does not make true.
+
 ## Measured results
 
 Real measurements only. Full method, execution plans and caveats in
