@@ -198,3 +198,33 @@ export interface EstablishmentFilter {
   outcome?: InspectionOutcome
   awaitingFirstInspection?: boolean
 }
+
+/**
+ * What the dataset contains, for the landing page.
+ *
+ * Counts rather than conclusions. No rates, no averages, no "worst borough" — every one of those is
+ * a claim rather than a measurement, and a claim drawn over a whole city hides exactly the
+ * small-sample effects that make per-cuisine figures misleading. This says what is in here.
+ *
+ * Fetched rather than hard-coded, because a figure typed into a page is true on the day it is
+ * written and silently false after the next ingestion run.
+ */
+export interface DatasetSummary {
+  establishmentCount: number
+
+  /** A published state, not an absence in our records — 3,605 of 23,528 in the live data. */
+  awaitingFirstInspectionCount: number
+
+  inspectionCount: number
+  localityCount: number
+  cuisineCount: number
+
+  /**
+   * The most recent inspection date in the data, as `yyyy-mm-dd`, or null when there are none.
+   *
+   * **The source's freshness, not ours.** A successful ingestion run that found nothing new leaves
+   * this unchanged, which is the honest thing to show: a figure based on our own job history would
+   * report the data as current at the moment the city went quiet.
+   */
+  latestInspectionOn: string | null
+}

@@ -9,13 +9,89 @@
   background: #f9f9f7;
 }
 
-.app-shell > header {
+/* The page below the nav. min-height:0 is what lets the map fill the remaining height instead of
+   overflowing it: a flex child defaults to min-height:auto, which refuses to shrink below its
+   content, and an absolutely-positioned map canvas has no content to measure. */
+.app-content {
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem 1.5rem;
-  padding: 0.75rem 1rem;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Visible only when focused. A keyboard user lands on it first and can jump past the navigation;
+   everyone else never sees it. Positioned rather than display:none, because a hidden element cannot
+   take focus at all. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  z-index: 10;
+  padding: 0.5rem 0.75rem;
+  background: #0b0b0b;
+  color: #fcfcfb;
+  border-radius: 0 0 6px;
+}
+
+.skip-link:focus {
+  left: 0;
+  top: 0;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid #e1e0d9;
+  background: #fcfcfb;
+}
+
+.nav-brand {
+  font-weight: 620;
+  font-size: 1.0625rem;
+  letter-spacing: -0.01em;
+  color: #0b0b0b;
+  text-decoration: none;
+}
+
+.nav ul {
+  display: flex;
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nav a {
+  color: #52514e;
+  text-decoration: none;
+  font-size: 0.9375rem;
+  padding: 0.125rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.nav a:hover {
+  color: #0b0b0b;
+}
+
+/* Keyed off aria-current rather than a class, so the styling and the accessible state cannot drift
+   apart — if the underline is here, a screen reader is also saying "current page". */
+.nav a[aria-current='page'] {
+  color: #0b0b0b;
+  border-bottom-color: #2a78d6;
+}
+
+.map-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.map-status-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.5rem 1rem;
   border-bottom: 1px solid #e1e0d9;
   background: #fcfcfb;
 }
@@ -488,4 +564,158 @@ main {
 .detail:focus-visible {
   outline: 2px solid #2a78d6;
   outline-offset: 1px;
+}
+
+
+/* ---- Landing page ---------------------------------------------------------------------------
+   Scrolls, unlike the map, which is the one page that must not. overflow-y on this element rather
+   than on the body: the shell is a full-height flex column, so the body never scrolls at all. */
+
+.landing {
+  overflow-y: auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+.landing > * {
+  max-width: 62rem;
+  margin-inline: auto;
+}
+
+.landing-hero h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  max-width: 20ch;
+}
+
+.landing-lede {
+  margin: 1rem 0 0;
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  color: #3d3c39;
+  max-width: 62ch;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
+}
+
+.landing-action {
+  display: inline-block;
+  padding: 0.625rem 1.125rem;
+  border-radius: 7px;
+  background: #0b0b0b;
+  color: #fcfcfb;
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 560;
+}
+
+.landing-action:hover {
+  background: #2a78d6;
+}
+
+.landing-numbers {
+  margin-top: 3rem;
+}
+
+.landing-numbers ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  background: #e1e0d9;
+  border: 1px solid #e1e0d9;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.landing-numbers li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 1rem 1.125rem;
+  background: #fcfcfb;
+}
+
+.landing-figure {
+  font-size: 1.625rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-figure-label {
+  font-size: 0.8125rem;
+  color: #52514e;
+}
+
+.landing-figure-note {
+  font-size: 0.75rem;
+  color: #6d6b66;
+  margin-top: 0.25rem;
+}
+
+.landing-freshness {
+  margin: 0.875rem 0 0;
+  font-size: 0.8125rem;
+  color: #52514e;
+  max-width: 72ch;
+}
+
+.landing-numbers-failure {
+  margin: 0;
+  padding: 1rem 1.125rem;
+  border: 1px solid #e1c9c9;
+  border-radius: 10px;
+  background: #fdf6f6;
+  font-size: 0.875rem;
+  max-width: 72ch;
+}
+
+.landing-explain,
+.landing-provenance {
+  margin-top: 3rem;
+}
+
+.landing-explain h2,
+.landing-provenance h2 {
+  margin: 0 0 1rem;
+  font-size: 1.125rem;
+  letter-spacing: -0.01em;
+}
+
+.landing-explain dl {
+  margin: 0;
+  display: grid;
+  gap: 1.25rem;
+}
+
+.landing-explain dt {
+  font-weight: 580;
+  margin-bottom: 0.25rem;
+}
+
+.landing-explain dd {
+  margin: 0;
+  color: #3d3c39;
+  line-height: 1.6;
+  max-width: 78ch;
+}
+
+.landing-provenance p {
+  margin: 0 0 0.75rem;
+  color: #3d3c39;
+  line-height: 1.6;
+  max-width: 78ch;
+}
+
+.landing-provenance a {
+  color: #2a78d6;
 }

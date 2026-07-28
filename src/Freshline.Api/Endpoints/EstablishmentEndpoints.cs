@@ -75,6 +75,20 @@ internal static class EstablishmentEndpoints
                 "locality match no value here, and there are some of both.");
 
         establishments
+            .MapGet("/summary", GetSummaryAsync)
+            .WithName("GetDatasetSummary")
+            .WithSummary("Counts describing the dataset as a whole")
+            .WithDescription(
+                "What is in here, rather than what it means: how many establishments and " +
+                "inspections, how many of those establishments have never been inspected, how many " +
+                "boroughs and cuisines, and the date of the most recent inspection. " +
+                "latestInspectionOn is the source's own freshness, not ours — a successful " +
+                "ingestion run that found nothing new leaves it unchanged, which is the honest " +
+                "thing to report. It is null only when there are no inspections at all. No rates " +
+                "or averages: those are conclusions, and a conclusion drawn over a whole city " +
+                "hides the small-sample effects that make per-cuisine figures misleading.");
+
+        establishments
             .MapGet("/{id:int}", GetByIdAsync)
             .WithName("GetEstablishment")
             .WithSummary("Get one establishment with its inspection history")
@@ -267,6 +281,11 @@ internal static class EstablishmentEndpoints
         IEstablishmentQueries queries,
         CancellationToken cancellationToken)
         => TypedResults.Ok(await queries.GetFilterOptionsAsync(cancellationToken));
+
+    private static async Task<Ok<DatasetSummary>> GetSummaryAsync(
+        IEstablishmentQueries queries,
+        CancellationToken cancellationToken)
+        => TypedResults.Ok(await queries.GetSummaryAsync(cancellationToken));
 
     private static ProblemHttpResult Problem(string title, string detail)
         => TypedResults.Problem(

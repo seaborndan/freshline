@@ -297,6 +297,63 @@ internal sealed class EstablishmentQueries(FreshlineDbContext dbContext) : IEsta
         return new EstablishmentFilterOptions { Cuisines = cuisines, Localities = localities };
     }
 
+    /// <summary>
+    /// Six aggregates over the whole dataset.
+    ///
+    /// <para><strong>Why these are six round trips rather than one query.</strong> Combining counts
+    /// over two unrelated tables means either a cross join — which multiplies row counts and produces
+    /// confidently wrong numbers — or a set of scalar subqueries stitched into one SELECT, which is
+    /// harder to read than the thing it replaces and saves latency measured in a handful of
+    /// milliseconds on aggregates the database answers from index metadata. `CLAUDE.md` prefers the
+    /// explainable implementation over the clever one, and this is a case where they differ and the
+    /// clever one wins nothing.</para>
+    ///
+    /// <para><strong>The distinct counts filter nulls before counting.</strong> Both columns are
+    /// nullable, and <c>COUNT(DISTINCT column)</c> in SQL already ignores nulls — the explicit
+    /// <c>Where</c> makes that visible rather than relying on the reader knowing it, and it keeps
+    /// these counts in agreement with <see cref="GetFilterOptionsAsync"/>, which lists exactly the
+    /// same values.</para>
+    /// </summary>
+    public async Task<DatasetSummary> GetSummaryAsync(CancellationToken cancellationToken)
+    {
+        int establishmentCount = await dbContext.Establishments.CountAsync(cancellationToken);
+
+        int awaitingFirstInspectionCount = await dbContext.Establishments
+            .CountAsync(establishment => establishment.IsAwaitingFirstInspection, cancellationToken);
+
+        int inspectionCount = await dbContext.Inspections.CountAsync(cancellationToken);
+
+        int localityCount = await dbContext.Establishments
+            .Where(establishment => establishment.Locality != null)
+            .Select(establishment => establishment.Locality)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        int cuisineCount = await dbContext.Establishments
+            .Where(establishment => establishment.Cuisine != null)
+            .Select(establishment => establishment.Cuisine)
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        // MaxAsync would throw on an empty table rather than return null, because the sequence has no
+        // elements to take a maximum of. An empty database is a legitimate state — a fresh clone
+        // before the first ingestion run — and the landing page should say "no inspections yet"
+        // rather than return a 500.
+        DateOnly? latestInspectionOn = await dbContext.Inspections
+            .Select(inspection => (DateOnly?)inspection.InspectedOn)
+            .MaxAsync(cancellationToken);
+
+        return new DatasetSummary
+        {
+            EstablishmentCount = establishmentCount,
+            AwaitingFirstInspectionCount = awaitingFirstInspectionCount,
+            InspectionCount = inspectionCount,
+            LocalityCount = localityCount,
+            CuisineCount = cuisineCount,
+            LatestInspectionOn = latestInspectionOn,
+        };
+    }
+
     // Two things deliberately absent from the detail query above, both worth being able to explain:
     //
     // AsNoTracking() is not here because it would do nothing. The change tracker holds entities;

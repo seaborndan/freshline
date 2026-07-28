@@ -14,6 +14,7 @@
  */
 
 import type {
+  DatasetSummary,
   EstablishmentDetail,
   EstablishmentFilter,
   EstablishmentFilterOptions,
@@ -26,7 +27,12 @@ import {
   isAbortError,
   type ProblemDetails,
 } from './errors'
-import { readEstablishmentDetail, readFilterOptions, readMapResult } from './validate'
+import {
+  readDatasetSummary,
+  readEstablishmentDetail,
+  readFilterOptions,
+  readMapResult,
+} from './validate'
 import { formatCoordinate, viewportProblem, type Viewport } from './viewport'
 
 /**
@@ -151,6 +157,16 @@ export async function fetchMap(request: MapRequest, signal?: AbortSignal): Promi
  */
 export async function fetchFilterOptions(signal?: AbortSignal): Promise<EstablishmentFilterOptions> {
   return readFilterOptions(await requestJson(`${apiRoot}/establishments/filter-options`, signal))
+}
+
+/**
+ * Counts describing the whole dataset, for the landing page.
+ *
+ * Fetched once. Like the filter vocabulary, these change only when ingestion runs, and they are the
+ * first request a visitor causes — so it is worth being the cheapest one the API answers.
+ */
+export async function fetchDatasetSummary(signal?: AbortSignal): Promise<DatasetSummary> {
+  return readDatasetSummary(await requestJson(`${apiRoot}/establishments/summary`, signal))
 }
 
 /** One establishment with its full inspection history. */

@@ -19,6 +19,7 @@
 
 import {
   inspectionOutcomes,
+  type DatasetSummary,
   type EstablishmentDetail,
   type EstablishmentFilterOptions,
   type InspectionDetail,
@@ -331,5 +332,58 @@ export function readFilterOptions(body: unknown): EstablishmentFilterOptions {
   return {
     cuisines: readNames(source.cuisines, 'cuisines'),
     localities: readNames(source.localities, 'localities'),
+  }
+}
+
+/**
+ * `GET /establishments/summary`.
+ *
+ * Every count is checked to be a non-negative integer, which is not ceremony: these numbers go
+ * straight onto the landing page as claims about the data, and `-1` or `2.5` reaching a page that
+ * says "23,528 establishments" would be the page inventing a number on the API's behalf.
+ *
+ * The relationship between the two establishment counts is checked as well. Never-inspected
+ * establishments are a subset of all establishments, so a summary claiming more of the former than
+ * the latter is internally inconsistent — and a page rendering it would print a percentage above
+ * 100 rather than fail.
+ */
+export function readDatasetSummary(body: unknown): DatasetSummary {
+  const source = readObject(body, 'response')
+
+  const readCount = (value: unknown, path: string): number => {
+    const count = readNumber(value, path)
+
+    if (!Number.isInteger(count) || count < 0) {
+      fail(path, `expected a count, got ${JSON.stringify(count)}`)
+    }
+
+    return count
+  }
+
+  const establishmentCount = readCount(source.establishmentCount, 'establishmentCount')
+  const awaitingFirstInspectionCount = readCount(
+    source.awaitingFirstInspectionCount,
+    'awaitingFirstInspectionCount',
+  )
+
+  if (awaitingFirstInspectionCount > establishmentCount) {
+    fail(
+      'awaitingFirstInspectionCount',
+      `expected at most establishmentCount (${establishmentCount}), got ${awaitingFirstInspectionCount}`,
+    )
+  }
+
+  return {
+    establishmentCount,
+    awaitingFirstInspectionCount,
+    inspectionCount: readCount(source.inspectionCount, 'inspectionCount'),
+    localityCount: readCount(source.localityCount, 'localityCount'),
+    cuisineCount: readCount(source.cuisineCount, 'cuisineCount'),
+    // Null is a real answer — an empty database before the first ingestion run — and is distinct
+    // from a malformed date, which still fails.
+    latestInspectionOn:
+      source.latestInspectionOn === null
+        ? null
+        : readPlainDateString(source.latestInspectionOn, 'latestInspectionOn'),
   }
 }
