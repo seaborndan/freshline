@@ -4,7 +4,29 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!--
+      A warning nobody reads is not a warning. M5 proved that concretely: ASPDEPR005
+      (ForwardedHeadersOptions.KnownNetworks is obsolete in .NET 10) reached main on a
+      line written in the same PR that reported "0 warnings" - the local build was
+      incremental and never recompiled the file, and CI printed the warning into output
+      no human reads. It surfaced days later, by accident, because a container image
+      build compiles from scratch by construction.
+
+      Turned on when the solution emitted zero warnings, so it cost nothing at the point
+      of adoption. That is the only cheap moment to do this: on a codebase with a warning
+      backlog the same change is a migration.
+
+      The real cost is deferred and worth stating plainly. A future SDK or analyser
+      release can introduce a new warning and turn a green build red without any change
+      to this repository - the build breaks on someone else's schedule. That is accepted
+      here, because the alternative is the failure above, and because a deprecation is
+      most cheaply fixed on the day it is announced rather than on the day it is removed.
+
+      When it does happen: fix the warning, or suppress that specific code with a comment
+      saying why. Do not set this back to false to get a build green - that trades one
+      visible failure for every future silent one.
+    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
     <!--
       NuGet audits restore against the GitHub Advisory Database. By default a vulnerable
