@@ -229,6 +229,22 @@ describe('EstablishmentsReport', () => {
     expect(within(row).queryByRole('link', { name: /^\(/ })).not.toBeInTheDocument()
   })
 
+  /** Phone is a column of its own, not something tucked into another cell. */
+  it('gives the phone its own sortable column', async () => {
+    render(<EstablishmentsReport onNavigate={onNavigate} />)
+
+    await screen.findByRole('row', { name: /ADDA GHOR/ })
+
+    expect(screen.getByRole('columnheader', { name: /Phone/ })).toBeInTheDocument()
+
+    // In its own cell, at the end of the row, rather than inside the name or result cell.
+    const row = screen.getByRole('row', { name: /ADDA GHOR/ })
+    const cells = within(row).getAllByRole('cell')
+
+    expect(cells).toHaveLength(6)
+    expect(cells[5]).toHaveTextContent('(718) 555-0100')
+  })
+
   it('cannot export a report that has not loaded', () => {
     fetchEstablishmentReport.mockReturnValue(new Promise(() => {}))
 

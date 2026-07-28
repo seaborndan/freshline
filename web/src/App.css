@@ -722,22 +722,24 @@ main {
 
 /* ---- Reports ---------------------------------------------------------------------------------- */
 
-/* The readable column lives on this element, not on each child.
+/* Full width, deliberately.
  *
- * It used to be `.reports > * { max-width: 78rem; margin-inline: auto }`, which centres every child
- * independently — so a paragraph capped at 76ch became a narrow box floating in the middle, starting
- * well to the right of the table's left edge. Every child was centred, and none of them agreed on
- * where the left edge was.
+ * This had a max-width, which is right for prose and wrong for the thing actually on this page: the
+ * outcome breakdown is eleven columns wide, and capping the page pushed the last of them into a
+ * horizontal scroll. Reading a table means comparing rows, and a column you have to scroll sideways
+ * to reach is a column most readers never see.
  *
- * With the column here, children simply fill it and a narrower one starts where the wider ones do.
- * border-box so the padding is inside the max-width rather than added to it. */
+ * The width is now the window's, and the individual blocks of prose are constrained where they sit
+ * (see `.reports-chooser`) rather than by squeezing everything that shares the page with them.
+ *
+ * `.reports-table-scroll` keeps its `overflow-x` as a floor, not a plan: on a phone no arrangement
+ * of eleven columns fits, and scrolling a table inside its own box is far better than a page that
+ * scrolls sideways and takes the navigation off the screen with it. */
 .reports {
   box-sizing: border-box;
   overflow-y: auto;
   width: 100%;
-  max-width: 80.5rem;
-  margin-inline: auto;
-  padding: 2rem 1.25rem 4rem;
+  padding: 2rem 1.5rem 4rem;
 }
 
 .reports-header h1 {
@@ -853,11 +855,22 @@ main {
   border-top: 1px solid #e1e0d9;
 }
 
+/* Wrapping, so a long cuisine or address makes a row taller instead of making the table wider.
+   `nowrap` on every cell was the other half of why this needed sideways scrolling: a single
+   "Latin American" or "31-14 31ST AVENUE" set the column's width for every row beneath it. */
 .reports-table th,
 .reports-table td {
   padding: 0.4375rem 0.75rem;
   border-bottom: 1px solid #ecebe4;
   text-align: left;
+  white-space: normal;
+}
+
+/* Except the ones where a break would be a misreading: a number split across two lines, a date
+   broken mid-month, or a result separated from the swatch that colours it. */
+.reports-table td.numeric,
+.reports-table th.numeric,
+.reports-table thead th {
   white-space: nowrap;
 }
 
@@ -911,7 +924,10 @@ main {
    the rest, so adding a longer report name widens the picker rather than wrapping the text. */
 .reports-chooser {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  /* The description is capped rather than filling a very wide window: the page is now as wide as the
+     screen for the table's sake, and a line of prose stretched across 2,000 pixels is unreadable.
+     The cap sits on the *cell*, so the text still starts where the picker's neighbour starts. */
+  grid-template-columns: auto minmax(0, 68ch);
   align-items: center;
   gap: 1.5rem;
   margin-top: 1rem;
