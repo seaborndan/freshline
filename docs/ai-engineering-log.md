@@ -482,3 +482,174 @@ a line to see whether anything noticed.
 So: **when you believe a specific line is what prevents a specific failure, delete it and check.** If
 nothing fails, you have learned something more valuable than a passing test — you have learned that
 your explanation was wrong, while it is still cheap to find out.
+
+## M5 — Map UI
+
+**Date:** 2026-07-27 · **Tool:** Claude Code (Opus 5)
+
+### The suite was green and the map was blank
+
+Seventy-seven tests passed. The user opened the page and reported: *"i dont see any pins or
+colors/highlighted establishments anywhere on the map."*
+
+The cause was a stale closure — a `style.load` handler registered once, holding the first render's
+empty `establishments` array forever. What is worth recording is not the bug but **why the tests could
+not see it**: the MapLibre test double fired `style.load` *synchronously*, during construction, which
+is the one ordering a real browser can never produce. A browser loads a style over the network, so the
+handler is always registered before the event arrives. The double had made the bug impossible by
+construction, and then confirmed the code was correct.
+
+The tests were not weak. They were **wrong about the world**, and being green was a consequence of
+that rather than evidence against it. `MapView.test.tsx` now fires nothing on its own, and each test
+drives events in the order a browser would.
+
+This is M4's lesson in a harder form. There, a green suite failed to prove an explanation was right.
+Here, a green suite actively asserted something false, and the only instrument that detected it was a
+person looking at a screen.
+
+### A number I reported that meant nothing
+
+While verifying the pins I reported "223 pins painted", from `queryRenderedFeatures`.
+
+That function reads what the renderer has drawn. Headless jsdom never runs a render loop, so it
+returns 0 whether the map is perfect or broken — and 223 was not a measurement of anything. It was
+deleted from the milestone document rather than softened, because a plausible number with no method
+behind it is worse than an empty section: the empty section invites the question.
+
+`CLAUDE.md` says never invent a number. The subtler version learned here is that **a number produced
+by a real function in a real test run can still be invented**, if the environment is incapable of
+producing the thing being measured.
+
+### "0 warnings", from a build that had not looked
+
+I reported the forwarded-headers PR as building with zero warnings. It did not. `ASPDEPR005` —
+`KnownNetworks`, obsolete in .NET 10 — was sitting on a line I had written in that same PR.
+
+The build I ran was **incremental**. The file had not changed since the previous compile, so nothing
+recompiled and nothing re-reported. CI printed the warning too, into output nobody reads, because
+`TreatWarningsAsErrors` is `false` here.
+
+It surfaced only because a container image build compiles from scratch by construction. Fixed, with
+the three forwarded-headers tests still passing — which is what makes the swap behaviour-preserving
+rather than merely compiling.
+
+The generalisable part is small and sharp: **"the build is clean" is a claim about the build that ran,
+not about the code.** An incremental build that skipped the file in question cannot support it.
+
+### Three rounds of chasing the wrong cause
+
+The user reported panning and zooming as "not buttery" — and then reported it twice more, after fixes
+that did not fix it.
+
+Two hypotheses died by measurement rather than by argument: pin count was identical either side of the
+rough zone, and layer count was *higher* in the smooth one, which is the opposite of what the theory
+predicted. Only once both were dead did measuring the tiles themselves show CARTO's vector tiles
+stopping at z14 — **389 KB at z14, HTTP 400 above it.** The map had been overzooming a tile set that
+does not exist. The fix was a hybrid: raster geometry, vector labels above z14 only.
+
+What I would do differently: I proposed fixes for the first two hypotheses *before* measuring either.
+Both measurements took minutes and both falsified the theory immediately. **Two of those three rounds
+were avoidable, and they were spent on the user's time rather than mine.**
+
+### The caption that made a correct map look broken
+
+The status line said "518 places". The user replied: *"certainly doesnt look like 518 dots."*
+
+They were right to count. 518 establishments occupy 306 distinct points — one address in the city
+carries 49 — so the map was correct and the sentence describing it was not. A reader who counts dots
+and finds a third of the claimed number concludes the map is broken, which is the exact opposite of
+what a status line is for. It now gives both numbers and says why they differ.
+
+Not a bug in any code: a true statement that produced a false belief. No test covers that category.
+
+### An investigation that correctly found nothing
+
+Violation descriptions looked like mojibake in terminal output — `â€™` where an apostrophe belonged.
+Before touching any encoding handling I queried the database directly: **9,963 rows containing U+2019,
+zero containing the mojibake byte sequence.** The data was clean. My terminal was decoding UTF-8 as
+cp1252.
+
+Recorded because a non-finding is a result. The tempting move was a defensive "fix" in the ingestion
+path, which would have corrupted correct data to satisfy a display artefact in a tool that is not part
+of the product.
+
+### Two deployment traps, both silent, both caught before shipping
+
+- **The web build's API base URL.** `client.ts` fell back to `http://localhost:5045`, and Vite
+  substitutes `import.meta.env` at *build* time — so a production bundle built without
+  `VITE_API_BASE_URL` would ship to a real URL and ask **the visitor's own machine** for data, failing
+  on every request while looking exactly like the API being down. The build now refuses to run without
+  the variable, and the fallback is `DEV`-guarded. The compiled bundle contains `localhost:5045`
+  **zero times** — which is the verification that matters. Not "unused". Absent.
+- **The readiness probe against a serverless database.** `/health/ready` queries the database, a login
+  is an auto-resume trigger, and Azure SQL's free grant is worth roughly 40 hours of being *awake* per
+  month. A platform probe polling it means the database never pauses and the grant is gone in under
+  two days. Liveness and readiness both point at `/health` on this platform — a real loss of signal,
+  recorded as one rather than dressed up as a trick.
+
+Neither was findable by any test in this repository. Both came from reading the platform's own
+documentation before provisioning anything, which is the deployment equivalent of running the thing.
+
+### Where a plan turned out to be unfollowable
+
+ADR-0005 prescribed `KnownProxies` populated with the ingress's real addresses, "and only that way
+round". On Container Apps those addresses are platform-managed, unpublished, and change without
+notice — a configuration value that must match something unknowable is a scheduled outage.
+
+ADR-0006 records what was done instead: trust bounded by `ForwardLimit`, which reads only the entries
+the proxies themselves appended. ADR-0005 was left untouched, per ADR-0001's rule that decisions are
+immutable and a changed one gets a new record with both kept.
+
+The earlier ADR was not careless. It was written before a deployment target existed and was correct in
+general. **It became wrong by acquiring a context**, which is the ordinary way architectural decisions
+expire.
+
+### What was delegated, and how it was verified
+
+- **The colour scale**, chosen on measured colour-vision separation rather than on convention. The
+  intuitive green-for-good / red-for-bad pair is ΔE 4.1 under deuteranopia — the two states a user
+  most needs to distinguish, rendered nearly identical for the most common form of colour blindness.
+- **The container image**, verified by running it rather than by it building: non-root uid 1654,
+  liveness 200 and readiness 503 against an unreachable database. That pair is the first *observation*
+  of the liveness/readiness split M4 designed on argument alone.
+- **The initial viewport**, measured against the API rather than guessed, then reshaped to the window
+  aspect ratio after `fitBounds` was found to fit the requested box *inside* the window — producing a
+  wider fetch than intended, and 19 pins over the truncation limit.
+- **144 backend tests, 171 web tests, 0 warnings.** No new dependencies: `maplibre-gl` was already
+  present from M0, and OpenAPI codegen was turned down in favour of a hand-written contract with
+  runtime boundary validation.
+
+### Where a human still has to look
+
+- **`IngressConfiguration.cs`** — auth-adjacent *and* deployment configuration, on `CLAUDE.md`'s
+  line-by-line list twice. Reviewed by summary rather than line by line, at the author's instruction.
+  The reasoning in it is longer than the code.
+- **The whole deployment**, when it happens. Nothing is deployed and the runbook in
+  `docs/deployment.md` has not been executed.
+
+### Where I took the tool's word for it
+
+- **That `ProxyHopCount: 1` is correct for Container Apps.** The tests prove the middleware behaves
+  correctly at a given hop count. Only a forged header against a real ingress proves the count matches
+  the topology, and nothing is deployed.
+- **Every cost and cold-start figure.** All read from Microsoft's documentation, none measured. What a
+  first visit actually costs a person is unknown.
+- **That the hybrid basemap is smooth.** The user said it was — *"this is a whole lot better"* — which
+  is the correct instrument for that question and is not a measurement. No frame timings were captured.
+
+### What I'd tell a junior
+
+M4's lesson was that a test suite tells you the code does what you told it to, and nothing else. M5
+sharpens it: **a test double is a theory about the world, and it can be wrong in exactly the direction
+that makes your bug invisible.**
+
+The blank map, the meaningless pin count and the false "0 warnings" share one shape. In each case an
+instrument reported success while being structurally incapable of observing the failure — an event
+fired in an order browsers cannot produce, a render query in an environment with no renderer, a
+compile that skipped the file. None of them lied. Each answered a narrower question than the one I
+believed I was asking.
+
+So the habit worth building is not "write more tests". It is: **before trusting an instrument, ask
+what it would do if the thing were broken.** If the answer is "the same thing", nothing has been
+measured yet — and on this milestone, every single time, the person looking at the screen found it
+first.

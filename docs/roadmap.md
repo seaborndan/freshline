@@ -160,6 +160,20 @@ they are looking at without being told. **The URL goes on the resume the day thi
 > thing in front of a human is worth more than getting the pipeline right first, and doing it manually
 > once is what makes the M7 automation legible rather than copied.
 
+**Status: built, not deployed.** Every deliverable above exists and is merged — pins coloured by
+outcome, filters, detail panel with inspection history, loading/error/empty states, keyboard
+navigation. 144 backend tests, 171 web tests, 0 warnings.
+
+**The done-when criterion is not met**, because it says *live URL* and there is no URL. The repository
+is deployable — container image, build-time guard on the API origin, and a step-by-step runbook in
+[`docs/deployment.md`](deployment.md) — and the Azure side is deliberately paused after creating an
+empty resource group. Resuming it is a documented sequence rather than a design problem.
+
+> **Carried into M6:** `ProxyHopCount` is unconfirmed against a real ingress, and no test here can
+> confirm it. The cold-start cost of a scale-to-zero container in front of an auto-pausing database is
+> unmeasured and is the price of the zero-cost constraint. Warnings are still not errors, which is how
+> one deprecation reached `main` unread.
+
 ---
 
 ### M6 — Scoring and territories *(~5h)*

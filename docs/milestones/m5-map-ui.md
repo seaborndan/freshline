@@ -386,7 +386,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | 5 | Detail panel with inspection history | **done** |
 | 6 | Loading, error, empty states and keyboard navigation | **done** |
 | 7 | Deployment, and the URL | **in progress** — repository is deployable; no Azure resource exists yet |
-| 8 | Consolidation — ADR, README, roadmap, log | **in progress** — ADR-0006 written; log waits on the deploy |
+| 8 | Consolidation — ADR, README, roadmap, log | **done** — ADR-0006, log entry, roadmap status, README |
 
 **Needs line-by-line human review before merge:** any new dependency, and anything touching
 deployment configuration or secrets.

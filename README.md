@@ -199,8 +199,32 @@ same index takes CPU from over 100 ms to unmeasurable. Reasoning in
 incremental run re-read 12,690 rows through the lookback window, inserted nothing, left every row
 count identical, and took 13.4 s.
 
+**The map's basemap, after three rounds of chasing the wrong cause.** Panning was reported as janky,
+twice more after fixes that did not fix it. Two hypotheses died by measurement — pin count was
+identical either side of the rough zone, and layer count was *higher* in the smooth one. Measuring the
+tiles themselves found the actual cause:
+
+| Zoom | Vector `.mvt` | Raster `.png` @2x |
+|---|---|---|
+| 12 | 98 KB | 30 KB |
+| 14 | **389 KB** | 26 KB |
+| 15+ | **HTTP 400 — does not exist** | — |
+
+The map was overzooming a tile set that stops at z14. Now raster geometry with vector labels above
+z14 only. **Smoothness itself was not measured** — the user said it was better, which is the right
+instrument for that question and is not a number.
+
+**Colour, measured rather than assumed.** The intuitive green-for-good / red-for-bad pair separates by
+ΔE 4.1 under deuteranopia — the two states a reader most needs to tell apart, rendered nearly
+identical for the most common form of colour blindness. The shipped scale was chosen on measured
+separation instead.
+
 **What I would do differently at 100× the volume:** _(not yet written — it needs numbers from a
 dataset large enough to have different bottlenecks, and 23,528 rows is not it.)_
+
+**Cold-start cost of the deployed map:** _(not yet written — nothing is deployed. A scale-to-zero
+container in front of an auto-pausing database makes the first visitor wait, and the figure that
+matters can only come from the real thing.)_
 
 ## Stack
 
