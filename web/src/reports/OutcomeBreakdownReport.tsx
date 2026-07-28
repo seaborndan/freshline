@@ -24,6 +24,20 @@ import { toCsv, downloadCsv } from './csv'
 import { defaultSort, nextSort, sortRows, type SortColumn, type SortState } from './sorting'
 import { useOutcomeBreakdown } from './useOutcomeBreakdown'
 
+/**
+ * What this report is, in a sentence, rendered by the page beside the report picker.
+ *
+ * Exported rather than rendered here because it belongs *to* this report and is *placed* by the
+ * shell — the picker and the description sit in one grid, and only the shell knows about that grid.
+ * Keeping the text in this file means changing the report and changing its description are the same
+ * edit.
+ */
+export const outcomeBreakdownDescription =
+  'Every establishment counts once, under its most recent inspection result. Percentages are over ' +
+  'establishments that have been inspected — never-inspected places are counted separately, ' +
+  'because including them would make a borough with a large inspection backlog look better than ' +
+  'one that has been visited.'
+
 const dimensionLabels: Record<ReportDimension, string> = {
   Locality: 'Borough',
   Cuisine: 'Cuisine',
@@ -143,13 +157,6 @@ export function OutcomeBreakdownReport() {
 
   return (
     <>
-      <p className="reports-lede">
-          Every establishment counts once, under its most recent inspection result. Percentages are
-          over establishments that have been inspected &mdash; never-inspected places are counted
-          separately, because including them would make a borough with a large inspection backlog
-          look better than one that has been visited.
-      </p>
-
       <form className="reports-controls" onSubmit={(event) => event.preventDefault()}>
         <label>
           Group by

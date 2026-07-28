@@ -18,21 +18,28 @@
  */
 
 import { useState } from 'react'
-import { EstablishmentsReport } from './EstablishmentsReport'
-import { OutcomeBreakdownReport } from './OutcomeBreakdownReport'
+import { EstablishmentsReport, establishmentsDescription } from './EstablishmentsReport'
+import { OutcomeBreakdownReport, outcomeBreakdownDescription } from './OutcomeBreakdownReport'
 
 type ReportName = 'outcome-breakdown' | 'establishments'
 
-const reports: { name: ReportName; label: string; question: string }[] = [
+const reports: {
+  name: ReportName
+  label: string
+  question: string
+  description: string
+}[] = [
   {
     name: 'outcome-breakdown',
     label: 'Outcome breakdown',
     question: 'How do inspection results distribute across boroughs or cuisines?',
+    description: outcomeBreakdownDescription,
   },
   {
     name: 'establishments',
     label: 'Establishments',
     question: 'Which establishments, and what was their latest result?',
+    description: establishmentsDescription,
   },
 ]
 
@@ -46,28 +53,46 @@ export function ReportsPage() {
       <header className="reports-header">
         <h1>Reports</h1>
 
-        {/* Radios rather than a dropdown: there are two, both are worth seeing without a click, and
-            each carries the question it answers — which is the part that tells somebody which one
-            they want. A select would hide the second option behind an interaction. */}
-        <fieldset className="reports-picker">
-          <legend>Report</legend>
+        {/*
+          The picker and the chosen report's description, in one grid.
 
-          {reports.map((entry) => (
-            <label key={entry.name}>
-              <input
-                type="radio"
-                name="report"
-                value={entry.name}
-                checked={report === entry.name}
-                onChange={() => setReport(entry.name)}
-              />
-              <span>
-                <strong>{entry.label}</strong>
-                <span className="reports-question">{entry.question}</span>
-              </span>
-            </label>
-          ))}
-        </fieldset>
+          The description used to be rendered by the report itself, below everything. Beside the
+          picker it answers the question the picker raises — "what am I about to look at" — at the
+          moment somebody is asking it, rather than after they have already chosen.
+
+          Two columns, and the description is centred against the picker rather than aligned to its
+          top: the picker is the taller element and an unaligned block of text beside it reads as
+          having fallen out of the layout.
+        */}
+        <div className="reports-chooser">
+          {/* Radios rather than a dropdown: there are two, both are worth seeing without a click,
+              and each carries the question it answers — which is the part that tells somebody which
+              one they want. A select would hide the second option behind an interaction.
+
+              Stacked rather than side by side, so the two read as a list of choices rather than as a
+              pair of buttons, and so a third report can be added without reflowing the row. */}
+          <fieldset className="reports-picker">
+            <legend>Report</legend>
+
+            {reports.map((entry) => (
+              <label key={entry.name}>
+                <input
+                  type="radio"
+                  name="report"
+                  value={entry.name}
+                  checked={report === entry.name}
+                  onChange={() => setReport(entry.name)}
+                />
+                <span>
+                  <strong>{entry.label}</strong>
+                  <span className="reports-question">{entry.question}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+
+          <p className="reports-lede">{current.description}</p>
+        </div>
       </header>
 
       {/*

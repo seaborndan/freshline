@@ -30,6 +30,13 @@ import {
 } from './sorting'
 import { useEstablishmentReport } from './useEstablishmentReport'
 
+/** What this report is, in a sentence. Placed by the page — see the note on the other report's. */
+export const establishmentsDescription =
+  'Every establishment matching the filters, with the result of its most recent counted ' +
+  'inspection. A place with no inspection in the selected period is still listed — it is part of ' +
+  'the answer to “what is here”, and dropping it would turn a list of establishments into a list ' +
+  'of inspections.'
+
 export function EstablishmentsReport() {
   const options = useFilterOptions()
 
@@ -137,13 +144,6 @@ export function EstablishmentsReport() {
 
   return (
     <>
-      <p className="reports-lede">
-        Every establishment matching the filters, with the result of its most recent counted
-        inspection. A place with no inspection in the selected period is still listed &mdash; it is
-        part of the answer to &ldquo;what is here&rdquo;, and dropping it would turn a list of
-        establishments into a list of inspections.
-      </p>
-
       <form className="reports-controls" onSubmit={(event) => event.preventDefault()}>
         <label>
           Borough
