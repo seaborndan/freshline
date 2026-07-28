@@ -414,12 +414,29 @@ export function MapView({
         }
 
         hovered = feature.id
+
+        /*
+         * Rebuilt as a plain object rather than passed through.
+         *
+         * `queryRenderedFeatures` returns MapLibre's own Feature class, and `setData` sends its
+         * argument to a web worker — which can only carry things the worker knows how to serialise.
+         * Handing it the class instance produced
+         *
+         *   can't serialize object of unregistered class Pv
+         *
+         * on every hover, as an error the map surfaced while otherwise working perfectly. Copying
+         * out the three fields the sprite needs is both the fix and the whole of what is required.
+         */
         ;(created.getSource(hoverSourceId) as GeoJSONSource | undefined)?.setData({
           type: 'FeatureCollection',
-          // The feature as MapLibre handed it back, which already carries the geometry and the
-          // properties the sprite is chosen from. Cast because the queried feature's type describes
-          // a rendered feature rather than a source one; the shape setData needs is the same.
-          features: [feature as unknown as PinFeature],
+          features: [
+            {
+              type: 'Feature',
+              id: feature.id,
+              geometry: feature.geometry as PinFeature['geometry'],
+              properties: feature.properties as PinFeature['properties'],
+            },
+          ],
         })
       })
 

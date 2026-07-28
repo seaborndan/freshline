@@ -1,76 +1,68 @@
 /**
- * Map pins, computed as pixels.
+ * The map markers, computed as pixels.
  *
- * ## Three attempts came before this one, and why they failed
+ * ## What this is, and what it deliberately is not
  *
- * A flat circle with a blurred dark copy offset underneath — read as a sticker. A shaded sphere —
- * lit correctly and still a ball sitting on a street, because a sphere has no relationship to the
- * place it marks. Then a pin shape that was the right *shape* and visibly soft.
+ * A **glossy orb floating above the map, on a fine needle that comes to a point at the
+ * establishment.** Not a map pin: no fat teardrop, no hole punched through the middle, nothing that
+ * looks like the marker every mapping product has shipped since 2005.
  *
- * The softness had two causes, and both are fixed here rather than argued with:
+ * That distinction is the requirement rather than a preference. Four attempts came before this:
  *
- * - **The sprite was drawn smaller than it is displayed.** A pin grows with how many establishments
- *   share its point, and again while hovered — up to 3.1× together. A 64×88 source scaled to that is
- *   an upsample, and an upsample is blur. This is drawn at **six device pixels per logical pixel**,
- *   so every size the map asks for is a *down*sample.
- * - **Its edges were supersampled.** Averaging 3×3 samples across a boundary produces a soft ramp
- *   several pixels wide. Edges here come from a **signed distance field** instead: the exact distance
- *   to the silhouette, which yields a one-pixel transition that stays crisp at any scale.
+ * 1. A flat circle with a blurred dark copy offset beneath — a sticker, not an object.
+ * 2. A shaded sphere centred on the coordinate — lit correctly, and a ball lying in a street, with
+ *    no relationship to the place it marked.
+ * 3. A classic map pin — the right idea about pointing at something, and entirely generic.
+ * 4. The same pin at six times the resolution — crisp, and still the same generic shape.
  *
- * ## The silhouette, exactly
+ * The lesson across all four: the shading was never the problem. **Silhouette is what an eye reads
+ * first**, and three of those four had the wrong one.
  *
- * A circle unioned with the triangle joining the tip to the two points where the circle's tangents
- * from the tip touch it. With the head at the origin and the tip at `(0, d)`, a tangent point `P`
- * satisfies `|P| = r` and `(P − T) · P = 0`, giving `P = (±(r/d)√(d² − r²), r²/d)`.
+ * ## The silhouette
  *
- * The distance to that union is `min(distance to circle, distance to triangle)`, and the triangle is
- * convex so its distance is the largest of the distances to its three edges. No sampling anywhere.
+ * A circle, and a needle whose half-width falls away as `(1 − t)^1.7` — concave rather than
+ * straight-sided, which is what separates an elegant taper from a triangle. The orb sits clear of
+ * the needle's widest point, so it reads as suspended rather than balanced on top of a spike.
  *
- * ## What makes it read as an object rather than a drawing
+ * Edges come from a signed distance field, smoothstepped over one pixel: exact, and crisp at any
+ * size. Supersampling was the previous version's other source of softness and is gone.
  *
- * Four things, in the order they matter:
+ * ## What makes it pop
  *
- * - **A white collar** around the whole silhouette, so the pin separates from any basemap underneath
- *   it. This is the single largest contributor to "crisp" — a coloured shape on a coloured map has no
- *   edge of its own.
- * - **Spherical shading on the head**, from a surface normal recovered from the distance to the
- *   centre, lit from above and to the left.
- * - **A specular highlight**, tight and offset into the upper left, which is what says "hard,
- *   polished" rather than "matte disc".
- * - **A dark inner shadow where the head meets the tail**, so the head sits *in front of* the tail
- *   rather than being glued to it.
+ * - **A white collar** around the whole silhouette. A coloured shape on a coloured map has no edge
+ *   of its own, and this is the single largest contributor to looking crisp.
+ * - **A vertical gradient** through the orb, bright at the top and deep at the bottom, which is what
+ *   a glossy sphere does under a sky.
+ * - **A hard specular highlight**, small and high and offset left — the wet spot that says polished.
+ * - **A bounce light** along the lower-right rim, dimmer and warmer, as though the ground were
+ *   throwing a little light back up. This is the detail that makes a rendered ball stop looking flat.
+ * - **A needle darker than the orb**, because it is below it and turned away from the light.
  */
 
 /**
- * Device pixels per logical pixel in the source image.
+ * Device pixels per logical pixel of the source image.
  *
- * Six, because a pin is drawn at up to 3.1× its base size (2.3× for a crowded point, 1.35× while
- * hovered) on a display that may itself be 2×. Six covers that with room, and everything below it is
- * a downsample.
+ * Six, because a marker is drawn at up to 3.1× its base size — 2.3× for a crowded point, 1.35× while
+ * hovered — on a display that may itself be 2×. Everything the map asks for is then a downsample,
+ * which is the difference between crisp and soft.
  */
 export const pinPixelRatio = 6
 
-/** Logical size of the base pin. Everything else here is expressed in source pixels. */
-export const pinWidth = 204
-export const pinHeight = 276
+export const pinWidth = 216
+export const pinHeight = 312
 
-const headCentre = { x: 102, y: 96 }
-const headRadius = 84
-const tip = { x: 102, y: 264 }
+const orb = { x: 108, y: 82, radius: 76 }
 
-/** The white collar, in source pixels. About 1.7 logical pixels at the base size. */
+/** Where the needle begins and ends. It starts inside the orb so there is no visible joint. */
+const needleTop = 128
+const needleTopHalfWidth = 30
+const tipY = pinHeight - 4
+
+/** The white collar, in source pixels — about 1.7 logical pixels at the base size. */
 const collar = 10
 
-/** The hole through the head. */
-const holeRadius = 34
-
-/** Above and to the left, normalised. The direction light comes from in almost every rendered object. */
-const light = { x: -0.5, y: -0.62, z: 0.6 }
-
-const tipDistance = tip.y - headCentre.y
-const tangentY = headCentre.y + (headRadius * headRadius) / tipDistance
-const tangentHalfWidth =
-  (headRadius / tipDistance) * Math.sqrt(tipDistance * tipDistance - headRadius * headRadius)
+/** Above, to the left, and towards the viewer. Normalised. */
+const light = { x: -0.48, y: -0.66, z: 0.58 }
 
 export interface PinImage {
   width: number
@@ -96,50 +88,11 @@ function clamp01(value: number): number {
   return Math.max(0, Math.min(1, value))
 }
 
-/** Signed distance to the head. Negative inside. */
-function distanceToHead(x: number, y: number): number {
-  return Math.hypot(x - headCentre.x, y - headCentre.y) - headRadius
-}
-
 /**
- * Signed distance to the tail triangle, as the largest distance to any of its three edges.
+ * Coverage from a signed distance, over one pixel.
  *
- * Exact for a convex shape, which a triangle is. The three edges are the flat top joining the two
- * tangent points, and the two sides running down to the tip.
- */
-function distanceToTail(x: number, y: number): number {
-  const left = { x: tip.x - tangentHalfWidth, y: tangentY }
-  const right = { x: tip.x + tangentHalfWidth, y: tangentY }
-
-  // Top edge: outward is upwards, so being above the tangent line is outside.
-  const top = tangentY - y
-
-  // Each side, as the distance to its line with the outward normal pointing away from the centre.
-  const side = (from: { x: number; y: number }, towards: number) => {
-    const dx = tip.x - from.x
-    const dy = tip.y - from.y
-    const length = Math.hypot(dx, dy)
-
-    // Normal perpendicular to the edge, pointing outwards on the given side.
-    const nx = (towards * dy) / length
-    const ny = (-towards * dx) / length
-
-    return (x - from.x) * nx + (y - from.y) * ny
-  }
-
-  return Math.max(top, side(left, -1), side(right, 1))
-}
-
-/** Signed distance to the pin's outline — the union of head and tail. */
-function distanceToPin(x: number, y: number): number {
-  return Math.min(distanceToHead(x, y), distanceToTail(x, y))
-}
-
-/**
- * Coverage from a signed distance, with a one-pixel transition.
- *
- * `smoothstep` rather than a linear ramp, so the edge has no visible corner where it meets full
- * opacity — the difference between "antialiased" and "antialiased and clean".
+ * `smoothstep` rather than a linear ramp, so there is no visible corner where the edge reaches full
+ * opacity — the difference between antialiased and cleanly antialiased.
  */
 function coverage(distance: number): number {
   const t = clamp01(0.5 - distance)
@@ -147,12 +100,46 @@ function coverage(distance: number): number {
   return t * t * (3 - 2 * t)
 }
 
+function distanceToOrb(x: number, y: number): number {
+  return Math.hypot(x - orb.x, y - orb.y) - orb.radius
+}
+
 /**
- * A pin in one colour.
+ * Distance to the needle.
  *
- * @param fill the head's colour, from `pinStyle.ts`
- * @param rim the colour the shaded side and the outline move towards — the state's own stroke, or
- *   the closure colour, so a closed establishment stays distinguishable
+ * Its half-width falls as `(1 − t)^1.7`, which gives a concave taper — sides that curve inwards
+ * rather than running straight to the tip. A straight-sided triangle is what makes a marker look
+ * like clip art.
+ */
+function distanceToNeedle(x: number, y: number): number {
+  // Clamped into the needle's own span, so a point above or below it measures to the nearest end
+  // rather than to an imaginary continuation. Returning the vertical gap alone — which an earlier
+  // version did — made every pixel in the strip below the tip count as inside, and the sprite drew
+  // an opaque band across the bottom of its own bounding box. Caught by a test asserting the corners
+  // are transparent.
+  const clampedY = Math.max(needleTop, Math.min(tipY, y))
+
+  const t = (clampedY - needleTop) / (tipY - needleTop)
+  const halfWidth = needleTopHalfWidth * Math.pow(1 - t, 1.7)
+
+  const lateral = Math.abs(x - orb.x) - halfWidth
+  const vertical = Math.abs(y - clampedY)
+
+  // Inside the span: the lateral distance is the answer, and it may be negative. Outside it: the two
+  // combine, and a point directly beyond the tip is `vertical` away.
+  return vertical === 0 ? lateral : Math.hypot(Math.max(lateral, 0), vertical)
+}
+
+function distanceToMarker(x: number, y: number): number {
+  return Math.min(distanceToOrb(x, y), distanceToNeedle(x, y))
+}
+
+/**
+ * One marker.
+ *
+ * @param fill the orb's colour, from `pinStyle.ts`
+ * @param rim the colour the shaded side moves towards — the state's own stroke, or the closure
+ *   colour, so a closed establishment stays distinguishable
  */
 export function pinImage(fill: string, rim: string): PinImage {
   const base = parseHex(fill)
@@ -164,7 +151,7 @@ export function pinImage(fill: string, rim: string): PinImage {
       const x = px + 0.5
       const y = py + 0.5
 
-      const distance = distanceToPin(x, y)
+      const distance = distanceToMarker(x, y)
       const outer = coverage(distance - collar)
 
       if (outer <= 0) {
@@ -174,64 +161,55 @@ export function pinImage(fill: string, rim: string): PinImage {
       const offset = (py * pinWidth + px) * 4
       const body = coverage(distance)
 
-      // The collar. White rather than a darker outline, because the basemap is pale and a pin needs
-      // to separate from it — a dark outline on a light map merges with every road underneath.
+      // The collar. White rather than a dark outline: the basemap is pale, and a dark outline merges
+      // with every road underneath it.
       let r = 255
       let g = 255
       let b = 253
 
       if (body > 0) {
-        // A sphere's normal, recovered from the distance to the head's centre. Used across the whole
-        // pin: on the tail it keeps shading continuous rather than stopping at a seam.
-        const nx = (x - headCentre.x) / headRadius
-        const ny = (y - headCentre.y) / headRadius
-        const nz = Math.sqrt(Math.max(0.05, 1 - nx * nx - ny * ny))
+        // The orb's surface normal, recovered from the distance to its centre. Used across the whole
+        // marker so shading stays continuous into the needle instead of stopping at a seam.
+        const nx = (x - orb.x) / orb.radius
+        const ny = (y - orb.y) / orb.radius
+        const nz = Math.sqrt(Math.max(0.04, 1 - nx * nx - ny * ny))
 
         const lambert = clamp01(nx * light.x + ny * light.y + nz * light.z)
 
-        // Ambient well above zero: an unlit side that goes black reads as a hole in the map.
-        const shade = 0.62 + 0.58 * lambert
+        // Ambient held well above zero: a dark side that reaches black reads as a hole in the map.
+        let shade = 0.58 + 0.62 * lambert
 
-        // Tight and bright. This is the highlight that makes a surface look polished.
-        const specular = Math.pow(lambert, 32) * 0.9
+        // A vertical gradient through the orb on top of the lighting — bright at the crown, deeper
+        // at the base. This is most of what a glossy sphere looks like under an open sky.
+        const height = clamp01((y - (orb.y - orb.radius)) / (orb.radius * 2))
+        shade *= 1.12 - 0.3 * height
 
-        // Where the head overlaps the tail, darken — so the head reads as being in front of it
-        // rather than fused to it. Strongest just below the head's widest point.
-        const seam =
-          clamp01((y - tangentY) / (headRadius * 0.9)) *
-          clamp01((headRadius + 6 - Math.abs(x - headCentre.x)) / headRadius)
-        const occlusion = 1 - 0.3 * seam
+        // The needle is beneath the orb and turned away from the light, so it is darker throughout.
+        // Ramped rather than stepped, so the transition is not a visible band.
+        const onNeedle = clamp01((y - (orb.y + orb.radius * 0.35)) / (orb.radius * 0.9))
+        shade *= 1 - 0.34 * onNeedle
 
-        let litR = base.r * shade * occlusion
-        let litG = base.g * shade * occlusion
-        let litB = base.b * shade * occlusion
+        // Bounce light along the lower-right rim, as though the ground were throwing a little back
+        // up. Small, and the detail that stops a rendered ball looking flat.
+        const bounce =
+          Math.pow(clamp01(-(nx * light.x + ny * light.y)), 3) *
+          clamp01(1 - Math.abs(distanceToOrb(x, y) + 9) / 10) *
+          0.42
 
-        // A thin inner edge in the stroke colour, just inside the collar. Gives the colour a
-        // boundary of its own so it does not float in the white.
-        const innerEdge = clamp01(1 - Math.abs(distance + 6) / 7)
-        litR += (edge.r - litR) * innerEdge * 0.75
-        litG += (edge.g - litG) * innerEdge * 0.75
-        litB += (edge.b - litB) * innerEdge * 0.75
+        // Tight, bright, and high on the left. The wet spot that says hard and polished.
+        const specular = Math.pow(lambert, 34) * 1.05
+
+        let litR = base.r * shade
+        let litG = base.g * shade
+        let litB = base.b * shade
+
+        litR += (edge.r - litR) * bounce
+        litG += (edge.g - litG) * bounce
+        litB += (edge.b - litB) * bounce
 
         litR += specular * 255
         litG += specular * 255
         litB += specular * 255
-
-        // The hole. Filled with the page's own background so it reads as punched through the pin,
-        // with its own soft inner shadow at the top where the head would cast onto it.
-        const holeDistance = Math.hypot(x - headCentre.x, y - headCentre.y) - holeRadius
-        const hole = coverage(holeDistance)
-
-        if (hole > 0) {
-          const insetShadow = clamp01(1 - Math.abs(holeDistance + 5) / 6) * 0.35
-          const holeR = 249 - 249 * insetShadow * 0.35
-          const holeG = 249 - 249 * insetShadow * 0.35
-          const holeB = 247 - 247 * insetShadow * 0.35
-
-          litR += (holeR - litR) * hole
-          litG += (holeG - litG) * hole
-          litB += (holeB - litB) * hole
-        }
 
         r += (litR - r) * body
         g += (litG - g) * body
