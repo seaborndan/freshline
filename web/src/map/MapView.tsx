@@ -500,7 +500,7 @@ export function MapView({
             'icon-ignore-placement': true,
 
             // The sprite is drawn upright regardless of bearing, so rotating the map does not tip
-            // the spheres over and break the illusion that they are lit from one direction.
+            // the pins over so they point sideways at nothing.
             // The tip marks the establishment, so the sprite hangs above its coordinate rather than
             // being centred on it. A centred pin covers the thing it points at with its own head.
             'icon-anchor': 'bottom',

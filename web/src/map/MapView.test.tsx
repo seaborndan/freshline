@@ -177,7 +177,7 @@ describe('MapView', () => {
    * Two layers over one source, split so the rare states are not painted over by their neighbours.
    *
    * There is no separate shadow layer any more: an offset blurred copy read as a sticker rather than
-   * as an object, and the spheres carry their own shading in the sprite. Two layers rather than
+   * as an object, and the pins carry their own shading and outline in the sprite. Two layers rather
    * three is the cheaper arrangement as well as the better-looking one.
    */
   it('adds two pin layers over one source', () => {
@@ -192,8 +192,8 @@ describe('MapView', () => {
   })
 
   /**
-   * Symbols, not circles — a circle layer has no gradient or lighting, so a sphere has to be an
-   * image. Collision detection is off on both counts: a symbol layer's default is to *hide* icons
+   * Symbols, not circles — a circle layer cannot draw a shape that tapers to a point, so a pin has
+   * to be an image. Collision detection is off on both counts: a symbol layer's default is to *hide* icons
    * that overlap, and a dense block of restaurants is the honest picture rather than a placement
    * problem.
    */
