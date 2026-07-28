@@ -82,10 +82,10 @@ const countScale: Expression = [
 const sizedRadius: Expression = ['*', stateRadius, countScale]
 
 /**
- * How large a sphere sprite is drawn, as a multiple of its 64px source.
+ * How large a pin sprite is drawn, as a multiple of its source size.
  *
  * `icon-size` rather than `circle-radius`: the pins are a symbol layer now, drawing the shaded
- * spheres in `sphereSprite.ts`. The arithmetic is otherwise the same one the circles used — a state
+ * pins in `pinSprite.ts`. The arithmetic is otherwise the same one the circles used — a state
  * size, scaled by how many establishments share the point, grown while hovered, all interpolated
  * over zoom.
  *
@@ -113,7 +113,7 @@ function sizeAcrossZoom(scale: Expression): Expression {
 export const iconSize: Expression = sizeAcrossZoom(iconScale)
 
 /**
- * How much a hovered sphere grows.
+ * How much a hovered pin grows.
  *
  * ## Why this is a separate layer rather than a `feature-state` expression
  *
@@ -137,7 +137,7 @@ export const iconSize: Expression = sizeAcrossZoom(iconScale)
 export const hoverIconSize: Expression = sizeAcrossZoom(['*', iconScale, 1.35])
 
 /**
- * Which sphere to draw.
+ * Which pin to draw.
  *
  * Two images per state, because closure is a separate fact from the result and has to survive the
  * move to sprites. A circle layer expressed it as a different stroke colour; a sprite bakes its

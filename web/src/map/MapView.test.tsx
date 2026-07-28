@@ -55,8 +55,8 @@ vi.mock('maplibre-gl', () => ({
       }
       addSource(...args)
     }
-    // The sphere sprites. hasImage answers false so registration runs; the pixels themselves are
-    // asserted in sphereSprite.test.ts, where they can actually be read.
+    // The pin sprites. hasImage answers false so registration runs; the pixels themselves are
+    // asserted in pinSprite.test.ts, where they can actually be read.
     hasImage = () => false
     addImage = addImage
     addLayer = (...args: unknown[]) => {
