@@ -386,7 +386,7 @@ Documentation for each slice is written **as part of that slice**, not deferred.
 | 5 | Detail panel with inspection history | **done** |
 | 6 | Loading, error, empty states and keyboard navigation | **done** |
 | 7 | Deployment, and the URL | **in progress** — repository is deployable; no Azure resource exists yet |
-| 8 | Consolidation — ADR, README, roadmap, log | not started |
+| 8 | Consolidation — ADR, README, roadmap, log | **in progress** — ADR-0006 written; log waits on the deploy |
 
 **Needs line-by-line human review before merge:** any new dependency, and anything touching
 deployment configuration or secrets.
@@ -984,6 +984,12 @@ clean `--no-incremental` Release build shows it; CI showed it too, in output nob
 Fixed, and the three forwarded-headers tests still pass, which is what makes the swap
 behaviour-preserving rather than merely compiling.
 
+The design itself graduated to [ADR-0006](../adr/0006-trusting-the-ingress-not-the-caller.md), because
+it outlives the milestone and because it supersedes an instruction ADR-0005 had already written down.
+ADR-0005 is left untouched: ADR-0001 says decisions are immutable and a changed one gets a new record
+with both kept, and "the record of having been wrong is part of the value" is the whole point of the
+practice rather than a formality.
+
 **Raised rather than quietly fixed:** a clean build of this solution now emits **zero** warnings, so
 promoting warnings to errors in `Directory.Build.props` would cost nothing today and would stop the
 next deprecation from merging unread. That is a repository-wide policy change affecting every future
@@ -1032,6 +1038,15 @@ Not specific to M5. Repeated because a milestone brief that omits them reads as 
 - **Nothing has been deployed yet.** The repository is deployable — image, build guard, documented
   steps — and no Azure resource exists. The forged-header check against a real ingress, which is the
   only way to confirm `ProxyHopCount` matches the real topology, is waiting on that.
+- **`/health/ready` cannot be a continuously-polled probe against a serverless database.** It logs
+  in, a login is an auto-resume trigger, and a database that never pauses spends Azure SQL's free
+  grant in under two days. The endpoint keeps its value for a human or an occasional monitor; it
+  loses it as a platform readiness probe. Written up in [`docs/deployment.md`](../deployment.md),
+  and it is a genuine loss rather than a workaround — on an always-on database it is the right
+  endpoint to poll.
+- **The cost of a cold visit is unmeasured.** EF Core retry now absorbs the documented 40613 that a
+  paused database returns to the first connection, but "absorbed" is not "instant", and how long a
+  first visitor actually waits can only be measured against a deployed instance.
 - **The rate limits are chosen, not load tested.** A real client panning a map is the first thing that
   will exercise them.
 - ~~**The `outcome` filter is unmeasured**~~ — measured in slice 4 against the live database, warm

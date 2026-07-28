@@ -136,10 +136,13 @@ error shape.
 > cryptography rather than a promise. Reasoning in
 > [ADR-0005](adr/0005-public-read-surface-and-token-validation.md).
 >
-> **Carried forward:** the rate limiter partitions on the client IP, which is the proxy's address the
-> moment anything sits in front of it — a **deploy-time blocker for M5**, not a cleanup. The limits
-> themselves are chosen rather than load tested. Nothing issues tokens yet, and stateless bearer
-> tokens have no revocation by construction.
+> **Carried forward:** ~~the rate limiter partitions on the client IP, which is the proxy's address
+> the moment anything sits in front of it~~ — cleared in M5, and not the way ADR-0005 said it would
+> be: the proxy's addresses turned out to be unknowable on Container Apps, so trust is bounded by the
+> number of proxies instead of a list of their addresses. See
+> [ADR-0006](adr/0006-trusting-the-ingress-not-the-caller.md). The limits themselves are still chosen
+> rather than load tested. Nothing issues tokens yet, and stateless bearer tokens have no revocation
+> by construction.
 
 ---
 
