@@ -33,7 +33,7 @@ function pin(id: number, name: string, outcome: 'Good' | 'Poor' | null): MapEsta
 describe('DetailPanel', () => {
   it('shows nothing when nothing has been clicked', () => {
     const { container } = render(
-      <DetailPanel candidates={[]} view={idle} selectedId={null} onSelect={vi.fn()} onClose={vi.fn()} />,
+      <DetailPanel candidates={[]} view={idle} selectedId={null} onSelect={vi.fn()} onCentre={vi.fn()} onClose={vi.fn()} />,
     )
 
     expect(container).toBeEmptyDOMElement()
@@ -49,6 +49,7 @@ describe('DetailPanel', () => {
         view={idle}
         selectedId={null}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -68,6 +69,7 @@ describe('DetailPanel', () => {
         view={idle}
         selectedId={null}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -86,6 +88,7 @@ describe('DetailPanel', () => {
         view={idle}
         selectedId={null}
         onSelect={onSelect}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -102,6 +105,7 @@ describe('DetailPanel', () => {
         view={{ detail: loaded, isLoading: false, failure: null }}
         selectedId={21}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -120,6 +124,7 @@ describe('DetailPanel', () => {
         view={{ detail: loaded, isLoading: false, failure: null }}
         selectedId={21}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -135,6 +140,7 @@ describe('DetailPanel', () => {
         view={{ detail: loaded, isLoading: false, failure: null }}
         selectedId={21}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -154,6 +160,7 @@ describe('DetailPanel', () => {
         view={{ detail: loaded, isLoading: false, failure: null }}
         selectedId={21}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -177,6 +184,7 @@ describe('DetailPanel', () => {
         view={{ detail: neverInspected, isLoading: false, failure: null }}
         selectedId={922}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -192,6 +200,7 @@ describe('DetailPanel', () => {
         view={{ detail: null, isLoading: false, failure: 'No establishment has id 999999.' }}
         selectedId={999999}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -209,6 +218,7 @@ describe('DetailPanel', () => {
         view={{ detail: loaded, isLoading: false, failure: null }}
         selectedId={21}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={onClose}
       />,
     )
@@ -228,6 +238,7 @@ describe('DetailPanel', () => {
         view={{ detail: loaded, isLoading: false, failure: null }}
         selectedId={21}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
@@ -245,12 +256,60 @@ describe('DetailPanel', () => {
         view={{ detail: loaded, isLoading: false, failure: null }}
         selectedId={21}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={vi.fn()}
       />,
     )
 
     // The container, not the close button, so what gets announced is the name rather than "Close".
     expect(screen.getByRole('heading', { name: 'POPEYES' }).closest('section')).toHaveFocus()
+  })
+
+  /**
+   * The camera control lives on the record rather than on the map, because it is only ever wanted
+   * while something is open — and the panel is the only part of the page that knows that.
+   */
+  it('offers to centre the map on the open establishment', async () => {
+    const onCentre = vi.fn()
+    const user = userEvent.setup()
+
+    render(
+      <DetailPanel
+        candidates={[pin(21, 'POPEYES', 'Good')]}
+        view={{ detail: loaded, isLoading: false, failure: null }}
+        selectedId={21}
+        onSelect={vi.fn()}
+        onCentre={onCentre}
+        onClose={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /centre on map/i }))
+
+    expect(onCentre).toHaveBeenCalled()
+  })
+
+  /**
+   * 511 establishments in this data have no coordinates — the city publishes zeroes and the mapper
+   * drops both components together. A button that silently did nothing would be worse than none.
+   */
+  it('offers no camera control for an establishment that cannot be drawn', () => {
+    render(
+      <DetailPanel
+        candidates={[]}
+        view={{
+          detail: { ...loaded, latitude: null, longitude: null },
+          isLoading: false,
+          failure: null,
+        }}
+        selectedId={21}
+        onSelect={vi.fn()}
+        onCentre={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
+
+    expect(screen.queryByRole('button', { name: /centre on map/i })).not.toBeInTheDocument()
   })
 
   it('closes on Escape', async () => {
@@ -263,6 +322,7 @@ describe('DetailPanel', () => {
         view={{ detail: loaded, isLoading: false, failure: null }}
         selectedId={21}
         onSelect={vi.fn()}
+        onCentre={vi.fn()}
         onClose={onClose}
       />,
     )

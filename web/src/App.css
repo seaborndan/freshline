@@ -1056,3 +1056,23 @@ main {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
+
+/* Takes the camera back to the open establishment. Beside the address, because that is the part of
+   the record it acts on. */
+.detail-centre {
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 550;
+  margin: 0.5rem 0 0;
+  padding: 0.375rem 0.75rem;
+  border: 1px solid #d5d4cd;
+  border-radius: 6px;
+  background: #fcfcfb;
+  color: #0b0b0b;
+  cursor: pointer;
+}
+
+.detail-centre:hover {
+  border-color: #2a78d6;
+  color: #2a78d6;
+}

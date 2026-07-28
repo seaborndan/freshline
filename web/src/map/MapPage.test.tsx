@@ -178,6 +178,54 @@ describe('MapPage', () => {
     expect(fetchMap).toHaveBeenCalledTimes(2)
   })
 
+  /**
+   * The camera control on the record.
+   *
+   * The property worth defending is that pressing it *again* works. The map's focus effect used to
+   * key on the coordinates alone, and asking to be taken to the same establishment twice — press,
+   * pan away, press again — is the same coordinates and would not have re-fired. A token per request
+   * is what makes a repeated ask a new ask.
+   */
+  describe('centring on the open establishment', () => {
+    async function openRecord() {
+      render(<MapPage />)
+      await showMap()
+
+      clicked = [{ properties: { id: 1328 } }]
+      await clickMap()
+
+      // The record is fetched before the panel can offer to centre on it.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0)
+      })
+    }
+
+    it('takes the camera there when asked', async () => {
+      await openRecord()
+      easeTo.mockClear()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /centre on map/i }))
+      })
+
+      expect(easeTo).toHaveBeenCalledTimes(1)
+    })
+
+    it('takes it there again on a second press', async () => {
+      await openRecord()
+      easeTo.mockClear()
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /centre on map/i }))
+      })
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /centre on map/i }))
+      })
+
+      expect(easeTo).toHaveBeenCalledTimes(2)
+    })
+  })
+
   describe('framing a borough', () => {
     /**
      * The reported problem: choosing a borough while looking at somewhere else leaves the map empty,

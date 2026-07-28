@@ -159,11 +159,16 @@ export interface MapViewProps {
   /**
    * A point the map should move to, or null to leave the camera alone.
    *
-   * Exists for one case: a link carrying `?id=` names an establishment that is usually nowhere near
-   * the opening view, so the record would open while the map showed a different part of the city.
-   * The caller decides when that is worth a camera move; this only carries it out.
+   * Exists for two cases: a link carrying `?id=` names an establishment that is usually nowhere near
+   * the opening view, and the panel's own "Centre on map" button. The caller decides when a move is
+   * warranted; this only carries it out.
+   *
+   * **`token` is what makes the second case work.** The effect below cannot key on the coordinates
+   * alone — pressing the button, panning away, and pressing it again asks to go to the *same* place,
+   * and an effect watching only latitude and longitude would not run the second time. The token
+   * changes per request, so a repeated ask is a new ask.
    */
-  focusOn?: { latitude: number; longitude: number } | null
+  focusOn?: { latitude: number; longitude: number; token: number } | null
 
   /**
    * A box the map should frame, or null to leave the camera alone.
@@ -577,10 +582,11 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- constructed once; see above.
   }, [])
 
-  // Moves the camera when the caller asks, and only then. Keyed on the coordinates rather than on
-  // an object identity so that re-rendering with the same point does not re-fly to it.
+  // Moves the camera when the caller asks, and only then — keyed on the request rather than on
+  // where it points, so asking twice for the same establishment moves twice. See `focusOn`.
   const focusLatitude = focusOn?.latitude ?? null
   const focusLongitude = focusOn?.longitude ?? null
+  const focusToken = focusOn?.token ?? null
 
   useEffect(() => {
     if (focusLatitude === null || focusLongitude === null || map.current === null) {
@@ -594,7 +600,10 @@ export function MapView({
       zoom: Math.max(map.current.getZoom(), 16),
       duration: 600,
     })
-  }, [focusLatitude, focusLongitude])
+    // The token is the trigger and the coordinates are read when it fires. Listing them as
+    // dependencies as well would be misleading: they are not what decides whether to move.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusToken])
 
   // Frames a box when the caller asks. Keyed on the four edges rather than on object identity, so a
   // re-render carrying an equal box does not re-fly to it — the same reasoning as `focusOn` above.

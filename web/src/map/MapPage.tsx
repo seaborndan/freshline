@@ -103,7 +103,36 @@ export function MapPage() {
    * and never recomputed. The viewport is read through a ref for the same reason: as a dependency it
    * would re-arm this on every pan.
    */
-  const [focusOn, setFocusOn] = useState<{ latitude: number; longitude: number } | null>(null)
+  const [focusOn, setFocusOn] = useState<{
+    latitude: number
+    longitude: number
+    token: number
+  } | null>(null)
+
+  /**
+   * Rises once per camera request.
+   *
+   * The map's focus effect keys on this rather than on the coordinates, so asking to be taken to the
+   * same establishment twice — pan away, press the button again — is two requests rather than one.
+   * A counter rather than a timestamp: deterministic, and a test can assert it.
+   */
+  const focusToken = useRef(0)
+
+  /** Takes the camera to the open establishment. Bound to the panel's button. */
+  const centreOnSelection = useCallback(() => {
+    const record = detail.detail
+
+    if (record === null || record.latitude === null || record.longitude === null) {
+      return
+    }
+
+    focusToken.current += 1
+    setFocusOn({
+      latitude: record.latitude,
+      longitude: record.longitude,
+      token: focusToken.current,
+    })
+  }, [detail.detail])
 
   /**
    * The borough to frame, or null.
@@ -204,7 +233,12 @@ export function MapPage() {
       return
     }
 
-    setFocusOn({ latitude: record.latitude, longitude: record.longitude })
+    focusToken.current += 1
+    setFocusOn({
+      latitude: record.latitude,
+      longitude: record.longitude,
+      token: focusToken.current,
+    })
   }, [detail.detail])
 
   // The address bar follows the state, at the point the state settles. replaceState rather than
@@ -261,6 +295,7 @@ export function MapPage() {
           view={detail}
           selectedId={selectedId}
           onSelect={setSelectedId}
+          onCentre={centreOnSelection}
           onClose={handleClose}
         />
       </main>
