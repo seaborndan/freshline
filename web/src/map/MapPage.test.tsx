@@ -293,9 +293,8 @@ describe('MapPage', () => {
     expect(status).toHaveTextContent('at 5 addresses')
   })
 
-  // Which rows a truncated response dropped is arbitrary, so a plain count would be a number the
-  // data does not support — and the point count is withheld entirely, since it would describe an
-  // arbitrary subset.
+  // A plain count would be a number the data does not support, and the address count is withheld
+  // entirely because it would describe a subset.
   it('never states a bare count from a truncated response', async () => {
     fetchMap.mockResolvedValue({ ...loaded, isTruncated: true })
 
@@ -306,6 +305,21 @@ describe('MapPage', () => {
     expect(status).toHaveTextContent(/more than 5 places/i)
     expect(status).toHaveTextContent(/zoom in/i)
     expect(status).not.toHaveTextContent(/addresses/i)
+  })
+
+  /**
+   * The subset a truncated view shows is *not* arbitrary — the API returns the most severe results
+   * first — and a reader has to be told, because at city zoom the map can be showing no `Good`
+   * establishments at all. Dropping them is right; letting somebody read the result as a picture of
+   * the city is not.
+   */
+  it('says a truncated map is showing the worst results, not a sample', async () => {
+    fetchMap.mockResolvedValue({ ...loaded, isTruncated: true })
+
+    render(<MapPage />)
+    await showMap()
+
+    expect(screen.getByRole('status')).toHaveTextContent(/worst results first/i)
   })
 
   it('distinguishes an empty view from a failure', async () => {

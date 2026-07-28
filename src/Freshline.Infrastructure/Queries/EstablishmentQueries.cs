@@ -166,8 +166,46 @@ internal sealed class EstablishmentQueries(FreshlineDbContext dbContext) : IEsta
         // the caller its viewport holds more than it was given, without a second COUNT over the box.
         int probeSize = viewport.Limit + 1;
 
+        /*
+         * Worst first, so that what survives truncation is what matters.
+         *
+         * This used to order by id, which correlates with nothing — and the consequence was reported
+         * from a browser: zooming out made red dots vanish. Measured over the same area, a tight
+         * viewport returned 2 `Poor` establishments untruncated, a wider one 8, and the widest just
+         * **3** — fewer while showing more of the city, because the 1,000-row cap was dropping rows
+         * in id order and `Poor` is 93 rows out of 23,528.
+         *
+         * A cap is unavoidable and its *contents* are a choice. Ordering by severity means zooming
+         * out drops `Good` establishments — of which there are 12,861 and one more tells a reader
+         * nothing — and keeps every failed inspection it can. The map still cannot claim to show
+         * everything, and `isTruncated` still says so; what changes is that the things it drops are
+         * the things worth dropping.
+         *
+         * Ranked in a CASE rather than on the enum's own numbers, which are ordered by nothing in
+         * particular: Ungraded is 0 and Good is 1. Never-inspected sorts last of all — it is a
+         * published state rather than a result, and at 3,605 rows it would otherwise fill the cap
+         * on its own.
+         */
         List<MapEstablishment> rows = await establishments
-            .OrderBy(establishment => establishment.Id)
+            .OrderBy(establishment => establishment.Inspections
+                .OrderByDescending(inspection => inspection.InspectedOn)
+                .ThenByDescending(inspection => inspection.Id)
+                // Nullable, and that is load-bearing rather than tidy. `FirstOrDefault` over an
+                // `int` yields **0** when an establishment has no inspections at all — and 0 is
+                // `Poor`'s rank, so every never-inspected establishment sorted as though it were a
+                // failed one. Measured before the cast was added: the widest viewport came back with
+                // 920 never-inspected rows and not one `Good`.
+                .Select(inspection => (int?)(
+                    inspection.Outcome == InspectionOutcome.Poor ? 0
+                    : inspection.Outcome == InspectionOutcome.PendingReinspection ? 1
+                    : inspection.Outcome == InspectionOutcome.Fair ? 2
+                    : inspection.Outcome == InspectionOutcome.Ungraded ? 3
+                    : 4))
+                .FirstOrDefault() ?? 5)
+
+            // A total order, so which rows survive the cap does not depend on the query plan. Without
+            // it two runs of the same viewport could return different establishments.
+            .ThenBy(establishment => establishment.Id)
             .Take(probeSize)
             .Select(establishment => new MapEstablishment
             {

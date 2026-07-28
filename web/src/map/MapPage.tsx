@@ -264,15 +264,22 @@ function Status({ view, filters }: { view: EstablishmentsView; filters: Establis
 
   const { items, isTruncated } = result
 
-  // Nothing derived from a truncated response may be stated as a fact about the area: which rows
-  // were dropped is arbitrary, so "1,000 places here" would be a number the data does not support.
-  // "More than" is the strongest true claim available, and the point count is withheld entirely —
-  // it would describe an arbitrary subset.
+  /*
+   * Nothing derived from a truncated response may be stated as a fact about the area: "1,000 places
+   * here" is a number the data does not support, so "more than" is the strongest true claim
+   * available and the address count is withheld entirely — it would describe a subset.
+   *
+   * **And the subset is no longer arbitrary, which the reader has to be told.** The API returns the
+   * most severe results first, so a truncated view keeps the failed inspections and drops the good
+   * ones — at city zoom it can be showing no `Good` establishments at all. That is the right thing
+   * to drop, and it makes the map look worse than the city is. Saying so is the difference between
+   * a deliberate bias and a misleading picture.
+   */
   if (isTruncated) {
     return (
       <p role="status">
-        More than {items.length.toLocaleString('en-GB')} places here — too many to show at once. Zoom
-        in to see all of them.
+        More than {items.length.toLocaleString('en-GB')} places here — too many to show at once, so
+        this is the worst results first. Zoom in to see everything, good and bad.
       </p>
     )
   }
