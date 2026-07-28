@@ -19,12 +19,17 @@
 
 import {
   inspectionOutcomes,
+  reportDimensions,
   type DatasetSummary,
   type EstablishmentDetail,
   type EstablishmentFilterOptions,
   type InspectionDetail,
   type InspectionOutcome,
   type LocalityBounds,
+  type OutcomeBreakdown,
+  type OutcomeBreakdownRow,
+  type ProportionEstimate,
+  type ReportDimension,
   type LatestInspectionSummary,
   type MapEstablishment,
   type MapResult,
@@ -429,4 +434,143 @@ export function readDatasetSummary(body: unknown): DatasetSummary {
         ? null
         : readPlainDateString(source.latestInspectionOn, 'latestInspectionOn'),
   }
+}
+
+
+/**
+ * `GET /reports/outcome-breakdown`.
+ *
+ * Checked harder than the map responses, and for a different reason. A wrong pin is visibly in the
+ * wrong place; a wrong number in a report is indistinguishable from a right one, and the reader has
+ * already been told it is a finding.
+ */
+export function readOutcomeBreakdown(body: unknown): OutcomeBreakdown {
+  const source = readObject(body, 'response')
+
+  const dimension = readString(source.dimension, 'dimension')
+
+  if (!(reportDimensions as readonly string[]).includes(dimension)) {
+    fail(
+      'dimension',
+      `expected one of ${reportDimensions.join(', ')}, got ${JSON.stringify(dimension)}`,
+    )
+  }
+
+  return {
+    dimension: dimension as ReportDimension,
+    rows: readArray(source.rows, 'rows').map((entry, index) =>
+      readOutcomeBreakdownRow(entry, `rows[${index}]`),
+    ),
+    ungroupedEstablishments: readCount(
+      source.ungroupedEstablishments,
+      'ungroupedEstablishments',
+    ),
+    hasDateRange: readBoolean(source.hasDateRange, 'hasDateRange'),
+  }
+}
+
+function readCount(value: unknown, path: string): number {
+  const count = readNumber(value, path)
+
+  if (!Number.isInteger(count) || count < 0) {
+    fail(path, `expected a count, got ${JSON.stringify(count)}`)
+  }
+
+  return count
+}
+
+function readOutcomeBreakdownRow(value: unknown, path: string): OutcomeBreakdownRow {
+  const source = readObject(value, path)
+
+  const group = readString(source.group, `${path}.group`)
+
+  if (group === '') {
+    fail(`${path}.group`, 'expected a group name, got an empty string')
+  }
+
+  const row: OutcomeBreakdownRow = {
+    group,
+    total: readCount(source.total, `${path}.total`),
+    neverInspected: readCount(source.neverInspected, `${path}.neverInspected`),
+    noInspectionInPeriod: readCount(source.noInspectionInPeriod, `${path}.noInspectionInPeriod`),
+    good: readCount(source.good, `${path}.good`),
+    fair: readCount(source.fair, `${path}.fair`),
+    poor: readCount(source.poor, `${path}.poor`),
+    ungraded: readCount(source.ungraded, `${path}.ungraded`),
+    pendingReinspection: readCount(source.pendingReinspection, `${path}.pendingReinspection`),
+    inspected: readCount(source.inspected, `${path}.inspected`),
+    poorShare: readProportion(source.poorShare, `${path}.poorShare`),
+  }
+
+  /*
+   * The arithmetic a reader will do in their head, checked before they do it.
+   *
+   * Every establishment in a group is in exactly one bucket: it has a counted outcome, or it has
+   * never been inspected, or it was inspected outside the period. A table whose columns do not add
+   * up to its total is one a reader is right to distrust — and this is the failure that no type can
+   * catch, because every individual number is a perfectly good non-negative integer.
+   */
+  const accounted = row.inspected + row.neverInspected + row.noInspectionInPeriod
+
+  if (accounted !== row.total) {
+    fail(
+      path,
+      `the columns do not account for the total: inspected ${row.inspected} + never inspected ` +
+        `${row.neverInspected} + not inspected in period ${row.noInspectionInPeriod} = ` +
+        `${accounted}, but total is ${row.total}`,
+    )
+  }
+
+  const outcomes = row.good + row.fair + row.poor + row.ungraded + row.pendingReinspection
+
+  if (outcomes !== row.inspected) {
+    fail(
+      `${path}.inspected`,
+      `the five outcome counts sum to ${outcomes}, but inspected is ${row.inspected}`,
+    )
+  }
+
+  return row
+}
+
+/**
+ * A rate and its evidence, arriving together.
+ *
+ * `total` is rejected when it disagrees with the row's own `inspected`, elsewhere — here the check
+ * is that the estimate is internally coherent, because ADR-0007's whole position is that a
+ * percentage without a trustworthy denominator is not a finding.
+ */
+function readProportion(value: unknown, path: string): ProportionEstimate {
+  const source = readObject(value, path)
+
+  const count = readCount(source.count, `${path}.count`)
+  const total = readCount(source.total, `${path}.total`)
+
+  if (count > total) {
+    fail(`${path}.count`, `expected at most total (${total}), got ${count}`)
+  }
+
+  const observed = readNumber(source.observed, `${path}.observed`)
+  const supportedAtLeast = readNumber(source.supportedAtLeast, `${path}.supportedAtLeast`)
+
+  for (const [name, rate] of [
+    ['observed', observed],
+    ['supportedAtLeast', supportedAtLeast],
+  ] as const) {
+    if (rate < 0 || rate > 1) {
+      fail(`${path}.${name}`, `expected a proportion between 0 and 1, got ${rate}`)
+    }
+  }
+
+  // A lower bound above the value it bounds is not a rounding artefact, it is a swapped pair — and
+  // swapped, the table would rank confident large groups last. Both are valid proportions, so only
+  // their relationship can catch it.
+  if (supportedAtLeast > observed) {
+    fail(
+      `${path}.supportedAtLeast`,
+      `a lower bound cannot exceed the observed rate: ${supportedAtLeast} > ${observed}`,
+    )
+  }
+
+  return { count, total, observed, supportedAtLeast }
 }

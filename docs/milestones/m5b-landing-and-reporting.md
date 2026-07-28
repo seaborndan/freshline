@@ -185,7 +185,7 @@ honours the viewport, because the sender already said where to look.
 | 2 | Camera moves to a chosen borough | **done** |
 | 3 | Report query layer in Core and Infrastructure | **done** |
 | 4 | Report endpoints, with their own rate-limit policy | **done** |
-| 5 | Reporting UI — selection, sortable table, CSV export | not started |
+| 5 | Reporting UI — selection, sortable table, CSV export | **done** |
 | 6 | Consolidation — ADR on report statistics, README, log | not started |
 
 **Needs line-by-line human review before merge:** any new dependency, and the small-sample handling

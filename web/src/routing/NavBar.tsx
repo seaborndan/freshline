@@ -23,7 +23,10 @@ interface NavLink {
   label: string
 }
 
-const links: NavLink[] = [{ route: 'map', label: 'Map' }]
+const links: NavLink[] = [
+  { route: 'map', label: 'Map' },
+  { route: 'reports', label: 'Reports' },
+]
 
 export interface NavBarProps {
   current: Route

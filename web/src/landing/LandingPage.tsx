@@ -51,6 +51,9 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
           <PrimaryLink route="map" onNavigate={onNavigate}>
             Open the map
           </PrimaryLink>
+          <PrimaryLink route="reports" onNavigate={onNavigate}>
+            Browse reports
+          </PrimaryLink>
         </div>
       </section>
 

@@ -15,6 +15,8 @@
 
 import type {
   DatasetSummary,
+  OutcomeBreakdown,
+  OutcomeBreakdownRequest,
   EstablishmentDetail,
   EstablishmentFilter,
   EstablishmentFilterOptions,
@@ -29,6 +31,7 @@ import {
 } from './errors'
 import {
   readDatasetSummary,
+  readOutcomeBreakdown,
   readEstablishmentDetail,
   readFilterOptions,
   readMapResult,
@@ -167,6 +170,42 @@ export async function fetchFilterOptions(signal?: AbortSignal): Promise<Establis
  */
 export async function fetchDatasetSummary(signal?: AbortSignal): Promise<DatasetSummary> {
   return readDatasetSummary(await requestJson(`${apiRoot}/establishments/summary`, signal))
+}
+
+/**
+ * How inspection results distribute across boroughs or cuisines.
+ *
+ * Spends the API's *report* budget rather than the map's — a separate, smaller token bucket, because
+ * a report costs many times what a viewport query costs. A 429 here means too many reports, not too
+ * much panning, and the message says so.
+ */
+export async function fetchOutcomeBreakdown(
+  request: OutcomeBreakdownRequest,
+  signal?: AbortSignal,
+): Promise<OutcomeBreakdown> {
+  const params = new URLSearchParams({ dimension: request.dimension })
+
+  // Only parameters with a value are sent. An empty string is an exact match against the empty
+  // string, which no cuisine or borough has, so sending one would silently return nothing.
+  if (request.locality !== undefined && request.locality !== '') {
+    params.set('locality', request.locality)
+  }
+
+  if (request.cuisine !== undefined && request.cuisine !== '') {
+    params.set('cuisine', request.cuisine)
+  }
+
+  if (request.inspectedFrom !== undefined && request.inspectedFrom !== '') {
+    params.set('inspectedFrom', request.inspectedFrom)
+  }
+
+  if (request.inspectedTo !== undefined && request.inspectedTo !== '') {
+    params.set('inspectedTo', request.inspectedTo)
+  }
+
+  return readOutcomeBreakdown(
+    await requestJson(`${apiRoot}/reports/outcome-breakdown?${params}`, signal),
+  )
 }
 
 /** One establishment with its full inspection history. */

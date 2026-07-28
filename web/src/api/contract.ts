@@ -250,3 +250,72 @@ export interface DatasetSummary {
    */
   latestInspectionOn: string | null
 }
+
+
+/** What an outcome breakdown groups by. */
+export const reportDimensions = ['Locality', 'Cuisine'] as const
+export type ReportDimension = (typeof reportDimensions)[number]
+
+/**
+ * A proportion, with how much evidence stands behind it.
+ *
+ * `observed` is what a table displays — the true rate, never adjusted. `supportedAtLeast` is what it
+ * sorts by: the lower bound of a 95% Wilson score interval, read as "the data supports a rate of at
+ * least this much". See ADR-0007.
+ */
+export interface ProportionEstimate {
+  count: number
+  total: number
+  observed: number
+  supportedAtLeast: number
+}
+
+/** One borough or cuisine, and how its establishments' latest results distribute. */
+export interface OutcomeBreakdownRow {
+  group: string
+
+  /** Every establishment in the group, including those with no counted outcome. */
+  total: number
+
+  /** Listed by the city and never inspected. A published state, not missing data. */
+  neverInspected: number
+
+  /** Inspected at some point, but not inside the selected date range. */
+  noInspectionInPeriod: number
+
+  good: number
+  fair: number
+  poor: number
+  ungraded: number
+  pendingReinspection: number
+
+  /** Establishments with a counted outcome — the denominator for every rate on this row. */
+  inspected: number
+
+  poorShare: ProportionEstimate
+}
+
+export interface OutcomeBreakdown {
+  dimension: ReportDimension
+  rows: OutcomeBreakdownRow[]
+
+  /**
+   * Establishments excluded from every row because the grouping column is null.
+   *
+   * 3,605 have no cuisine — exactly those never inspected — and 66 have no locality. Shown, because
+   * a table whose totals do not reconcile with the landing page, with nothing explaining the gap, is
+   * one a reader is right to distrust.
+   */
+  ungroupedEstablishments: number
+
+  hasDateRange: boolean
+}
+
+/** The parameters an outcome breakdown accepts. Undefined means "do not send this". */
+export interface OutcomeBreakdownRequest {
+  dimension: ReportDimension
+  locality?: string
+  cuisine?: string
+  inspectedFrom?: string
+  inspectedTo?: string
+}
