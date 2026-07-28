@@ -25,4 +25,15 @@ public interface IReportQueries
     Task<OutcomeBreakdown> GetOutcomeBreakdownAsync(
         OutcomeBreakdownQuery query,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The establishments themselves, filtered, with their latest counted result.
+    ///
+    /// <para>The row-level counterpart to <see cref="GetOutcomeBreakdownAsync"/>: that one answers
+    /// how results distribute, this one answers which places. Bounded rather than paged — see
+    /// <see cref="EstablishmentReportQuery"/> for why a cursor cannot serve a sortable table.</para>
+    /// </summary>
+    Task<EstablishmentReport> GetEstablishmentsAsync(
+        EstablishmentReportQuery query,
+        CancellationToken cancellationToken);
 }

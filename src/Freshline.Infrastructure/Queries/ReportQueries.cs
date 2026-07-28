@@ -137,4 +137,103 @@ internal sealed class ReportQueries(FreshlineDbContext dbContext) : IReportQueri
             HasDateRange = query.HasDateRange,
         };
     }
+
+    public async Task<EstablishmentReport> GetEstablishmentsAsync(
+        EstablishmentReportQuery query,
+        CancellationToken cancellationToken)
+    {
+        IQueryable<Establishment> establishments = dbContext.Establishments;
+
+        if (query.Locality is not null)
+        {
+            establishments = establishments.Where(e => e.Locality == query.Locality);
+        }
+
+        if (query.Cuisine is not null)
+        {
+            establishments = establishments.Where(e => e.Cuisine == query.Cuisine);
+        }
+
+        if (query.IsAwaitingFirstInspection is bool awaiting)
+        {
+            establishments = establishments.Where(e => e.IsAwaitingFirstInspection == awaiting);
+        }
+
+        // The latest inspection inside the period, exactly as the breakdown computes it — the date
+        // range is applied inside the subquery, so the reported result belongs to the period asked
+        // about rather than to all time.
+        var projected = establishments.Select(e => new
+        {
+            e.Id,
+            e.Name,
+            e.AddressLine,
+            e.Locality,
+            e.Cuisine,
+            e.IsAwaitingFirstInspection,
+            Latest = e.Inspections
+                .Where(i =>
+                    (query.InspectedFrom == null || i.InspectedOn >= query.InspectedFrom) &&
+                    (query.InspectedTo == null || i.InspectedOn <= query.InspectedTo))
+                .OrderByDescending(i => i.InspectedOn)
+                .ThenByDescending(i => i.Id)
+                .Select(i => new
+                {
+                    i.Outcome,
+                    i.InspectedOn,
+                    i.RawGrade,
+                    i.RawScore,
+                    i.ClosedByAuthority,
+                })
+                .FirstOrDefault(),
+        });
+
+        if (query.Outcome is InspectionOutcome outcome)
+        {
+            projected = projected.Where(row => row.Latest != null && row.Latest.Outcome == outcome);
+        }
+
+        // Ordered by name and then id, the same total order the list endpoint uses. It matters here
+        // for a different reason: which rows survive truncation must not depend on the plan, or the
+        // same report run twice would return different establishments.
+        //
+        // One row over the limit, so "there are more" is observed rather than inferred from a full
+        // page — a page that is exactly full is otherwise indistinguishable from one that is exactly
+        // the whole answer.
+        var page = await projected
+            .OrderBy(row => row.Name)
+            .ThenBy(row => row.Id)
+            .Take(query.Limit + 1)
+            .ToListAsync(cancellationToken);
+
+        bool isTruncated = page.Count > query.Limit;
+
+        List<EstablishmentReportRow> rows = page
+            .Take(query.Limit)
+            .Select(row => new EstablishmentReportRow
+            {
+                Id = row.Id,
+                Name = row.Name,
+                AddressLine = row.AddressLine,
+                Locality = row.Locality,
+                Cuisine = row.Cuisine,
+                IsAwaitingFirstInspection = row.IsAwaitingFirstInspection,
+                Outcome = row.Latest == null ? null : row.Latest.Outcome,
+                InspectedOn = row.Latest == null ? null : row.Latest.InspectedOn,
+                RawGrade = row.Latest?.RawGrade,
+                RawScore = row.Latest?.RawScore,
+
+                // False rather than null when there is no counted inspection: "was it closed" has an
+                // answer here, and the answer is no. A nullable bool would make every consumer handle
+                // a third state that carries no information.
+                ClosedByAuthority = row.Latest != null && row.Latest.ClosedByAuthority,
+            })
+            .ToList();
+
+        return new EstablishmentReport
+        {
+            Rows = rows,
+            IsTruncated = isTruncated,
+            HasDateRange = query.InspectedFrom is not null || query.InspectedTo is not null,
+        };
+    }
 }
