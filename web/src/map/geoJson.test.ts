@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MapEstablishment } from '../api/contract'
-import { distinctPointCount, idsOf, toFeatureCollection } from './geoJson'
+import { distinctPointCount, toFeatureCollection } from './geoJson'
 
 const timesSquare: MapEstablishment = {
   id: 1328,
@@ -72,95 +72,8 @@ describe('toFeatureCollection', () => {
     expect(properties.state).toBe('Ungraded')
   })
 
-  /**
-   * A feature is a point now, not an establishment, so it carries every id stacked on it rather than
-   * one. The feature's own id is its position in the collection — what `setFeatureState` needs for
-   * hover, and meaningless as a business identity.
-   */
-  it('carries the establishments at a point, so a click needs no lookup table', () => {
-    const [feature] = toFeatureCollection([timesSquare]).features
-
-    expect(idsOf(feature.properties)).toEqual([1328])
-    expect(feature.properties.count).toBe(1)
-  })
-
-  /**
-   * The change that made the map cheaper as well as more informative.
-   *
-   * Stacked establishments used to be separate features drawn exactly on top of each other — 518
-   * features for 306 visible dots in the opening viewport, so 212 circles were painted under
-   * something opaque. One feature per coordinate removes that work.
-   */
-  it('draws one feature per point rather than one per establishment', () => {
-    const neighbour: MapEstablishment = { ...timesSquare, id: 2, name: 'NEXT DOOR' }
-    const elsewhere: MapEstablishment = { ...timesSquare, id: 3, latitude: 40.75 }
-
-    const { features } = toFeatureCollection([timesSquare, neighbour, elsewhere])
-
-    expect(features).toHaveLength(2)
-    expect(idsOf(features[0].properties)).toEqual([1328, 2])
-    expect(features[0].properties.count).toBe(2)
-    expect(idsOf(features[1].properties)).toEqual([3])
-  })
-
-  /**
-   * What a stacked point is allowed to claim.
-   *
-   * The colour used to be whichever establishment the source handed over last — arbitrary, and
-   * different between two runs of the same query. It is now the most severe state present, so a
-   * point containing a Poor cannot look Good. See `mostSevereState` for why an unknown state never
-   * outranks a known one.
-   */
-  it('shows the most severe state at a stacked point', () => {
-    const poor: MapEstablishment = {
-      ...timesSquare,
-      id: 2,
-      latestInspection: { ...timesSquare.latestInspection!, outcome: 'Poor' },
-    }
-
-    const [feature] = toFeatureCollection([timesSquare, poor]).features
-
-    expect(feature.properties.state).toBe('Poor')
-  })
-
-  /** An unknown state must not outrank a known one — one ungraded among good is not bad news. */
-  it('does not let an ungraded establishment override a good one', () => {
-    const ungraded: MapEstablishment = {
-      ...timesSquare,
-      id: 2,
-      latestInspection: { ...timesSquare.latestInspection!, outcome: 'Ungraded' },
-    }
-
-    const [feature] = toFeatureCollection([timesSquare, ungraded]).features
-
-    expect(feature.properties.state).toBe('Good')
-  })
-
-  /** A closure anywhere at a point is a closure at that point — the ring is not the first one's. */
-  it('marks a point closed when any establishment on it was closed', () => {
-    const closed: MapEstablishment = {
-      ...timesSquare,
-      id: 2,
-      latestInspection: { ...timesSquare.latestInspection!, closedByAuthority: true },
-    }
-
-    const [feature] = toFeatureCollection([timesSquare, closed]).features
-
-    expect(feature.properties.closed).toBe(true)
-  })
-
-  /**
-   * The feature id is a position, and `setFeatureState` keys hover on it. If the order changed
-   * between renders of the same response, a hovered dot would hand its highlight to a different one.
-   */
-  it('numbers points in a stable order', () => {
-    const elsewhere: MapEstablishment = { ...timesSquare, id: 3, latitude: 40.75 }
-    const input = [timesSquare, elsewhere]
-
-    expect(toFeatureCollection(input).features.map((feature) => feature.id)).toEqual(
-      toFeatureCollection(input).features.map((feature) => feature.id),
-    )
-    expect(toFeatureCollection(input).features.map((feature) => feature.id)).toEqual([0, 1])
+  it('gives every feature the establishment id, so a click needs no lookup table', () => {
+    expect(toFeatureCollection([timesSquare]).features[0].id).toBe(1328)
   })
 })
 

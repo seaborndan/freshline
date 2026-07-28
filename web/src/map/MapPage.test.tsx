@@ -26,15 +26,12 @@ const fitBounds = vi.hoisted(() => vi.fn())
 let bounds = { south: 40.7515, north: 40.7605, west: -73.9925, east: -73.9785 }
 
 /** What the fake map reports as being under the next click. */
-// A clicked feature is a *point*, and carries every establishment stacked on it — see geoJson.ts.
-let clicked: { properties: { ids: string } }[] = []
+let clicked: { properties: { id: number } }[] = []
 
 vi.mock('maplibre-gl', () => ({
   Map: class {
     addControl = vi.fn()
     addSource = vi.fn()
-    hasImage = () => false
-    addImage = vi.fn()
     addLayer = vi.fn()
     getSource = () => undefined
     remove = vi.fn()
@@ -456,7 +453,7 @@ describe('MapPage', () => {
     render(<MapPage />)
     await showMap()
 
-    clicked = [{ properties: { ids: '1328' } }]
+    clicked = [{ properties: { id: 1328 } }]
     await clickMap()
 
     expect(fetchEstablishment).toHaveBeenCalledWith(1328, expect.anything())
@@ -471,8 +468,7 @@ describe('MapPage', () => {
     render(<MapPage />)
     await showMap()
 
-    // One feature, two establishments on it — which is what a stacked point now looks like.
-    clicked = [{ properties: { ids: ['1328', '901'].join('\n') } }]
+    clicked = [{ properties: { id: 1328 } }, { properties: { id: 901 } }]
     await clickMap()
 
     expect(screen.getByRole('heading', { name: '2 places at this address' })).toBeInTheDocument()
@@ -483,7 +479,7 @@ describe('MapPage', () => {
     render(<MapPage />)
     await showMap()
 
-    clicked = [{ properties: { ids: '1328' } }]
+    clicked = [{ properties: { id: 1328 } }]
     await clickMap()
 
     expect(window.location.search).toContain('id=1328')
@@ -502,7 +498,7 @@ describe('MapPage', () => {
     render(<MapPage />)
     await showMap()
 
-    clicked = [{ properties: { ids: '1328' } }]
+    clicked = [{ properties: { id: 1328 } }]
     await clickMap()
     expect(screen.getByRole('heading', { name: 'RAISING CANES #888' })).toBeInTheDocument()
 
@@ -563,7 +559,7 @@ describe('MapPage', () => {
     render(<MapPage />)
     await showMap()
 
-    clicked = [{ properties: { ids: '1328' } }]
+    clicked = [{ properties: { id: 1328 } }]
     await clickMap()
 
     expect(easeTo).not.toHaveBeenCalled()

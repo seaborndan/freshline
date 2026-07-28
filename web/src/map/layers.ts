@@ -6,7 +6,7 @@
  * one table means a colour cannot be changed in one place only.
  */
 
-import { pinStates, pinStyles } from './pinStyle'
+import { closedModifier, pinStates, pinStyles } from './pinStyle'
 
 /** MapLibre expressions are nested JSON arrays; this is as much type as they need here. */
 type Expression = unknown[]
@@ -30,6 +30,26 @@ function matchOnState(valueFor: (state: (typeof pinStates)[number]) => unknown):
   ]
 }
 
+export const circleColour: Expression = matchOnState((state) => pinStyles[state].fill)
+
+/**
+ * The closure ring wins over the ordinary outline, because it is the more urgent fact and there is
+ * only one outline to give it.
+ */
+export const circleStrokeColour: Expression = [
+  'case',
+  ['get', 'closed'],
+  closedModifier.stroke,
+  matchOnState((state) => pinStyles[state].stroke),
+]
+
+export const circleStrokeWidth: Expression = [
+  'case',
+  ['get', 'closed'],
+  closedModifier.strokeWidth,
+  1,
+]
+
 /**
  * Radius is severity scaled by zoom, and the nesting order is not a matter of taste.
  *
@@ -50,126 +70,24 @@ const stateRadius: Expression = [
   4,
 ]
 
-/**
- * How much bigger a point gets for holding several establishments.
- *
- * **Area, not radius, carries the meaning.** A dot twice the radius is four times the ink, so
- * scaling the radius linearly with the count would make a point of ten look like a point of a
- * hundred. The stops below follow roughly the square root of the count, which is what makes the
- * *area* proportional — the same reason bubble charts are sized that way.
- *
- * Capped at 20. Beyond that the dot is competing with the street it sits on, and a point holding 49
- * establishments — one exists on Broadway — would otherwise draw a disc wide enough to swallow its
- * neighbours and hide exactly the pins somebody is looking for.
- *
- * `interpolate` on a data property is legal at any depth, unlike `['zoom']` — see the note below,
- * which is why this multiplies into the zoom stops rather than wrapping them.
- */
-const countScale: Expression = [
+export const circleRadius: Expression = [
   'interpolate',
   ['linear'],
-  ['get', 'count'],
-  1,
-  1,
-  4,
-  1.5,
-  10,
-  1.9,
-  20,
-  2.3,
+  ['zoom'],
+  12,
+  ['*', 0.6, stateRadius],
+  16,
+  stateRadius,
+  19,
+  ['*', 1.8, stateRadius],
 ]
-
-const sizedRadius: Expression = ['*', stateRadius, countScale]
-
-/**
- * How large a pin sprite is drawn, as a multiple of its source size.
- *
- * `icon-size` rather than `circle-radius`: the pins are a symbol layer now, drawing the shaded
- * pins in `pinSprite.ts`. The arithmetic is otherwise the same one the circles used — a state
- * size, scaled by how many establishments share the point, grown while hovered, all interpolated
- * over zoom.
- *
- * Divided by 5, which is the radius of an ordinary state in `pinStyle.ts`, so a `Good` pin draws at
- * the sprite's own logical size and the rest scale around it. Keeping those radii as the unit means
- * the legend swatches and the map still read from one table — raise a state's radius and both its
- * pin and its swatch grow, from one edit.
- */
-const iconScale: Expression = ['/', sizedRadius, 5]
-
-function sizeAcrossZoom(scale: Expression): Expression {
-  return [
-    'interpolate',
-    ['linear'],
-    ['zoom'],
-    12,
-    ['*', 0.6, scale],
-    16,
-    scale,
-    19,
-    ['*', 1.8, scale],
-  ]
-}
-
-export const iconSize: Expression = sizeAcrossZoom(iconScale)
-
-/**
- * How much a hovered pin grows.
- *
- * ## Why this is a separate layer rather than a `feature-state` expression
- *
- * The obvious implementation — `['case', ['feature-state', 'hover'], 1.35, 1]` folded into
- * `icon-size` — is rejected by MapLibre outright:
- *
- * > *"feature-state data expressions are not supported with layout properties"*
- *
- * `icon-size` is a **layout** property, and layout is resolved when a tile is prepared rather than
- * per frame, so it cannot depend on state that changes between frames. The whole layer fails to be
- * added and the map draws nothing — the same shape of failure as putting `['zoom']` below the top
- * level of a paint property, and found the same way: by loading the page.
- *
- * There is no paint route either. A symbol layer's paint properties are opacity, translate, and the
- * colour and halo of *SDF* icons; these sprites are full-colour, so none of them can change a size.
- *
- * So the hovered point is drawn by its own layer over a source holding at most one feature. Hovering
- * writes one feature and leaving writes zero, which is a smaller update than any of the alternatives
- * and is confined to the one dot the pointer is on.
- */
-export const hoverIconSize: Expression = sizeAcrossZoom(['*', iconScale, 1.35])
-
-/**
- * Which pin to draw.
- *
- * Two images per state, because closure is a separate fact from the result and has to survive the
- * move to sprites. A circle layer expressed it as a different stroke colour; a sprite bakes its
- * outline in, so the closed variant is a second image outlined in `closedModifier.stroke` instead of
- * the state's own.
- *
- * Twelve images rather than six. At 16 KB each that is under 200 KB held for the map's lifetime, and
- * none of it is recomputed as the map moves.
- */
-export const iconImage: Expression = [
-  'case',
-  ['get', 'closed'],
-  matchOnState((state) => pinImageName(state, true)),
-  matchOnState((state) => pinImageName(state, false)),
-]
-
-/**
- * The image name for a state, so registration and the expression above cannot disagree about it.
- */
-export function pinImageName(state: (typeof pinStates)[number], closed: boolean): string {
-  return closed ? `pin-${state}-closed` : `pin-${state}`
-}
 
 /**
  * The pins that must not be painted over: `Poor` is 0.4% of the data and the tier the product exists
  * to surface, and a closure is the most urgent thing the map can say.
  *
- * A layer draws its features in whatever order the source hands them over, so "on top" is not
+ * A circle layer draws its features in whatever order the source hands them over, so "on top" is not
  * something a single layer can promise. Two layers with complementary filters can.
- *
- * Still meaningful now that a point carries a weighted state rather than an arbitrary one: a point
- * whose dominant state is `Poor`, or where anything was closed, is drawn above its neighbours.
  */
 export const priorityFilter: Expression = [
   'any',

@@ -16,53 +16,22 @@
  */
 
 import type { MapEstablishment } from '../api/contract'
-import { dominantState, isClosed, pinStateOf, type PinState } from './pinStyle'
+import { isClosed, pinStateOf, type PinState } from './pinStyle'
 
 /**
  * What each feature carries. Kept to what the layer paints with plus what a click needs — every
- * property is copied for every feature on every update.
- *
- * **One feature per point, not per establishment.** New York geocodes many establishments to the
- * same address, and drawing them as separate features meant painting circles that were exactly
- * covered by other circles: in the opening viewport, 518 features for 306 visible dots, so 212 of
- * them were pure cost. Aggregating removes that work and makes the stack something the map can say
- * out loud rather than something it hides.
+ * property is copied for every pin on every update, and there can be a thousand of them.
  */
 export interface PinProperties {
-  /**
-   * Every establishment at this point, newline-separated.
-   *
-   * A string because GeoJSON feature properties reach MapLibre expressions as primitives — an array
-   * survives the round trip as data but cannot be indexed by a style expression, and the click
-   * handler is the only thing that reads this. Newline rather than comma because no id contains one.
-   */
-  ids: string
-
-  /** How many establishments are here. What the radius scales on, and what the dot labels itself. */
-  count: number
-
-  /** The name shown when this point holds exactly one establishment. */
+  id: number
   name: string
-
-  /** The state carrying the most weight here — see `dominantState`. */
   state: PinState
-
-  /** True when *any* establishment here was closed by the authority. */
   closed: boolean
 }
 
 export interface PinFeature {
   type: 'Feature'
-
-  /**
-   * A stable identity for this point.
-   *
-   * Needed for `setFeatureState`, which is how hover is expressed without rebuilding the source on
-   * every mouse move. It is the point's own index in this collection rather than an establishment
-   * id, because a feature is now a place on the map rather than a business.
-   */
   id: number
-
   geometry: { type: 'Point'; coordinates: [number, number] }
   properties: PinProperties
 }
@@ -93,71 +62,26 @@ export function distinctPointCount(establishments: readonly MapEstablishment[]):
   ).size
 }
 
-/**
- * One feature per coordinate, carrying everything stacked there.
- *
- * Insertion order is preserved, so a re-render of the same response produces the same features in
- * the same order — which matters because the feature id is a position in this list, and a hover
- * state keyed on a shifting id would light up the wrong dot.
- */
 export function toFeatureCollection(
   establishments: readonly MapEstablishment[],
 ): PinFeatureCollection {
-  const byPoint = new Map<string, MapEstablishment[]>()
-
-  for (const establishment of establishments) {
-    // Exact coordinate equality, deliberately — the same reasoning as distinctPointCount. Rounding
-    // to a tolerance would merge neighbouring restaurants that genuinely draw as separate dots.
-    const key = `${establishment.latitude},${establishment.longitude}`
-    const existing = byPoint.get(key)
-
-    if (existing === undefined) {
-      byPoint.set(key, [establishment])
-    } else {
-      existing.push(establishment)
-    }
-  }
-
   return {
     type: 'FeatureCollection',
-    features: [...byPoint.values()].map((atPoint, index) => {
-      const first = atPoint[0]
-
-      return {
-        type: 'Feature' as const,
-        id: index,
-        geometry: {
-          type: 'Point' as const,
-          // Longitude first. See the note at the top of this file.
-          coordinates: [first.longitude, first.latitude] as [number, number],
-        },
-        properties: {
-          ids: atPoint.map((establishment) => establishment.id).join(idSeparator),
-          count: atPoint.length,
-          name: first.name,
-          state: dominantState(atPoint.map(pinStateOf)),
-
-          // Any closure here, not the first one's. A point holding one closed establishment among
-          // five is a point where something was closed, and the ring says so.
-          closed: atPoint.some(isClosed),
-        },
-      }
-    }),
+    features: establishments.map((establishment) => ({
+      type: 'Feature',
+      // The feature id, so a click can be tied back to an establishment without a lookup table.
+      id: establishment.id,
+      geometry: {
+        type: 'Point',
+        // Longitude first. See the note at the top of this file.
+        coordinates: [establishment.longitude, establishment.latitude],
+      },
+      properties: {
+        id: establishment.id,
+        name: establishment.name,
+        state: pinStateOf(establishment),
+        closed: isClosed(establishment),
+      },
+    })),
   }
-}
-
-/**
- * What separates packed ids.
- *
- * A newline, because no decimal id contains one — a comma would too, but a newline makes a malformed
- * value obvious the moment anybody logs it.
- */
-const idSeparator = '\n'
-
-/** The establishment ids a feature stands for. The inverse of how `ids` is packed above. */
-export function idsOf(properties: Pick<PinProperties, 'ids'>): number[] {
-  return properties.ids
-    .split(idSeparator)
-    .filter((entry) => entry !== '')
-    .map(Number)
 }

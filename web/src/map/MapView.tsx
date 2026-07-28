@@ -14,17 +14,15 @@ import type { GeoJSONSource } from 'maplibre-gl'
 import 'maplibre-gl/dist/maplibre-gl.css'
 import type { MapEstablishment } from '../api/contract'
 import type { Viewport } from '../api/viewport'
-import { idsOf, toFeatureCollection, type PinFeature } from './geoJson'
+import { toFeatureCollection } from './geoJson'
 import {
-  hoverIconSize,
-  iconImage,
-  iconSize,
+  circleColour,
+  circleRadius,
+  circleStrokeColour,
+  circleStrokeWidth,
   ordinaryFilter,
   priorityFilter,
-  pinImageName,
 } from './layers'
-import { closedModifier, pinStates, pinStyles } from './pinStyle'
-import { pinImage, pinPixelRatio } from './pinSprite'
 import {
   basemapAttribution,
   basemapRasterTiles,
@@ -102,56 +100,8 @@ function quietenLabelsWhenZoomedOut(map: MapLibreMap): void {
 }
 
 const sourceId = 'establishments'
-
 const ordinaryLayerId = 'establishments-ordinary'
 const priorityLayerId = 'establishments-priority'
-
-/**
- * The hovered point, drawn larger, over a source holding at most one feature.
- *
- * A separate layer because `icon-size` is a layout property and MapLibre refuses `feature-state`
- * there — see `hoverIconSize`. It is excluded from every `queryRenderedFeatures` call: it draws a
- * copy of a pin that is already interactive underneath it, and including it would return that point
- * twice from one click.
- */
-const hoverSourceId = 'establishment-hover'
-const hoverLayerId = 'establishment-hover'
-
-const noFeatures = { type: 'FeatureCollection' as const, features: [] as PinFeature[] }
-
-/**
- * Registers one pin sprite per state, and a closed variant of each.
- *
- * Twelve images, computed once at startup and held for the map's lifetime. Each is 204×276 RGBA —
- * 225 KB — so the set is about 2.7 MB of texture, and none of it is recomputed as the map moves.
- *
- * That is a deliberate trade for sharpness. `pixelRatio: 6` tells MapLibre the sprite carries six
- * device pixels per logical pixel, so every size the map draws — including a crowded point at 2.3×
- * while hovered at 1.35× — is a downsample rather than an upsample.
- *
- * Guarded with `hasImage`, because a style reload re-fires `style.load` and re-registering an
- * existing name throws.
- */
-function registerPinImages(map: MapLibreMap): void {
-  for (const state of pinStates) {
-    const style = pinStyles[state]
-
-    // Two per state. The closed variant differs only in the colour its silhouette darkens towards,
-    // which is how a closure stays visible now that the ring is baked into the sprite rather than
-    // painted as a stroke.
-    for (const closed of [false, true]) {
-      const name = pinImageName(state, closed)
-
-      if (map.hasImage(name)) {
-        continue
-      }
-
-      const rim = closed ? closedModifier.stroke : style.stroke
-
-      map.addImage(name, pinImage(style.fill, rim), { pixelRatio: pinPixelRatio })
-    }
-  }
-}
 
 export interface MapViewProps {
   /** The pins to draw. */
@@ -367,95 +317,22 @@ export function MapView({
         layers: [ordinaryLayerId, priorityLayerId],
       })
 
-      // A feature is a point now, not an establishment, so each one carries every id stacked on it.
-      const ids = features.flatMap((feature) =>
-        typeof feature.properties?.ids === 'string' ? idsOf({ ids: feature.properties.ids }) : [],
-      )
+      const ids = features
+        .map((feature) => feature.properties?.id)
+        .filter((id): id is number => typeof id === 'number')
 
       latestOnSelect.current?.([...new Set(ids)])
     })
-
-    /*
-     * Hover: the pointer grows the dot it is over.
-     *
-     * Written into a source of its own that holds the hovered feature and nothing else, so the
-     * update is one feature rather than a re-tiling of every pin on screen. The pin underneath is
-     * still drawn; the larger copy simply covers it.
-     */
-    let hovered: number | null = null
-
-    const clearHover = () => {
-      if (hovered === null) {
-        return
-      }
-
-      hovered = null
-      ;(created.getSource(hoverSourceId) as GeoJSONSource | undefined)?.setData(noFeatures)
-    }
 
     // A dot that can be clicked should say so before it is clicked.
     for (const layerId of [ordinaryLayerId, priorityLayerId]) {
       created.on('mouseenter', layerId, () => {
         created.getCanvas().style.cursor = 'pointer'
       })
-
-      created.on('mousemove', layerId, (event) => {
-        // Nothing while the map is moving. A drag fires mousemove continuously, and the pointer is
-        // then a consequence of the gesture rather than a choice — growing whatever passes under it
-        // adds work to exactly the frames that must stay cheap.
-        if (created.isMoving()) {
-          return
-        }
-
-        const feature = event.features?.[0]
-
-        if (feature === undefined || typeof feature.id !== 'number' || feature.id === hovered) {
-          return
-        }
-
-        hovered = feature.id
-
-        /*
-         * Rebuilt as plain objects, all the way down.
-         *
-         * `setData` sends its argument to a web worker, and MapLibre serialises by reading
-         * `input.constructor._classRegistryKey`. That breaks twice over on a queried feature:
-         *
-         * - the feature is MapLibre's own `Feature` class, which is not in the registry —
-         *   *"can't serialize object of unregistered class Pv"*;
-         * - and its `properties` and `geometry` come back with a **null prototype**, so
-         *   `constructor` is `undefined` and reading a key off it throws
-         *   *"Cannot read properties of undefined (reading '_classRegistryKey')"*.
-         *
-         * The first fix copied the fields but kept the same nested objects, which traded the first
-         * error for the second. Both are errors on a map that draws perfectly otherwise, which is
-         * exactly the kind that survives a green test suite.
-         *
-         * Spreading gives every level an ordinary `Object` prototype.
-         */
-        const geometry = feature.geometry as PinFeature['geometry']
-
-        ;(created.getSource(hoverSourceId) as GeoJSONSource | undefined)?.setData({
-          type: 'FeatureCollection',
-          features: [
-            {
-              type: 'Feature',
-              id: feature.id as number,
-              geometry: { type: 'Point', coordinates: [...geometry.coordinates] },
-              properties: { ...feature.properties } as PinFeature['properties'],
-            },
-          ],
-        })
-      })
-
       created.on('mouseleave', layerId, () => {
         created.getCanvas().style.cursor = ''
-        clearHover()
       })
     }
-
-    // A gesture can carry the pointer off a dot without a mouseleave ever firing for it.
-    created.on('movestart', clearHover)
 
     // `moveend`, not `move`. A drag fires `move` continuously — one event per frame — and every one
     // of them would start the debounce timer again; `moveend` fires once when the camera settles,
@@ -492,10 +369,6 @@ export function MapView({
         data: toFeatureCollection(latestEstablishments.current),
       })
 
-      registerPinImages(created)
-
-      created.addSource(hoverSourceId, { type: 'geojson', data: noFeatures })
-
       // Two layers over one source. The ordinary pins first, then the ones that must not be hidden
       // by them — see `priorityFilter`.
       for (const [id, filter] of [
@@ -504,54 +377,17 @@ export function MapView({
       ] as const) {
         created.addLayer({
           id,
-          type: 'symbol',
+          type: 'circle',
           source: sourceId,
           filter,
-          layout: {
-            'icon-image': iconImage,
-            'icon-size': iconSize,
-
-            /*
-             * Collision detection off, on both counts.
-             *
-             * A symbol layer's whole reason for existing is placing labels that must not overlap, so
-             * by default it *hides* icons that collide. These are pins: a dense block is the honest
-             * picture, and silently dropping some of them would be the map lying about how much is
-             * there — the same failure as the stacked pins this milestone just fixed.
-             *
-             * It is also what keeps the cost down. With overlap allowed there is no placement
-             * calculation to run on every frame of a pan.
-             */
-            'icon-allow-overlap': true,
-            'icon-ignore-placement': true,
-
-            // The sprite is drawn upright regardless of bearing, so rotating the map does not tip
-            // the pins over so they point sideways at nothing.
-            // The tip marks the establishment, so the sprite hangs above its coordinate rather than
-            // being centred on it. A centred pin covers the thing it points at with its own head.
-            'icon-anchor': 'bottom',
-
-            'icon-rotation-alignment': 'viewport',
-            'icon-pitch-alignment': 'viewport',
+          paint: {
+            'circle-color': circleColour,
+            'circle-radius': circleRadius,
+            'circle-stroke-color': circleStrokeColour,
+            'circle-stroke-width': circleStrokeWidth,
           },
         } as Parameters<typeof created.addLayer>[0])
       }
-
-      // Last, so the enlarged copy draws over every ordinary pin rather than under its neighbours.
-      created.addLayer({
-        id: hoverLayerId,
-        type: 'symbol',
-        source: hoverSourceId,
-        layout: {
-          'icon-image': iconImage,
-          'icon-size': hoverIconSize,
-          'icon-allow-overlap': true,
-          'icon-ignore-placement': true,
-          'icon-anchor': 'bottom',
-          'icon-rotation-alignment': 'viewport',
-          'icon-pitch-alignment': 'viewport',
-        },
-      } as Parameters<typeof created.addLayer>[0])
     })
 
     map.current = created

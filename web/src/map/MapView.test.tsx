@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MapEstablishment } from '../api/contract'
 import type { Viewport } from '../api/viewport'
 import { MapView } from './MapView'
-import { pinStates } from './pinStyle'
 
 /**
  * These tests exist because of a bug that shipped past a green suite.
@@ -20,10 +19,9 @@ import { pinStates } from './pinStyle'
  * So this double never fires anything by itself. The test decides when the style loads, and both
  * orderings are asserted.
  */
-const handlers = new Map<string, (event?: unknown) => void>()
+const handlers = new Map<string, () => void>()
 const addSource = vi.fn()
 const addLayer = vi.fn()
-const addImage = vi.fn()
 const setData = vi.fn()
 let sourceExists = false
 
@@ -55,10 +53,6 @@ vi.mock('maplibre-gl', () => ({
       }
       addSource(...args)
     }
-    // The pin sprites. hasImage answers false so registration runs; the pixels themselves are
-    // asserted in pinSprite.test.ts, where they can actually be read.
-    hasImage = () => false
-    addImage = addImage
     addLayer = (...args: unknown[]) => {
       addedLayers.push(args)
       addLayer(...args)
@@ -69,16 +63,8 @@ vi.mock('maplibre-gl', () => ({
     getStyle = () => ({ layers: styleLayers })
     setLayerZoomRange = setLayerZoomRange
     setLayoutProperty = setLayoutProperty
-    /**
-     * MapLibre's `on` takes either `(event, handler)` or `(event, layerId, handler)`, and the
-     * layer-scoped form is how hover is registered. Storing the second argument blindly recorded a
-     * layer id as though it were a handler, which is why no test could reach the hover path.
-     */
-    on(event: string, layerOrHandler: unknown, maybeHandler?: unknown) {
-      const handler = (maybeHandler ?? layerOrHandler) as (event?: unknown) => void
-      const key = maybeHandler === undefined ? event : `${event}:${layerOrHandler as string}`
-
-      handlers.set(key, handler)
+    on(event: string, handler: () => void) {
+      handlers.set(event, handler)
     }
   },
   LngLatBounds: class {},
@@ -89,28 +75,6 @@ function loadStyle() {
   act(() => {
     handlers.get('style.load')?.()
   })
-}
-
-/**
- * A feature shaped the way `queryRenderedFeatures` really returns one: **null prototypes** on the
- * nested objects, which is what MapLibre's vector-tile reader produces and what broke serialisation
- * twice.
- */
-function queriedFeature() {
-  const properties = Object.assign(Object.create(null), {
-    ids: '1328',
-    count: 1,
-    name: 'RAISING CANES #888',
-    state: 'Good',
-    closed: false,
-  })
-
-  const geometry = Object.assign(Object.create(null), {
-    type: 'Point',
-    coordinates: [-73.986193424352, 40.7570962405],
-  })
-
-  return { id: 0, type: 'Feature', geometry, properties }
 }
 
 function endMovement() {
@@ -150,9 +114,7 @@ function deliveredFeatures(): unknown[] {
     return fromSetData.features
   }
 
-  // By name rather than by position: there is a second, separate source holding the hovered point,
-  // and it is added after this one.
-  const fromSource = addSource.mock.calls.findLast((call) => call[0] === 'establishments')?.[1] as
+  const fromSource = addSource.mock.calls.at(-1)?.[1] as
     | { data: { features: unknown[] } }
     | undefined
 
@@ -163,7 +125,6 @@ beforeEach(() => {
   handlers.clear()
   addSource.mockClear()
   addLayer.mockClear()
-  addImage.mockClear()
   setData.mockClear()
   sourceExists = false
   moving = false
@@ -203,14 +164,7 @@ describe('MapView', () => {
     expect(deliveredFeatures()).toHaveLength(1)
   })
 
-  /**
-   * Two layers over one source, split so the rare states are not painted over by their neighbours.
-   *
-   * There is no separate shadow layer any more: an offset blurred copy read as a sticker rather than
-   * as an object, and the pins carry their own shading and outline in the sprite. Two layers rather
-   * three is the cheaper arrangement as well as the better-looking one.
-   */
-  it('adds two pin layers over one source', () => {
+  it('adds two layers over one source, so the rare pins are not painted over', () => {
     render(<MapView establishments={[pin]} initialViewport={viewport} />)
 
     loadStyle()
@@ -219,44 +173,6 @@ describe('MapView', () => {
       (call) => (call[0] as { source?: string }).source === 'establishments',
     )
     expect(pinLayers).toHaveLength(2)
-  })
-
-  /**
-   * Symbols, not circles — a circle layer cannot draw a shape that tapers to a point, so a pin has
-   * to be an image. Collision detection is off on both counts: a symbol layer's default is to *hide* icons
-   * that overlap, and a dense block of restaurants is the honest picture rather than a placement
-   * problem.
-   */
-  it('draws the pins as sprites that are never hidden by their neighbours', () => {
-    render(<MapView establishments={[pin]} initialViewport={viewport} />)
-
-    loadStyle()
-
-    const [firstPinLayer] = addedLayers
-      .map((call) => call[0] as { source?: string; type?: string; layout?: Record<string, unknown> })
-      .filter((layer) => layer.source === 'establishments')
-
-    expect(firstPinLayer.type).toBe('symbol')
-    expect(firstPinLayer.layout?.['icon-allow-overlap']).toBe(true)
-    expect(firstPinLayer.layout?.['icon-ignore-placement']).toBe(true)
-  })
-
-  /**
-   * Two sprites per state, registered before any layer asks for one by name: the ordinary one and
-   * the closed variant, whose silhouette darkens towards the closure colour. Closure is a separate
-   * fact from the result, and baking the rim into a sprite is the only way it survives the move from
-   * a stroked circle.
-   */
-  it('registers an ordinary and a closed pin for every state', () => {
-    render(<MapView establishments={[pin]} initialViewport={viewport} />)
-
-    loadStyle()
-
-    expect(addImage).toHaveBeenCalledTimes(pinStates.length * 2)
-
-    const names = addImage.mock.calls.map((call) => call[0] as string)
-    expect(names).toContain('pin-Poor')
-    expect(names).toContain('pin-Poor-closed')
   })
 
   it('says so when the map itself fails, rather than leaving a blank rectangle', () => {
@@ -293,14 +209,7 @@ describe('MapView', () => {
     setData.mockClear()
 
     moving = true
-    // A different coordinate, not just a different id: features are one per point now, so two pins
-    // at the same place would arrive as one feature and this would be counting the wrong thing.
-    rerender(
-      <MapView
-        establishments={[pin, { ...pin, id: 2, latitude: pin.latitude + 0.001 }]}
-        initialViewport={viewport}
-      />,
-    )
+    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
     endMovement()
 
     expect(setData).toHaveBeenCalledTimes(1)
@@ -315,13 +224,13 @@ describe('MapView', () => {
     setData.mockClear()
 
     moving = true
-    // Distinct coordinates throughout, for the reason above: one feature per point means pins that
-    // share a place arrive as one feature, and the count would stop meaning what it says.
-    const second = { ...pin, id: 2, latitude: pin.latitude + 0.001 }
-    const third = { ...pin, id: 3, latitude: pin.latitude + 0.002 }
-
-    rerender(<MapView establishments={[pin, second]} initialViewport={viewport} />)
-    rerender(<MapView establishments={[pin, second, third]} initialViewport={viewport} />)
+    rerender(<MapView establishments={[pin, { ...pin, id: 2 }]} initialViewport={viewport} />)
+    rerender(
+      <MapView
+        establishments={[pin, { ...pin, id: 2 }, { ...pin, id: 3 }]}
+        initialViewport={viewport}
+      />,
+    )
     endMovement()
 
     expect(setData).toHaveBeenCalledTimes(1)
@@ -399,49 +308,5 @@ describe('MapView', () => {
 
     expect(removeLayer.mock.calls.map((call) => call[0])).not.toContain('place-label')
     expect(setLayerZoomRange).toHaveBeenCalledWith('place-label', 14, 24)
-  })
-})
-
-/**
- * Hover writes into a source of its own, and what it writes crosses a worker boundary.
- *
- * MapLibre serialises by reading `input.constructor._classRegistryKey`, which fails on its own
- * `Feature` class (*"can't serialize object of unregistered class"*) and fails differently on an
- * object with a null prototype, where `constructor` is `undefined` (*"Cannot read properties of
- * undefined"*). Both were reported from a browser on a map that drew perfectly; neither could be
- * seen here, because the double never serialises anything.
- *
- * So the property is asserted directly: everything handed to `setData` has an ordinary prototype.
- */
-describe('the hovered marker', () => {
-  function hover() {
-    render(<MapView establishments={[pin]} initialViewport={viewport} />)
-    loadStyle()
-    setData.mockClear()
-
-    act(() => {
-      handlers.get('mousemove:establishments-ordinary')?.({ features: [queriedFeature()] })
-    })
-
-    return setData.mock.calls.at(-1)?.[0] as {
-      features: { geometry: unknown; properties: unknown }[]
-    }
-  }
-
-  it('writes only plain objects, which is what can cross a worker boundary', () => {
-    const written = hover()
-
-    expect(written).toBeDefined()
-
-    const [feature] = written.features
-    expect(Object.getPrototypeOf(feature)).toBe(Object.prototype)
-    expect(Object.getPrototypeOf(feature.geometry)).toBe(Object.prototype)
-    expect(Object.getPrototypeOf(feature.properties)).toBe(Object.prototype)
-  })
-
-  it('carries the state the sprite is chosen from', () => {
-    const [feature] = hover().features
-
-    expect((feature.properties as { state: string }).state).toBe('Good')
   })
 })
