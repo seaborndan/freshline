@@ -20,6 +20,7 @@ const handlers = new Map<string, () => void>()
 
 /** Camera moves the map was asked to make. */
 const easeTo = vi.hoisted(() => vi.fn())
+const fitBounds = vi.hoisted(() => vi.fn())
 
 /** The box the fake map claims to be showing. Times Square, wider than the committed constant. */
 let bounds = { south: 40.7515, north: 40.7605, west: -73.9925, east: -73.9785 }
@@ -43,6 +44,7 @@ vi.mock('maplibre-gl', () => ({
     getCanvas = () => ({ style: {} })
     getZoom = () => 15
     easeTo = easeTo
+    fitBounds = fitBounds
     queryRenderedFeatures = () => clicked
     getBounds = () => ({
       getSouth: () => bounds.south,
@@ -54,7 +56,20 @@ vi.mock('maplibre-gl', () => ({
       handlers.set(event, handler)
     }
   },
-  LngLatBounds: class {},
+  // Records its corners so a test can assert *which* box was framed rather than only that something
+  // was. [west, south] then [east, north], which is MapLibre's own argument order.
+  //
+  // Explicit fields rather than constructor parameter properties: `erasableSyntaxOnly` is on, and
+  // parameter properties emit runtime code, so they pass vitest and fail `tsc -b`.
+  LngLatBounds: class {
+    southWest: [number, number]
+    northEast: [number, number]
+
+    constructor(southWest: [number, number], northEast: [number, number]) {
+      this.southWest = southWest
+      this.northEast = northEast
+    }
+  },
   NavigationControl: class {},
 }))
 
@@ -82,6 +97,7 @@ beforeEach(() => {
   bounds = { south: 40.7515, north: 40.7605, west: -73.9925, east: -73.9785 }
   clicked = []
   easeTo.mockClear()
+  fitBounds.mockClear()
   fetchMap.mockReset()
   fetchMap.mockResolvedValue(loaded)
   fetchEstablishment.mockReset()
@@ -102,6 +118,12 @@ beforeEach(() => {
   fetchFilterOptions.mockResolvedValue({
     cuisines: ['American', 'Chinese'],
     localities: ['Brooklyn', 'Manhattan'],
+    // Measured from the live data. Brooklyn is nowhere near the opening view, which is the whole
+    // point of the camera move these bounds exist for.
+    localityBounds: [
+      { locality: 'Brooklyn', minLatitude: 40.5727, maxLatitude: 40.7377, minLongitude: -74.037, maxLongitude: -73.8581 },
+      { locality: 'Manhattan', minLatitude: 40.6911, maxLatitude: 40.8729, minLongitude: -74.0196, maxLongitude: -73.9148 },
+    ],
   })
   window.history.replaceState(null, '', '/')
 })
@@ -151,6 +173,111 @@ describe('MapPage', () => {
     })
 
     expect(fetchMap).toHaveBeenCalledTimes(2)
+  })
+
+  describe('framing a borough', () => {
+    /**
+     * The reported problem: choosing a borough while looking at somewhere else leaves the map empty,
+     * because the filter is applied to a viewport containing none of it. Choosing a borough is a
+     * request to see that borough.
+     */
+    it('moves the camera to the borough that was chosen', async () => {
+      render(<MapPage />)
+      await showMap()
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/borough/i), { target: { value: 'Brooklyn' } })
+      })
+
+      expect(fitBounds).toHaveBeenCalledTimes(1)
+
+      // The box the API measured for Brooklyn, not a box near it — [west, south], [east, north].
+      const framed = fitBounds.mock.calls[0][0] as {
+        southWest: [number, number]
+        northEast: [number, number]
+      }
+      expect(framed.southWest).toEqual([-74.037, 40.5727])
+      expect(framed.northEast).toEqual([-73.8581, 40.7377])
+    })
+
+    /**
+     * The bug the `focusOn` camera already taught this page once, in a different shape.
+     *
+     * Derived from "is the view inside the chosen borough?", this would fire again the moment
+     * somebody panned *within* that borough — the map would drag itself back and the user could not
+     * move. The move belongs to the act of choosing, so panning afterwards must leave it alone.
+     */
+    it('does not drag the map back when the user pans afterwards', async () => {
+      render(<MapPage />)
+      await showMap()
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/borough/i), { target: { value: 'Brooklyn' } })
+      })
+      expect(fitBounds).toHaveBeenCalledTimes(1)
+
+      bounds = { south: 40.6, north: 40.61, west: -74.0, east: -73.99 }
+      await act(async () => {
+        handlers.get('moveend')?.()
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(debounceMilliseconds)
+      })
+
+      expect(fitBounds).toHaveBeenCalledTimes(1)
+    })
+
+    /**
+     * A link naming a borough and nothing else opens on the committed opening view, which is Times
+     * Square — so a `?locality=Brooklyn` link would show a filter matching nothing on screen. That is
+     * the same empty map this feature exists to prevent, arriving by a different route.
+     */
+    it('frames a borough named by a link that fixed no viewport', async () => {
+      window.history.replaceState(null, '', '/map?locality=Brooklyn')
+
+      render(<MapPage />)
+      await showMap()
+
+      expect(fitBounds).toHaveBeenCalledTimes(1)
+    })
+
+    /**
+     * The opposite case, and the reason the one above is conditional. A shared link carrying a box
+     * *and* a borough has already said where to look; framing the borough would discard the view the
+     * sender deliberately chose.
+     */
+    it('honours a shared viewport rather than framing the borough it names', async () => {
+      window.history.replaceState(
+        null,
+        '',
+        '/map?locality=Brooklyn&minLat=40.60&maxLat=40.62&minLon=-74.00&maxLon=-73.98',
+      )
+
+      render(<MapPage />)
+      await showMap()
+
+      expect(fitBounds).not.toHaveBeenCalled()
+    })
+
+    /**
+     * "Show me everywhere" is not a request to go anywhere in particular, and zooming out to the
+     * whole city would throw away the place the user was looking at.
+     */
+    it('stays put when the borough filter is cleared', async () => {
+      render(<MapPage />)
+      await showMap()
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/borough/i), { target: { value: 'Brooklyn' } })
+      })
+      expect(fitBounds).toHaveBeenCalledTimes(1)
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/borough/i), { target: { value: '' } })
+      })
+
+      expect(fitBounds).toHaveBeenCalledTimes(1)
+    })
   })
 
   // Two numbers, not one. They match here — the five fixture establishments are at five different

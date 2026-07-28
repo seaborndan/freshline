@@ -294,7 +294,33 @@ internal sealed class EstablishmentQueries(FreshlineDbContext dbContext) : IEsta
             .OrderBy(locality => locality)
             .ToListAsync(cancellationToken);
 
-        return new EstablishmentFilterOptions { Cuisines = cuisines, Localities = localities };
+        // One grouped pass for all five boxes rather than a query per locality. Establishments with
+        // no coordinates are excluded because they cannot contribute to a box that a camera will be
+        // pointed at — and a locality whose establishments are all uncoordinated correctly produces
+        // no entry at all rather than a box around nothing.
+        List<LocalityBounds> localityBounds = await dbContext.Establishments
+            .Where(establishment =>
+                establishment.Locality != null &&
+                establishment.Latitude != null &&
+                establishment.Longitude != null)
+            .GroupBy(establishment => establishment.Locality!)
+            .Select(group => new LocalityBounds
+            {
+                Locality = group.Key,
+                MinLatitude = group.Min(establishment => establishment.Latitude!.Value),
+                MaxLatitude = group.Max(establishment => establishment.Latitude!.Value),
+                MinLongitude = group.Min(establishment => establishment.Longitude!.Value),
+                MaxLongitude = group.Max(establishment => establishment.Longitude!.Value),
+            })
+            .OrderBy(bounds => bounds.Locality)
+            .ToListAsync(cancellationToken);
+
+        return new EstablishmentFilterOptions
+        {
+            Cuisines = cuisines,
+            Localities = localities,
+            LocalityBounds = localityBounds,
+        };
     }
 
     /// <summary>

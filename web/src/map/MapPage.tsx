@@ -105,6 +105,65 @@ export function MapPage() {
    */
   const [focusOn, setFocusOn] = useState<{ latitude: number; longitude: number } | null>(null)
 
+  /**
+   * The borough to frame, or null.
+   *
+   * **Set when the chosen locality changes, and only then.** This is the same discipline the camera
+   * bug above taught: as a value derived from "is the current view inside the chosen borough?" it
+   * would be true again the moment somebody panned within that borough, and the map would drag
+   * itself back. Choosing a borough is an act; the camera move belongs to the act.
+   *
+   * Clearing the filter deliberately does not move anything. "Show me everywhere" is not a request
+   * to go anywhere in particular, and zooming out to the whole city would throw away the place the
+   * user was looking at.
+   */
+  const [frameBounds, setFrameBounds] = useState<Viewport | null>(null)
+
+  /**
+   * Seeded from the URL, but only when the URL also fixed a viewport.
+   *
+   * A shared link carrying both a box and a borough has already said where to look, and framing the
+   * borough would throw away the view the sender chose. A link carrying a borough and *no* box has
+   * not — and left unseeded it would open on the committed opening view with a filter that matches
+   * nothing there, which is the empty map this whole feature exists to prevent.
+   */
+  const previousLocality = useRef(initial.viewport === null ? undefined : initial.filters.locality)
+
+  useEffect(() => {
+    const locality = filters.locality
+
+    if (locality === previousLocality.current) {
+      return
+    }
+
+    if (locality === undefined) {
+      previousLocality.current = locality
+      return
+    }
+
+    // A borough whose establishments all lack coordinates has no box, and there is nowhere to point
+    // a camera. The filter still applies; the view simply stays where it is.
+    const bounds = options?.localityBounds.find((entry) => entry.locality === locality)
+
+    // Recorded only once the move has actually been made, and this ordering is load-bearing: the
+    // vocabulary is fetched asynchronously, so on a `?locality=` link this effect runs first with
+    // `options` still null. Marking the borough handled at that point would spend its one chance to
+    // frame on a render where there was nothing to frame with, and the retry when the options
+    // arrive would find it already dealt with. Found by a test, not by reading it back.
+    if (bounds === undefined) {
+      return
+    }
+
+    previousLocality.current = locality
+
+    setFrameBounds({
+      minLatitude: bounds.minLatitude,
+      maxLatitude: bounds.maxLatitude,
+      minLongitude: bounds.minLongitude,
+      maxLongitude: bounds.maxLongitude,
+    })
+  }, [filters.locality, options])
+
   const viewportRef = useRef(viewport)
   viewportRef.current = viewport
 
@@ -146,6 +205,7 @@ export function MapPage() {
           onViewportChange={handleViewportChange}
           onSelect={handleSelect}
           focusOn={focusOn}
+          frameBounds={frameBounds}
         />
 
         {establishments.failure === null ? null : (

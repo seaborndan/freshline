@@ -181,6 +181,28 @@ export interface EstablishmentDetail {
 export interface EstablishmentFilterOptions {
   cuisines: string[]
   localities: string[]
+
+  /**
+   * Where each area's drawable establishments are, so choosing a borough can move the camera to it.
+   *
+   * Measured from the establishments rather than taken from a published borough outline — it frames
+   * where the restaurants are, which is a different question from where the legal boundary runs, and
+   * the more useful one for a camera.
+   *
+   * An area whose establishments all lack coordinates appears in `localities` and not here, so this
+   * list can be shorter than that one. A lookup that misses is a borough with nowhere to point at,
+   * not an error.
+   */
+  localityBounds: LocalityBounds[]
+}
+
+/** The box containing one area's drawable establishments. Named as `Viewport` names its edges. */
+export interface LocalityBounds {
+  locality: string
+  minLatitude: number
+  maxLatitude: number
+  minLongitude: number
+  maxLongitude: number
 }
 
 /**

@@ -24,6 +24,7 @@ import {
   type EstablishmentFilterOptions,
   type InspectionDetail,
   type InspectionOutcome,
+  type LocalityBounds,
   type LatestInspectionSummary,
   type MapEstablishment,
   type MapResult,
@@ -332,7 +333,49 @@ export function readFilterOptions(body: unknown): EstablishmentFilterOptions {
   return {
     cuisines: readNames(source.cuisines, 'cuisines'),
     localities: readNames(source.localities, 'localities'),
+    localityBounds: readArray(source.localityBounds, 'localityBounds').map((entry, index) =>
+      readLocalityBounds(entry, `localityBounds[${index}]`),
+    ),
   }
+}
+
+/**
+ * One area's box, checked hard because it is about to be handed to a camera.
+ *
+ * The check that matters is **ordering**, and it is the one a range check cannot make: a swapped
+ * min and max are both perfectly valid New York coordinates, so "is this a plausible latitude" says
+ * yes to an inside-out box. Handed to `fitBounds`, that box either frames nothing or throws inside
+ * MapLibre, and the failure surfaces as a broken map rather than as a bad response.
+ *
+ * This is the same shape of bug the viewport containment check exists for, one level up: the values
+ * are individually fine and their relationship is wrong.
+ */
+function readLocalityBounds(value: unknown, path: string): LocalityBounds {
+  const source = readObject(value, path)
+
+  const locality = readString(source.locality, `${path}.locality`)
+
+  if (locality === '') {
+    fail(`${path}.locality`, 'expected a locality name, got an empty string')
+  }
+
+  const minLatitude = readNumber(source.minLatitude, `${path}.minLatitude`)
+  const maxLatitude = readNumber(source.maxLatitude, `${path}.maxLatitude`)
+  const minLongitude = readNumber(source.minLongitude, `${path}.minLongitude`)
+  const maxLongitude = readNumber(source.maxLongitude, `${path}.maxLongitude`)
+
+  if (minLatitude > maxLatitude) {
+    fail(`${path}.minLatitude`, `expected at most maxLatitude (${maxLatitude}), got ${minLatitude}`)
+  }
+
+  if (minLongitude > maxLongitude) {
+    fail(
+      `${path}.minLongitude`,
+      `expected at most maxLongitude (${maxLongitude}), got ${minLongitude}`,
+    )
+  }
+
+  return { locality, minLatitude, maxLatitude, minLongitude, maxLongitude }
 }
 
 /**

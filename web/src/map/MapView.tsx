@@ -136,6 +136,19 @@ export interface MapViewProps {
    * The caller decides when that is worth a camera move; this only carries it out.
    */
   focusOn?: { latitude: number; longitude: number } | null
+
+  /**
+   * A box the map should frame, or null to leave the camera alone.
+   *
+   * Exists for filtering to a borough: choosing "Staten Island" while looking at Times Square
+   * otherwise empties the map, because the filter is applied to a viewport that contains none of it.
+   * The user's request was to see that borough, and the honest reading of it moves the camera.
+   *
+   * A box rather than a centre and a zoom, for the same reason the URL carries one: `fitBounds`
+   * guarantees the whole area is visible on any window size, where a zoom would frame a different
+   * amount of city on a phone than on a monitor.
+   */
+  frameBounds?: Viewport | null
 }
 
 export function MapView({
@@ -144,6 +157,7 @@ export function MapView({
   onViewportChange,
   onSelect,
   focusOn,
+  frameBounds,
 }: MapViewProps) {
   const container = useRef<HTMLDivElement>(null)
   const map = useRef<MapLibreMap | null>(null)
@@ -403,6 +417,35 @@ export function MapView({
       duration: 600,
     })
   }, [focusLatitude, focusLongitude])
+
+  // Frames a box when the caller asks. Keyed on the four edges rather than on object identity, so a
+  // re-render carrying an equal box does not re-fly to it — the same reasoning as `focusOn` above.
+  const frameSouth = frameBounds?.minLatitude ?? null
+  const frameNorth = frameBounds?.maxLatitude ?? null
+  const frameWest = frameBounds?.minLongitude ?? null
+  const frameEast = frameBounds?.maxLongitude ?? null
+
+  useEffect(() => {
+    if (
+      frameSouth === null ||
+      frameNorth === null ||
+      frameWest === null ||
+      frameEast === null ||
+      map.current === null
+    ) {
+      return
+    }
+
+    map.current.fitBounds(
+      new LngLatBounds([frameWest, frameSouth], [frameEast, frameNorth]),
+      {
+        // Room for the legend and the panels, which sit over the map rather than beside it. Without
+        // it a borough's southern edge lands underneath the legend and reads as missing pins.
+        padding: 48,
+        duration: 700,
+      },
+    )
+  }, [frameSouth, frameNorth, frameWest, frameEast])
 
   // Pushes new pins into the existing source, unless the user is mid-gesture — see `setOrDefer`.
   // Guarded because the pins usually arrive *before* the style has loaded, in which case there is no
