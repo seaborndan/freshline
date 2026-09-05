@@ -130,6 +130,7 @@ internal static class EstablishmentEndpoints
         IEstablishmentQueries queries,
         CancellationToken cancellationToken,
         string? nameStartsWith = null,
+        string? nameContains = null,
         string? cuisine = null,
         string? locality = null,
         InspectionOutcome? outcome = null,
@@ -162,6 +163,7 @@ internal static class EstablishmentEndpoints
                 Filter = new EstablishmentFilter
                 {
                     NameStartsWith = nameStartsWith,
+                    NameContains = nameContains,
                     Cuisine = cuisine,
                     Locality = locality,
                     Outcome = outcome,
@@ -209,6 +211,7 @@ internal static class EstablishmentEndpoints
         double? minLon = null,
         double? maxLon = null,
         string? nameStartsWith = null,
+        string? nameContains = null,
         string? cuisine = null,
         string? locality = null,
         InspectionOutcome? outcome = null,
@@ -267,6 +270,7 @@ internal static class EstablishmentEndpoints
                 Filter = new EstablishmentFilter
                 {
                     NameStartsWith = nameStartsWith,
+                    NameContains = nameContains,
                     Cuisine = cuisine,
                     Locality = locality,
                     Outcome = outcome,

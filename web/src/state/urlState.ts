@@ -79,7 +79,7 @@ export function readUrlState(search: string): MapUrlState {
 
   const name = params.get('name')?.trim()
   if (name !== undefined && name !== '') {
-    filters.nameStartsWith = name
+    filters.nameContains = name
   }
 
   const cuisine = params.get('cuisine')?.trim()
@@ -140,8 +140,8 @@ export function writeUrlState(state: MapUrlState): string {
   const params = new URLSearchParams()
   const { filters, viewport, selectedId } = state
 
-  if (filters.nameStartsWith !== undefined && filters.nameStartsWith !== '') {
-    params.set('name', filters.nameStartsWith)
+  if (filters.nameContains !== undefined && filters.nameContains !== '') {
+    params.set('name', filters.nameContains)
   }
 
   if (filters.cuisine !== undefined) {

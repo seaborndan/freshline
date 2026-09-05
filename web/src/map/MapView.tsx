@@ -36,8 +36,6 @@ import {
   unclusteredFilter,
 } from './layers'
 import {
-  basemapAttribution,
-  basemapRasterTiles,
   basemapStyleUrl,
   dataBounds,
   labelMinimumZoom,
@@ -45,44 +43,6 @@ import {
 } from './initialView'
 import { viewportOf } from './viewportOf'
 import { basemapRequest } from './basemapRequest'
-
-const rasterSourceId = 'basemap-geometry'
-const rasterLayerId = 'basemap-geometry'
-
-/**
- * Replaces the basemap's geometry with pictures, keeping its lettering.
- *
- * Positron arrives as 95 layers: a background, 9 fills, 56 lines, 2 circles and 27 symbol layers.
- * Everything but the background and the symbols is removed and a single raster layer put in its
- * place, underneath the labels. See `basemapRasterTiles` for the measurements behind this — the
- * short version is that a vector tile has to be parsed before it can be drawn and an image does not,
- * and parsing is what makes the map stutter when it moves somewhere new.
- *
- * The labels stay vector so they stay upright when the map is rotated. Baked into a picture they
- * would turn with it and never turn back.
- */
-function drawGeometryFromRasterTiles(map: MapLibreMap): void {
-  const layers = map.getStyle().layers
-  const firstSymbolLayer = layers.find((layer) => layer.type === 'symbol')?.id
-
-  map.addSource(rasterSourceId, {
-    type: 'raster',
-    tiles: [basemapRasterTiles],
-    // 256 with an @2x URL: the images are 512 pixels drawn into 256 of layout, which is how a raster
-    // basemap stays sharp on a high-density display.
-    tileSize: 256,
-    attribution: basemapAttribution,
-  })
-
-  // Beneath the labels, above the background.
-  map.addLayer({ id: rasterLayerId, type: 'raster', source: rasterSourceId }, firstSymbolLayer)
-
-  for (const layer of layers) {
-    if (layer.type === 'fill' || layer.type === 'line' || layer.type === 'circle') {
-      map.removeLayer(layer.id)
-    }
-  }
-}
 
 /**
  * Stops the basemap drawing labels below `labelMinimumZoom`.
@@ -133,6 +93,8 @@ const clickableLayerIds = [
 ]
 
 export interface MapViewProps {
+  /** Larger pins for a focused shortlist. Read at map construction. */
+  prominentPins?: boolean
   /** The pins to draw. */
   establishments: readonly MapEstablishment[]
 
@@ -202,6 +164,7 @@ export interface MapViewProps {
 }
 
 export function MapView({
+  prominentPins = false,
   establishments,
   initialViewport,
   onViewportChange,
@@ -452,11 +415,8 @@ export function MapView({
       // it was, and the first request would be the one the user's first pan triggered.
       latestOnViewportChange.current?.(viewportOf(created))
 
-      drawGeometryFromRasterTiles(created)
 
-      // Applied after the geometry swap, so the only vector layers left are the ones this restricts.
-      // That is what stops the vector tiles being fetched at all below this zoom: MapLibre asks a
-      // source for tiles only when a visible layer needs them.
+      // Reduce label placement work when zoomed out; geometry remains vector at every zoom.
       quietenLabelsWhenZoomedOut(created)
 
       created.addSource(sourceId, {
@@ -515,9 +475,9 @@ export function MapView({
           ['all', unclusteredFilter, ordinaryFilter],
           {
             'circle-color': circleColour,
-            'circle-radius': circleRadius,
+            'circle-radius': prominentPins ? 10 : circleRadius,
             'circle-stroke-color': circleStrokeColour,
-            'circle-stroke-width': circleStrokeWidth,
+            'circle-stroke-width': prominentPins ? 3 : circleStrokeWidth,
           },
         ],
         [
@@ -525,9 +485,9 @@ export function MapView({
           ['all', unclusteredFilter, priorityFilter],
           {
             'circle-color': circleColour,
-            'circle-radius': circleRadius,
+            'circle-radius': prominentPins ? 12 : circleRadius,
             'circle-stroke-color': circleStrokeColour,
-            'circle-stroke-width': circleStrokeWidth,
+            'circle-stroke-width': prominentPins ? 3 : circleStrokeWidth,
           },
         ],
       ] as const) {
@@ -560,7 +520,7 @@ export function MapView({
         source: selectionSourceId,
         paint: {
           'circle-color': selectionColour,
-          'circle-radius': selectionHaloRadius,
+          'circle-radius': prominentPins ? 19 : selectionHaloRadius,
           'circle-opacity': 0.22,
           'circle-stroke-color': selectionColour,
           'circle-stroke-width': 1,
@@ -574,7 +534,7 @@ export function MapView({
         source: selectionSourceId,
         paint: {
           'circle-color': selectionColour,
-          'circle-radius': selectionRingRadius,
+          'circle-radius': prominentPins ? 15 : selectionRingRadius,
           // White, and thick. The basemap is pale and covered in coloured dots; the one thing none
           // of them has is a heavy light outline, which is what makes this one findable.
           'circle-stroke-color': '#ffffff',

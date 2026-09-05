@@ -40,7 +40,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { fetchMap } from '../api/client'
+import { completeMap } from './completeMap'
 import type { EstablishmentFilter, MapResult } from '../api/contract'
 import { ApiProblemError, ApiUnreachableError, isAbortError } from '../api/errors'
 import { viewportKey, viewportProblem, type Viewport } from '../api/viewport'
@@ -146,7 +146,7 @@ export function useEstablishments(
       requested.current = `${key}|${filterKey}`
       setIsLoading(true)
 
-      fetchMap({ viewport, filter }, controller.signal)
+      completeMap({ viewport, filter }, controller.signal)
         .then((next) => {
           setResult(next)
           setFailure(null)

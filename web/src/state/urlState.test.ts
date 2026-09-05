@@ -20,7 +20,7 @@ describe('readUrlState', () => {
     )
 
     expect(filters).toEqual({
-      nameStartsWith: 'DUNKIN',
+      nameContains: 'DUNKIN',
       cuisine: 'Coffee/Tea',
       locality: 'Brooklyn',
       outcome: 'Poor',
@@ -81,7 +81,7 @@ describe('writeUrlState', () => {
   })
 
   it('omits an empty name rather than writing name=', () => {
-    expect(writeUrlState({ viewport: null, filters: { nameStartsWith: '' }, selectedId: null })).toBe('')
+    expect(writeUrlState({ viewport: null, filters: { nameContains: '' }, selectedId: null })).toBe('')
   })
 
   // The round trip is what makes a link shareable: what comes out of the address bar has to be what
@@ -91,7 +91,7 @@ describe('writeUrlState', () => {
       viewport: timesSquare,
       selectedId: 1328,
       filters: {
-        nameStartsWith: 'DUNKIN',
+        nameContains: 'DUNKIN',
         cuisine: 'Coffee/Tea',
         locality: 'Brooklyn',
         outcome: 'Poor' as const,

@@ -353,24 +353,22 @@ describe('MapPage', () => {
     await showMap()
 
     const status = screen.getByRole('status')
-    expect(status).toHaveTextContent(/more than 5 places/i)
-    expect(status).toHaveTextContent(/zoom in/i)
+    expect(screen.getByRole('alert')).toHaveTextContent(/dense|location/i)
+    expect(status).not.toHaveTextContent(/5 places/i)
     expect(status).not.toHaveTextContent(/addresses/i)
   })
 
   /**
    * The subset a truncated view shows is *not* arbitrary — the API returns the most severe results
-   * first — and a reader has to be told, because at city zoom the map can be showing no `Good`
-   * establishments at all. Dropping them is right; letting somebody read the result as a picture of
-   * the city is not.
+   * first. The complete loader must replace that biased sample with complete child responses.
    */
-  it('says a truncated map is showing the worst results, not a sample', async () => {
-    fetchMap.mockResolvedValue({ ...loaded, isTruncated: true })
+  it('combines complete partitions instead of showing a worst-first sample', async () => {
+    fetchMap.mockResolvedValueOnce({ ...loaded, isTruncated: true }).mockResolvedValue(loaded)
 
     render(<MapPage />)
     await showMap()
 
-    expect(screen.getByRole('status')).toHaveTextContent(/worst results first/i)
+    expect(screen.getByRole('status')).toHaveTextContent('5 places')
   })
 
   it('distinguishes an empty view from a failure', async () => {

@@ -352,23 +352,12 @@ describe('MapView', () => {
   // over Manhattan, a zoom-14 vector tile is 389KB against 26KB of raster, and their vector tiles
   // stop at 14 — which is exactly where the reported jitter stopped, because above it MapLibre
   // overzooms tiles it has already parsed.
-  it('draws the basemap geometry from raster tiles', () => {
+  it('keeps vector geometry and never adds raster tiles', () => {
     render(<MapView establishments={[pin]} initialViewport={viewport} />)
     loadStyle()
-
-    const raster = addedLayers.find((call) => (call[0] as { type?: string }).type === 'raster')
-    expect(raster).toBeDefined()
-    // Underneath the labels, so they draw over the picture rather than beneath it.
-    expect(raster?.[1]).toBe('place-label')
-  })
-
-  it('removes the vector geometry it replaced', () => {
-    render(<MapView establishments={[pin]} initialViewport={viewport} />)
-    loadStyle()
-
-    const removed = removeLayer.mock.calls.map((call) => call[0])
-    expect(removed).toContain('water')
-    expect(removed).toContain('road')
+    expect(addedLayers.some((call) => (call[0] as { type?: string }).type === 'raster')).toBe(false)
+    expect(removeLayer.mock.calls.map((call) => call[0])).not.toContain('water')
+    expect(removeLayer.mock.calls.map((call) => call[0])).not.toContain('road')
   })
 
   // The labels stay vector so they stay upright when the map is rotated. Baked into a picture they

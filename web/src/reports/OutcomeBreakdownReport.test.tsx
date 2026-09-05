@@ -104,7 +104,7 @@ describe('OutcomeBreakdownReport', () => {
 
     await screen.findByRole('row', { name: /Basque/ })
 
-    expect(screen.getByRole('columnheader', { name: /Supported/ })).toHaveAttribute(
+    expect(screen.getByRole('columnheader', { name: /Conservative poor/ })).toHaveAttribute(
       'aria-sort',
       'descending',
     )
