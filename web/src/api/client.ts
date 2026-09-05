@@ -30,6 +30,15 @@ export async function fetchProspectCategories(signal?: AbortSignal): Promise<Opp
   return readCategories(await requestJson(`${apiRoot}/prospects/categories`, signal))
 }
 
+export async function fetchProspectMap(ids: number[], signal?: AbortSignal): Promise<MapResult> {
+  const items: MapResult['items'] = []
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    const body = await requestJson(`${apiRoot}/prospects/map?ids=${ids.slice(offset, offset + 200).join(',')}`, signal)
+    items.push(...readMapResult(body, { minLatitude: -90, maxLatitude: 90, minLongitude: -180, maxLongitude: 180 }).items)
+  }
+  return { items, isTruncated: false }
+}
+
 export async function fetchProspects(filters: { locality: string; from: string; to: string; category?: string }, signal?: AbortSignal): Promise<ProspectResult> {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value)

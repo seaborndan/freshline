@@ -5,6 +5,13 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+Prospect cards now have **View on map** beside inspection history. `focus=1` requests an explicit
+initial camera move, even when the restaurant is already inside the opening viewport. Saved lists
+have a dedicated `/prospects/map?list=...` view backed by a bounded batch pin lookup; it fits only
+the list's restaurants, reports unavailable locations, and links back to the selected saved list.
+The list remains browser-local. Live checks verified individual centering and a saved-list pin.
+Validation for this addition: 147 API tests passed; frontend, TypeScript, lint and build checked.
+
 `feat/evidence-prospecting` follows the user's instruction to finish the remaining explorer issues
 and then build the supplier workflow. Read `docs/prospecting.md` for the current behavior and
 verification. This supersedes the earlier notes below about hybrid rendering and prefix-only search.

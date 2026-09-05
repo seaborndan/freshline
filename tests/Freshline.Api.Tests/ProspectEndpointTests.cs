@@ -10,6 +10,31 @@ namespace Freshline.Api.Tests;
 public class ProspectEndpointTests(ApiFixture fixture)
 {
     [Fact]
+    public async Task List_map_returns_only_requested_places_and_deduplicates_ids()
+    {
+        using HttpClient client = fixture.CreateClient();
+        int id = fixture.Seeded.InspectedTwiceId;
+        var options = new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web);
+        options.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        var result = await client.GetFromJsonAsync<MapResult>($"/api/v1/prospects/map?ids={id},{id},2147483647", options);
+        Assert.NotNull(result);
+        Assert.Equal(id, Assert.Single(result.Items).Id);
+        Assert.NotNull(result.Items[0].LatestInspection);
+        Assert.False(result.IsTruncated);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("0")]
+    [InlineData("1,abc")]
+    public async Task List_map_rejects_invalid_ids(string ids)
+    {
+        using HttpClient client = fixture.CreateClient();
+        using HttpResponseMessage response = await client.GetAsync($"/api/v1/prospects/map?ids={ids}");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Category_changes_the_evidence_and_all_combines_it_without_duplicate_places()
     {
         using HttpClient client = fixture.CreateClient();

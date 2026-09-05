@@ -25,5 +25,6 @@ public static class OpportunityCategories
 
 public interface IProspectQueries
 {
+    Task<MapResult> MapAsync(int[] ids, CancellationToken cancellationToken);
     Task<ProspectResult> FindAsync(string category, string? locality, DateOnly from, DateOnly to, CancellationToken cancellationToken);
 }

@@ -27,6 +27,7 @@ export function MapPage() {
   // Read once. After this the URL is an output — re-reading it on every render would fight the
   // writes below, and nothing else in the application changes it.
   const initial = useRef(readUrlState(window.location.search)).current
+  const forceInitialFocus = useRef(new URLSearchParams(window.location.search).get('focus') === '1')
 
   const [filters, setFilters] = useState<EstablishmentFilter>(initial.filters)
 
@@ -229,9 +230,10 @@ export function MapPage() {
     // Already on screen — which is every click on a pin, and some `?id=` links. Moving the camera
     // there would yank it out from under somebody who was already looking at the thing they clicked.
     const current = viewportRef.current
-    if (current !== null && containsPoint(current, record.latitude, record.longitude)) {
+    if (!forceInitialFocus.current && current !== null && containsPoint(current, record.latitude, record.longitude)) {
       return
     }
+    forceInitialFocus.current = false
 
     focusToken.current += 1
     setFocusOn({

@@ -37,6 +37,15 @@ and 180 days earlier. No schema, authentication, or grading changes were made.
 
 ## Saved work
 
+Both discovery and saved cards offer **View on map**, which centers and selects the restaurant,
+alongside **View inspection history**. **View entire list on map** opens `/prospects/map?list=...`,
+fits the selected list's pins, and offers the normal map selection/details. The list name refers to
+this browser's local storage, so the link alone does not share a list with another user.
+**Back to saved list** restores the selected list. Missing coordinates/deleted records are counted
+as unavailable; pins use current inspection outcomes, while saved evidence remains its original snapshot.
+`GET /api/v1/prospects/map?ids=...` accepts 1–200 positive IDs per request, deduplicates them, and
+returns only matching establishments with coordinates. Larger lists use sequential batches.
+
 Lists are stored under `freshline.prospects.v1` in browser local storage, not on the server. Click
 **Save to list** on a result, then choose an existing list name or type your own. There is no
 hardcoded list name; a name labels saved work and never changes the discovery query. Older saved

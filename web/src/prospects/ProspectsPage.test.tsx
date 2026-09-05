@@ -79,6 +79,16 @@ it('links the evidence to the matching inspection history', async () => {
   const heading = await screen.findByText('TEST CAFE')
   const card = heading.closest('article')!
   expect(within(card).getByRole('link', { name: /inspection history/ })).toHaveAttribute('href', '/map?id=1')
+  expect(within(card).getByRole('link', { name: 'View on map' })).toHaveAttribute('href', '/map?id=1&focus=1')
+})
+
+it('maps saved cards individually and the selected named list together', async () => {
+  localStorage.setItem(storageKey, JSON.stringify([{ ...prospect, list: 'Queens & Brooklyn', stage: 'To review', notes: '' }]))
+  const user = userEvent.setup()
+  render(<ProspectsPage onNavigate={vi.fn()} />)
+  await user.click(screen.getByRole('button', { name: /Saved lists/ }))
+  expect(screen.getByRole('link', { name: 'View on map' })).toHaveAttribute('href', '/map?id=1&focus=1')
+  expect(screen.getByRole('link', { name: 'View entire list on map' })).toHaveAttribute('href', '/prospects/map?list=Queens%20%26%20Brooklyn')
 })
 
 it('undoes a removal without losing notes', async () => {

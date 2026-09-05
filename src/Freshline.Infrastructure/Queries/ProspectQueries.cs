@@ -6,6 +6,25 @@ namespace Freshline.Infrastructure.Queries;
 
 internal sealed class ProspectQueries(FreshlineDbContext db) : IProspectQueries
 {
+    public async Task<MapResult> MapAsync(int[] ids, CancellationToken cancellationToken)
+    {
+        var items = await db.Establishments.AsNoTracking()
+            .Where(e => ids.Contains(e.Id) && e.Latitude != null && e.Longitude != null)
+            .Select(e => new MapEstablishment
+            {
+                Id = e.Id, Name = e.Name,
+                Latitude = e.Latitude.GetValueOrDefault(), Longitude = e.Longitude.GetValueOrDefault(),
+                IsAwaitingFirstInspection = e.IsAwaitingFirstInspection,
+                LatestInspection = e.Inspections.OrderByDescending(i => i.InspectedOn).ThenByDescending(i => i.Id)
+                    .Select(i => new LatestInspectionSummary
+                    {
+                        InspectedOn = i.InspectedOn, RawGrade = i.RawGrade, Outcome = i.Outcome,
+                        NormalisedSeverity = i.NormalisedSeverity, ClosedByAuthority = i.ClosedByAuthority,
+                    }).FirstOrDefault(),
+            }).ToListAsync(cancellationToken);
+        return new MapResult { Items = items, IsTruncated = false };
+    }
+
     public async Task<ProspectResult> FindAsync(
         string category, string? locality, DateOnly from, DateOnly to, CancellationToken cancellationToken)
     {

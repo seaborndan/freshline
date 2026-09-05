@@ -26,11 +26,11 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
   })
   const [saved, setSaved] = useState<SavedProspect[]>(initialStorage.saved)
   const [storageError, setStorageError] = useState(initialStorage.error)
-  const [list, setList] = useState(initialStorage.saved[0]?.list ?? '')
+  const [list, setList] = useState(new URLSearchParams(location.search).get('list') ?? initialStorage.saved[0]?.list ?? '')
   const [savingId, setSavingId] = useState<number | null>(null)
   const [categories, setCategories] = useState<OpportunityCategory[]>([])
   const [categoryError, setCategoryError] = useState('')
-  const [mode, setMode] = useState<'discover' | 'saved'>('discover')
+  const [mode, setMode] = useState<'discover' | 'saved'>(new URLSearchParams(location.search).has('list') ? 'saved' : 'discover')
   const [announcement, setAnnouncement] = useState('')
   const [removed, setRemoved] = useState<SavedProspect | null>(null)
   const listName = list.trim()
@@ -100,6 +100,7 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
       <label>Saved list<select value={list} onChange={e => setList(e.target.value)}><option value="">Choose a saved list</option>{[...new Set(saved.map(s => s.list))].map(name => <option key={name}>{name}</option>)}</select></label>
       <p>Saved only in this browser. Export your list to keep a copy. Notes and contact status are personal records; nothing is sent to restaurants.</p>
       <button type="button" onClick={exportList} disabled={currentList.length === 0}>Export list CSV</button>
+      {currentList.length > 0 ? <a href={`/prospects/map?list=${encodeURIComponent(listName)}`}>View entire list on map</a> : null}
     </section> : null}
     {storageError ? <p role="alert" className="reports-notice">{storageError}</p> : null}
     {removed ? <p className="prospect-count">Removed {removed.name} from {removed.list}. <button type="button" onClick={() => {
@@ -129,7 +130,8 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
         <div className="prospect-card-head"><span className="eyebrow">{p.locality ?? 'Borough unavailable'}</span><span>{formatPlainDate(p.inspectedOn)}</span></div>
         <h2>{p.name}</h2><p className="prospect-address">{p.address ?? 'Address not published'}</p>
         <div className="prospect-evidence"><h3>Why this place?</h3><ul>{p.evidence.map(e => <li key={e.code}><strong>{e.code}</strong> {e.description ?? 'No description published.'}</li>)}</ul></div>
-        <div className="prospect-actions"><a href={`/map?id=${p.id}`} onClick={e => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onNavigate('map', `?id=${p.id}`) } }}>View inspection history ↗</a>
+        <div className="prospect-actions"><a href={`/map?id=${p.id}&focus=1`} onClick={e => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onNavigate('map', `?id=${p.id}&focus=1`) } }}>View on map</a>
+          <a href={`/map?id=${p.id}`} onClick={e => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onNavigate('map', `?id=${p.id}`) } }}>View inspection history ↗</a>
           {p.phone ? <a href={`tel:${p.phone.replace(/[^+\d]/g, '')}`}>{p.phone}</a> : <span>No phone published</span>}
         </div>
         {mode === 'saved' && existing ? <div className="prospect-notes">
