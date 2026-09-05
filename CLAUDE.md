@@ -6,6 +6,8 @@ quietly working around it.
 
 ## What this project is
 
+For the latest cross-agent development handoff, read `docs/handoff.md` before starting work.
+
 Freshline aggregates public health-inspection and business-licence data from city open-data portals,
 normalises it into one schema, scores establishments, and serves the result to a map UI. See
 `README.md` for the product framing and `docs/adr/` for decisions.
