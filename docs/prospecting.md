@@ -98,6 +98,11 @@ The large map-chunk warning remains; these sizes are not network or phone-perfor
 
 ## Working a territory
 
+Saved cards offer Copy or move to another list. Choose an existing destination or name a new one.
+Copy preserves the source; move removes its membership and opens the destination list. Both carry
+notes, stage, follow-up date and saved evidence. If the restaurant is already at the destination,
+the operation is blocked rather than merging or overwriting independent work.
+
 Discovery cards can be selected individually or a page at a time. Selection survives pagination
 but clears for a submitted search, workspace mode change or unsaved-filter change. The batch save
 form previews new versus existing memberships in the destination list. It adds only new entries,

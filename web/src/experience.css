@@ -239,3 +239,6 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 .discovery-selection { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-block: 20px; }
 .prospect-select { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; color: var(--accent); font-size: 14px; }
 .prospect-select input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
+.transfer-prospect { padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: #f4f7f2; display: grid; gap: 12px; }
+.transfer-prospect p { margin: 0; font-size: 13px; color: var(--muted); }
+.transfer-choices { display: flex; flex-wrap: wrap; gap: 8px; }

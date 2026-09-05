@@ -8,6 +8,8 @@ import { EvidenceCheck } from './EvidenceCheck'
 import { FollowUpAgenda } from './FollowUpAgenda'
 import { VisitBrief } from './VisitBrief'
 import { BatchSave } from './BatchSave'
+import { TransferProspect } from './TransferProspect'
+import { transferProspect } from './workspace'
 import { isDue, localToday, readDiscovery, savedMatches, workspaceQuery } from './workspace'
 import { downloadCsv, toCsv } from '../reports/csv'
 import type { Route } from '../routing/route'
@@ -220,6 +222,13 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
         </div>
         {mode === 'saved' && existing ? <div className="prospect-notes">
           <EvidenceCheck prospect={existing} />
+          <TransferProspect prospect={existing} saved={saved} onTransfer={(destination, move) => {
+            const next = transferProspect(saved, existing.id, existing.list, destination, move)
+            if (!next || !persist(next)) return false
+            setAnnouncement(`${move ? 'Moved' : 'Copied'} ${existing.name} to ${destination}.`)
+            if (move) { setList(destination); resetSavedFilters(); setRemoved(null) }
+            return true
+          }} />
           {isDue(existing, today) && existing.followUpOn ? <p className="followup-due">{existing.followUpOn === today ? 'Follow up today' : `Follow-up overdue · ${formatPlainDate(existing.followUpOn)}`}</p> : null}
           <label>Contact status<select value={existing.stage} onChange={e => update(existing, { stage: e.target.value as SavedProspect['stage'] })}>{stages.map(s => <option key={s}>{s}</option>)}</select></label>
           <label>Next follow-up<input type="date" value={existing.followUpOn ?? ''} onChange={e => update(existing, { followUpOn: e.target.value })} /></label>

@@ -5,6 +5,12 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+Saved restaurants now support Copy or move to another list, preserving notes, status, dates and
+evidence. Copy is the default; move explicitly removes the source membership and opens the destination.
+Existing destination memberships are never overwritten, and failed writes keep the form available.
+Validation: 317 frontend tests passed, lint and production build checked. CUA still fails before
+tab access with a missing kernel-assets path; this UI has not had live visual verification.
+
 Discovery now supports selecting individual restaurants or the visible page, retaining selections
 across pages, and saving together to one destination. A preview counts new versus existing list
 memberships; existing evidence, notes and status are preserved. New searches and mode changes clear
