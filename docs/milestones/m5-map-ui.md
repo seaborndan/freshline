@@ -449,11 +449,16 @@ it a hue would overwrite the grade it actually has. **Never-inspected is hollow*
 `Ungraded` by shape as well as fill; they are the two largest non-grades and the pair most likely to
 be collapsed into "no data".
 
-**The basemap is CARTO Positron**, from `basemaps.cartocdn.com`, with no API key. Named as a runtime
+**Update, 5 September 2026:** CARTO now requires a basemap API key. Freshline supplies it through
+`VITE_CARTO_BASEMAP_API_KEY` in ignored local configuration. See [local development](../local-development.md#web-app-and-carto-basemap-key)
+for registration, watermark troubleshooting, and CARTO's raster retirement notice. The hybrid
+raster/vector rendering described below is still in use.
+
+**The basemap is CARTO Positron**, from `basemaps.cartocdn.com`, now authenticated by API key. Named as a runtime
 dependency on a third party: if that CDN is down the pins draw on a blank background and the page
-still works. Greyscale by design, so the data on top of it can have the colour. Rejected: MapTiler
-and Stadia, which are better and need a key — a key in a client bundle is a key in the repository;
-and raster OpenStreetMap tiles, whose usage policy asks applications not to use them.
+still works. Greyscale by design, so the data on top of it can have the colour. The original
+selection favored CARTO's then-keyless access over providers requiring keys. That rationale is
+now obsolete: browser-visible keys can be configured outside Git, as Freshline now does.
 
 **Three bugs were found by running the app. The first two could not have been found by a test;
 the third was actively hidden by one.**

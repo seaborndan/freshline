@@ -119,7 +119,7 @@ export const labelMinimumZoom = 14
 /**
  * The basemap.
  *
- * **CARTO Positron**, served from `basemaps.cartocdn.com` with no API key. This is a runtime
+ * **CARTO Positron**, served from `basemaps.cartocdn.com` with a CARTO basemap API key. This is a runtime
  * dependency on a third party and is named as one: if that CDN is down, the pins draw on a blank
  * background rather than on streets, and the page still works. Attribution for CARTO and
  * OpenStreetMap comes from the style document itself and MapLibre renders it.
@@ -128,9 +128,10 @@ export const labelMinimumZoom = 14
  * up its own colour so that the data on top of it can have some. A full-colour basemap would put
  * green parks and red roads underneath a scale whose whole meaning is green-ish and red-ish dots.
  *
- * Rejected: MapTiler and Stadia, which are better basemaps and need an API key — a key in a client
- * bundle is a key in the repository, and this milestone has no secret to protect and intends to keep
- * it that way. Raster OpenStreetMap tiles, whose usage policy asks applications not to use them.
+ * CARTO now requires a key. basemapRequest adds VITE_CARTO_BASEMAP_API_KEY to CARTO requests;
+ * local configuration lives in an ignored .env.local, never in this source file. Vite exposes
+ * this key to the browser; keeping it out of Git does not make a browser key secret.
+ * See docs/local-development.md for registration and the planned raster retirement.
  *
  * **Only its labels and its lettering are used.** See `basemapRasterTiles` for why, and for what
  * replaces the rest of it.

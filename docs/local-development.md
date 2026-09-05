@@ -139,6 +139,58 @@ FROM Establishments WHERE IsAwaitingFirstInspection = 1;
 SELECT TOP 1 ExternalId, Payload FROM SourceRecords;
 ```
 
+## Web app and CARTO basemap key
+
+From `web`, copy `.env.example` to `.env.local` and set `VITE_CARTO_BASEMAP_API_KEY`
+to your project-specific CARTO key. Run `npm run dev`; restart Vite after changing configuration
+if it has not restarted automatically. `.env.local` is ignored by Git. Never put the actual key
+in source, examples, or documentation. Vite embeds this value in browser code, so it is visible
+to visitors and in tile requests even though it is excluded from Git.
+
+### Getting a key (verified 5 September 2026)
+
+[CARTO's key request page](https://carto.com/basemaps/apikey/) asks for your email,
+domains (one per line), and a description of the project. For local Freshline development,
+use `localhost` and `127.0.0.1`. Describe it as a personal portfolio project exploring NYC
+restaurant inspection data. No CARTO account or approval queue is required.
+
+After submitting, look for mail from `support-basemaps@carto.com` with subject
+“Your CARTO Basemaps API key”. CARTO says delivery usually takes a few minutes but can take
+longer when busy. Check spam and promotions; do not resubmit, because that creates another key.
+If it has not arrived after a few hours, contact that support address.
+
+CARTO currently advertises a free allowance of 5 million tile requests per calendar month across
+raster and vector services, intended for non-commercial projects. Keep CARTO and OpenStreetMap
+attribution visible, and use the key only for this project. Consult the request page and
+[current terms](https://carto.com/legal/basemap-terms/) for usage conditions.
+
+### How Freshline uses the key
+
+MapLibre's `transformRequest` adds `?key=...` (or an additional query parameter) to requests
+on `basemaps.cartocdn.com` and its subdomains. This covers the style and resources discovered
+inside it, including raster tiles and vector tiles. It does not attach the key to the Freshline
+API or unrelated hosts. CARTO's Leaflet example illustrates the same URL parameter, but this
+app uses MapLibre, so no Leaflet code or dependency is needed.
+
+Unauthenticated raster tiles now contain an “API KEY REQUIRED” watermark. If it remains after
+configuration, force-refresh: the browser and CARTO CDN can retain previously cached tiles.
+
+### Are we using vector?
+
+Partly. Freshline currently combines Positron **raster geometry without labels** with **vector
+symbol layers for labels at zoom 14 and above**. Below zoom 14 the basemap uses only raster.
+Restaurant markers are drawn separately from Freshline's data. This hybrid was chosen after
+the July 2026 performance investigation recorded in `docs/milestones/m5-map-ui.md`; it keeps
+labels upright while reducing vector parsing when zoomed out.
+
+CARTO now says raster PNG basemaps are being retired and that it is considering stopping their
+data updates. It recommends vector for sharpness, browser styling, fresher data, and serving
+efficiency. Its key requirement is starting with raster and will also apply to vector; the same
+key covers both. See the [basemap FAQ](https://docs.carto.com/faqs/carto-basemaps) for migration
+guidance. A full-vector migration remains follow-up work: compare real panning/rotation
+performance against the existing hybrid before replacing it. Adding authentication does not
+change the current rendering strategy.
+
 ## Resetting
 
 ```bash

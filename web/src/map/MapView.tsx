@@ -44,6 +44,7 @@ import {
   minimumZoom,
 } from './initialView'
 import { viewportOf } from './viewportOf'
+import { basemapRequest } from './basemapRequest'
 
 const rasterSourceId = 'basemap-geometry'
 const rasterLayerId = 'basemap-geometry'
@@ -296,6 +297,7 @@ export function MapView({
     const created = new MapLibreMap({
       container: container.current,
       style: basemapStyleUrl,
+      transformRequest: basemapRequest,
 
       // fitBounds rather than a centre and a zoom, so that what is drawn is exactly the box that was
       // fetched, on any window size. Centre and zoom would frame a different amount of city on a
