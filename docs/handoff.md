@@ -5,6 +5,9 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+The Saved lists tab badge counts distinct list names, not total saved prospects. Regression coverage
+includes four saved prospects across two lists.
+
 Prospect cards now have **View on map** beside inspection history. `focus=1` requests an explicit
 initial camera move, even when the restaurant is already inside the opening viewport. Saved lists
 have a dedicated `/prospects/map?list=...` view backed by a bounded batch pin lookup; it fits only

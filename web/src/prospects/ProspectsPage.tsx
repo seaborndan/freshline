@@ -94,7 +94,7 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
     </header>
     <div className="prospect-tabs" aria-label="Prospect workspace">
       <button type="button" aria-pressed={mode === 'discover'} onClick={() => setMode('discover')}>Discover prospects</button>
-      <button type="button" aria-pressed={mode === 'saved'} onClick={() => setMode('saved')}>Saved lists ({saved.length})</button>
+      <button type="button" aria-pressed={mode === 'saved'} onClick={() => setMode('saved')}>Saved lists ({new Set(saved.map(p => p.list)).size})</button>
     </div>
     {mode === 'saved' ? <section className="list-tools" aria-label="Saved list settings">
       <label>Saved list<select value={list} onChange={e => setList(e.target.value)}><option value="">Choose a saved list</option>{[...new Set(saved.map(s => s.list))].map(name => <option key={name}>{name}</option>)}</select></label>

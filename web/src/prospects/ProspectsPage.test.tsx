@@ -91,6 +91,18 @@ it('maps saved cards individually and the selected named list together', async (
   expect(screen.getByRole('link', { name: 'View entire list on map' })).toHaveAttribute('href', '/prospects/map?list=Queens%20%26%20Brooklyn')
 })
 
+it('counts distinct saved lists rather than saved prospects in the tab', async () => {
+  localStorage.setItem(storageKey, JSON.stringify([
+    { ...prospect, list: 'Queens', stage: 'To review', notes: '' },
+    { ...prospect, id: 2, list: 'Queens', stage: 'To review', notes: '' },
+    { ...prospect, list: 'Brooklyn', stage: 'To review', notes: '' },
+    { ...prospect, id: 3, list: 'Brooklyn', stage: 'To review', notes: '' },
+  ]))
+  render(<ProspectsPage onNavigate={vi.fn()} />)
+  expect(screen.getByRole('button', { name: 'Saved lists (2)' })).toBeInTheDocument()
+  await screen.findByText('TEST CAFE')
+})
+
 it('undoes a removal without losing notes', async () => {
   localStorage.setItem(storageKey, JSON.stringify([{ ...prospect, list: 'Pest-control prospects', stage: 'Follow up', notes: 'Existing note' }]))
   const user = userEvent.setup()
