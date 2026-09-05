@@ -5,6 +5,9 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+Saved-list maps use larger pins (10px radius, 12px for priority pins) with 3px outlines to make
+sparse shortlists easier to spot. Outcome colors and the general explorer's sizing stay consistent.
+
 The Saved lists tab badge counts distinct list names, not total saved prospects. Regression coverage
 includes four saved prospects across two lists.
 

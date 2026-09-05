@@ -40,7 +40,7 @@ export function ProspectMapPage() {
     <p className="prospect-count">This list belongs to this browser. Pins show current recorded inspection outcomes; saved evidence remains a snapshot.</p>
     {pins !== null && pins.length === 0 ? <p>No places to map. Save restaurants to this list, or check their published addresses.</p> : null}
     {pins && pins.length > 0 ? <main>
-      <MapView establishments={pins} initialViewport={{
+      <MapView prominentPins establishments={pins} initialViewport={{
         minLatitude: Math.min(...pins.map(p => p.latitude)) - 0.002,
         maxLatitude: Math.max(...pins.map(p => p.latitude)) + 0.002,
         minLongitude: Math.min(...pins.map(p => p.longitude)) - 0.002,

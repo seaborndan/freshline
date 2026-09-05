@@ -93,6 +93,8 @@ const clickableLayerIds = [
 ]
 
 export interface MapViewProps {
+  /** Larger pins for a focused shortlist. Read at map construction. */
+  prominentPins?: boolean
   /** The pins to draw. */
   establishments: readonly MapEstablishment[]
 
@@ -162,6 +164,7 @@ export interface MapViewProps {
 }
 
 export function MapView({
+  prominentPins = false,
   establishments,
   initialViewport,
   onViewportChange,
@@ -472,9 +475,9 @@ export function MapView({
           ['all', unclusteredFilter, ordinaryFilter],
           {
             'circle-color': circleColour,
-            'circle-radius': circleRadius,
+            'circle-radius': prominentPins ? 10 : circleRadius,
             'circle-stroke-color': circleStrokeColour,
-            'circle-stroke-width': circleStrokeWidth,
+            'circle-stroke-width': prominentPins ? 3 : circleStrokeWidth,
           },
         ],
         [
@@ -482,9 +485,9 @@ export function MapView({
           ['all', unclusteredFilter, priorityFilter],
           {
             'circle-color': circleColour,
-            'circle-radius': circleRadius,
+            'circle-radius': prominentPins ? 12 : circleRadius,
             'circle-stroke-color': circleStrokeColour,
-            'circle-stroke-width': circleStrokeWidth,
+            'circle-stroke-width': prominentPins ? 3 : circleStrokeWidth,
           },
         ],
       ] as const) {
