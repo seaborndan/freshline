@@ -789,6 +789,11 @@ Write the decision before the code. Then go and find out whether you were right,
 next to the question.
 # September 5 product workspace pass
 
+Further iteration: multi-select discovery, duplicate-preserving batch save and unsaved-only view.
+314 frontend tests pass, including batch persistence and already-saved empty states. Browser QA is
+unverified: CUA could not initialize its kernel assets even after reset. Desktop/mobile visual
+inspection remains a follow-up; the earlier live checks below cover earlier features only.
+
 Implemented local follow-up workflow, backup/restore, manual evidence refresh checks, URL filters,
 and deferred map loading. Verification: 306 frontend tests, TypeScript, lint, production build,
 live saved filtering/evidence lookup and 390px width check. No user notes were changed for live QA.

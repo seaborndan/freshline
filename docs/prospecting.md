@@ -98,6 +98,13 @@ The large map-chunk warning remains; these sizes are not network or phone-perfor
 
 ## Working a territory
 
+Discovery cards can be selected individually or a page at a time. Selection survives pagination
+but clears for a submitted search, workspace mode change or unsaved-filter change. The batch save
+form previews new versus existing memberships in the destination list. It adds only new entries,
+preserving existing notes, dates, stage and evidence; storage errors leave the selection available.
+Only unsaved places excludes restaurants already in any local list. It filters the loaded API
+results, not the full city, and does not fetch replacements beyond the existing 200-record cap.
+
 The across-list agenda shows all due follow-ups, oldest first, excluding Not a fit. Each list
 membership retains its own date and opens the exact restaurant in that list. Clear saved filters
 or Show full list returns to the complete list. Dates refresh while the page remains open.

@@ -9,6 +9,21 @@ vi.mock('../filters/useFilterOptions', () => ({ useFilterOptions: () => ({ local
 vi.mock('../landing/useDatasetSummary', () => ({ useDatasetSummary: () => ({ summary: { latestInspectionOn: '2026-07-22' }, failure: null }) }))
 const prospect = { id: 1, name: 'TEST CAFE', address: '1 Test Street', locality: 'Queens', phone: null,
   inspectedOn: '2026-07-01', evidence: [{ code: '04L', description: 'Evidence of mice.' }] }
+it('selects a page and saves a batch without replacing existing work', async () => {
+  localStorage.setItem(storageKey, JSON.stringify([{ ...prospect, list: 'Queens', stage: 'Contacted', notes: 'Keep my note' }]))
+  vi.mocked(fetchProspects).mockResolvedValue({ items: [prospect, { ...prospect, id: 2, name: 'SECOND CAFE' }], isTruncated: false })
+  render(<ProspectsPage onNavigate={vi.fn()} />)
+  await screen.findByText('SECOND CAFE')
+  await userEvent.click(screen.getByRole('button', { name: 'Select this page (2)' }))
+  await userEvent.type(screen.getByRole('combobox', { name: 'Destination list' }), 'Queens')
+  await userEvent.click(screen.getByRole('button', { name: 'Save selected prospects' }))
+  const records = readSaved(localStorage.getItem(storageKey))
+  expect(records).toHaveLength(2)
+  expect(records[0].notes).toBe('Keep my note')
+  expect(records[0].stage).toBe('Contacted')
+  expect(records[1].stage).toBe('To review')
+  expect(screen.queryByRole('form', { name: 'Save selected prospects' })).not.toBeInTheDocument()
+})
 beforeEach(() => {
   history.replaceState(null, '', '/prospects')
   localStorage.clear()
@@ -16,6 +31,17 @@ beforeEach(() => {
   vi.mocked(fetchProspectCategories).mockResolvedValue([
     { id: 'sanitation', label: 'Cleaning & sanitation', description: 'Surface cleaning evidence.', codes: ['06D', '10F'] },
   ])
+})
+
+it('filters previously saved discoveries without mistaking them for absent evidence', async () => {
+  localStorage.setItem(storageKey, JSON.stringify([{ ...prospect, list: 'Elsewhere', stage: 'To review', notes: '' }]))
+  render(<ProspectsPage onNavigate={vi.fn()} />)
+  await screen.findByText('TEST CAFE')
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Only unsaved places' }))
+  expect(screen.queryByRole('heading', { name: 'TEST CAFE' })).not.toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'These loaded matches are already in your lists.' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('checkbox', { name: 'Only unsaved places' }))
+  expect(screen.getByRole('heading', { name: 'TEST CAFE' })).toBeInTheDocument()
 })
 
 it('saves evidence and notes in a named list and restores them after remount', async () => {

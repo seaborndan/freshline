@@ -5,6 +5,15 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+Discovery now supports selecting individual restaurants or the visible page, retaining selections
+across pages, and saving together to one destination. A preview counts new versus existing list
+memberships; existing evidence, notes and status are preserved. New searches and mode changes clear
+selection. Only unsaved places filters loaded results against all local lists, with explicit API-cap
+and already-saved empty-state wording. No API or storage-schema changes.
+Validation: 314 frontend tests passed; lint checked. Browser QA for this addition is blocked by the
+CUA runtime failing to initialize (missing kernel asset path), including after reset; do not assume
+a live visual check was completed. Follow-up: inspect batch controls at desktop and phone widths.
+
 Added an across-list due agenda and downloadable text visit briefs. Agenda entries preserve each
 restaurant/list membership and open the exact record; due dates refresh on focus and every minute.
 Briefs include all currently filtered records (not just the visible page), notes, follow-up dates,

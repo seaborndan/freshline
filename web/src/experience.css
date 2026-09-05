@@ -231,3 +231,11 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 .followup-agenda li span { display: block; color: var(--muted); font-size: 13px; margin-top: 5px; }
 .visit-brief { display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: center; margin-block: 20px; padding: 20px; border-radius: 12px; background: #eaf2ed; }
 .visit-brief p { margin-bottom: 0; }
+.batch-save { display: flex; flex-wrap: wrap; align-items: end; gap: 18px; margin-block: 20px; padding: 22px; background: #eaf2ed; border: 1px solid #b7d1c3; border-radius: 12px; }
+.batch-save label { display: grid; gap: 6px; font-size: 14px; }
+.batch-save input { padding: 11px; border: 1px solid #cedbd2; border-radius: 6px; max-width: 100%; }
+.batch-save p, .discovery-selection span { font-size: 14px; color: var(--muted); }
+.batch-save button, .discovery-selection button { padding: 11px 16px; border: 1px solid #cedbd2; border-radius: 6px; background: white; color: #17634f; }
+.discovery-selection { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; margin-block: 20px; }
+.prospect-select { display: flex; gap: 10px; align-items: center; margin-bottom: 18px; color: var(--accent); font-size: 14px; }
+.prospect-select input { width: 18px; height: 18px; accent-color: var(--accent); flex-shrink: 0; }
