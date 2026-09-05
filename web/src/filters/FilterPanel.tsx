@@ -53,7 +53,8 @@ function FilterPanelContent({ filters, options, onChange }: FilterPanelProps) {
 
   return (
     <section className="filters" aria-labelledby="filters-heading">
-      <h2 id="filters-heading">Filter</h2>
+      <h2 id="filters-heading">Find your next place</h2>
+      <p className="filter-intro">Explore by name, borough, or result.</p>
 
       <div className="filter-row">
         <label htmlFor="filter-name">Name starts with</label>

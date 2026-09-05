@@ -71,6 +71,7 @@ export function NavBar({ current, onNavigate }: NavBarProps) {
           </li>
         ))}
       </ul>
+      <span className="nav-context">NYC restaurant inspections</span>
     </nav>
   )
 }

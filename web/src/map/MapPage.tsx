@@ -252,7 +252,11 @@ export function MapPage() {
   return (
     <div className="map-page">
       <header className="map-status-bar">
+        <div className="explorer-title"><span className="eyebrow">NEW YORK CITY / EXPLORER</span><h1>Every place has a story.</h1></div>
+        <div className={establishments.result?.isTruncated ? 'view-status view-status-partial' : 'view-status'}>
+        {establishments.result?.isTruncated ? <strong className="view-status-label">Partial view · worst results first</strong> : null}
         <Status view={establishments} filters={filters} />
+        </div>
       </header>
 
       <main>
@@ -288,8 +292,12 @@ export function MapPage() {
             onSelect={handleSelectOne}
           />
 
-          <Legend />
         </div>
+
+        <details className="map-key">
+          <summary>Map key <span aria-hidden="true">＋</span></summary>
+          <Legend />
+        </details>
 
         <DetailPanel
           candidates={candidates}
@@ -372,4 +380,3 @@ function Status({ view, filters }: { view: EstablishmentsView; filters: Establis
     </p>
   )
 }
-

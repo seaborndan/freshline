@@ -20,6 +20,7 @@ import { ReportsPage } from './reports/ReportsPage'
 import { NavBar } from './routing/NavBar'
 import { useRoute } from './routing/useRoute'
 import './App.css'
+import './experience.css'
 
 function App() {
   const { route, navigate } = useRoute()
