@@ -98,6 +98,12 @@ The large map-chunk warning remains; these sizes are not network or phone-perfor
 
 ## Working a territory
 
+Saved searches names and stores the submitted category, borough and exact date range in this
+browser. Run search reloads results and restores those filters; it does not store a result snapshot
+or advance the date range. Up to 50 names are supported. Removal offers undo, existing names cannot
+be overwritten, and detected changes from another tab stop stale writes. Search bookmarks use
+freshline.searches.v1 and are separate from restaurant-list JSON backups.
+
 Saved cards offer Copy or move to another list. Choose an existing destination or name a new one.
 Copy preserves the source; move removes its membership and opens the destination list. Both carry
 notes, stage, follow-up date and saved evidence. If the restaurant is already at the destination,

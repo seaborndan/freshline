@@ -8,6 +8,7 @@ import { EvidenceCheck } from './EvidenceCheck'
 import { FollowUpAgenda } from './FollowUpAgenda'
 import { VisitBrief } from './VisitBrief'
 import { BatchSave } from './BatchSave'
+import { SavedSearches } from './SavedSearches'
 import { TransferProspect } from './TransferProspect'
 import { transferProspect } from './workspace'
 import { isDue, localToday, readDiscovery, savedMatches, workspaceQuery } from './workspace'
@@ -197,6 +198,7 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
       <p className="eyebrow">Results for: {request.category === 'all' ? 'All opportunity types' : categories.find(c => c.id === request.category)?.label ?? request.category}</p>
       {failure ? <p role="alert">{failure}</p> : <p role="status" className="prospect-count">{loading ? 'Checking the latest inspection evidence…' : result?.isTruncated ? 'Showing the 200 most recently inspected matches. Narrow the borough or dates to see a smaller set.' : `${rows.length} matching places · newest inspections first`}</p>}
       <p className="discovery-continuity">Your submitted search is in the address bar. Bookmark or copy its URL to return to this territory.</p>
+      <SavedSearches search={request} categories={categories} onRun={search => { setFilters(search); setRequest({ ...search }); setOnlyUnsaved(false) }} />
       <label className="prospect-select"><input type="checkbox" checked={onlyUnsaved} onChange={e => { setOnlyUnsaved(e.target.checked); setSelectedIds([]); setPage(1) }} />Only unsaved places</label>
       {onlyUnsaved && result ? <p className="prospect-count">{rows.length} of {result.items.length} loaded matches are not in any saved list. This filters the loaded results; narrow your search if the API limit was reached.</p> : null}
     </> : <p className="prospect-count">{rows.length} of {currentList.length} saved in “{listName || 'Choose a list name'}” · due follow-ups first · evidence is a snapshot from when you saved it</p>}

@@ -5,6 +5,12 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+Discovery supports named saved searches under freshline.searches.v1, separate from restaurant lists.
+Up to 50 fixed-date searches; save uses submitted filters, Run fetches again, removal has undo.
+Duplicate names, unreadable storage and detected stale writes are protected. Restaurant JSON backups
+do not include search bookmarks; the UI states this. 320 frontend tests pass, lint/build checked.
+CUA still fails initializing kernel assets, so live visual verification remains outstanding.
+
 Saved restaurants now support Copy or move to another list, preserving notes, status, dates and
 evidence. Copy is the default; move explicitly removes the source membership and opens the destination.
 Existing destination memberships are never overwritten, and failed writes keep the form available.

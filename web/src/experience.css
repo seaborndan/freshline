@@ -242,3 +242,12 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 .transfer-prospect { padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: #f4f7f2; display: grid; gap: 12px; }
 .transfer-prospect p { margin: 0; font-size: 13px; color: var(--muted); }
 .transfer-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.saved-searches { margin-block: 20px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.saved-searches summary { cursor: pointer; font-weight: 650; color: var(--ink); }
+.saved-searches p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.saved-searches form, .saved-searches li { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
+.saved-searches label { display: grid; gap: 6px; }
+.saved-searches input, .saved-searches button { padding: 11px 16px; border: 1px solid #cedbd2; border-radius: 6px; background: white; color: #17634f; }
+.saved-searches ul { padding: 0; list-style: none; }
+.saved-searches li { padding-block: 16px; border-top: 1px solid var(--line); align-items: center; }
+.saved-searches li > div { flex: 1; min-width: 180px; overflow-wrap: anywhere; }
