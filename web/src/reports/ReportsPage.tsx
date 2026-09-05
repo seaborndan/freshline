@@ -93,6 +93,7 @@ export function ReportsPage({ onNavigate }: ReportsPageProps) {
   return (
     <div className="reports">
       <header className="reports-header">
+        <p className="eyebrow">THE CITY, IN CONTEXT</p>
         <h1>Reports</h1>
 
         {/*

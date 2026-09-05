@@ -39,6 +39,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   return (
     <div className="landing">
       <section className="landing-hero">
+        <p className="eyebrow">A CLOSER LOOK AT NEW YORK</p>
         <h1>New York City restaurant inspections, made legible.</h1>
 
         <p className="landing-lede">

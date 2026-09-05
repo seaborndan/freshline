@@ -353,13 +353,14 @@ function BreakdownTable({
     { key: 'ungraded', label: 'Ungraded', numeric: true },
     { key: 'pendingReinspection', label: 'Pending', numeric: true },
     { key: 'observed', label: 'Poor %', numeric: true },
-    { key: 'supported', label: 'Supported ≥', numeric: true },
+    { key: 'supported', label: 'Conservative poor %', numeric: true },
   ]
 
   return (
     <div className="reports-table-scroll">
-      <table className="reports-table">
-        <caption>
+        <table className="reports-table">
+          <caption>
+            <strong>Conservative poor %</strong> is the lower end of a 95% confidence interval, which accounts for sample size.{' '}
           Every row accounts for its own total: inspected + never inspected + not inspected in the
           selected period. Ordered by what the evidence supports, worst first &mdash; not by the
           observed percentage.

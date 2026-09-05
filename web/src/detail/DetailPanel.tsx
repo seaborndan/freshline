@@ -181,6 +181,12 @@ function Detail({ view, onCentre }: { view: DetailView; onCentre: () => void }) 
         {[detail.addressLine, detail.locality, detail.postalCode].filter(Boolean).join(', ')}
       </p>
 
+      <div className="detail-summary">
+        <span className="eyebrow">LATEST PUBLISHED RESULT</span>
+        <strong>{detail.isAwaitingFirstInspection ? 'Never inspected' : detail.inspections[0] ? pinStyles[detail.inspections[0].outcome].label : 'No inspection on record'}</strong>
+        {detail.inspections[0] ? <span>{formatPlainDate(detail.inspections[0].inspectedOn)} · {detail.inspections[0].violations.length} violations cited</span> : null}
+      </div>
+
       {/*
         Only when there is somewhere to go. 511 establishments in this data have no coordinates —
         the city publishes zeroes for them and the mapper drops both components together — and a
@@ -202,7 +208,7 @@ function Detail({ view, onCentre }: { view: DetailView; onCentre: () => void }) 
         {detail.phone === null ? null : (
           <>
             <dt>Phone</dt>
-            <dd>{detail.phone}</dd>
+            <dd><a href={`tel:${detail.phone.replace(/[^+\d]/g, '')}`}>{detail.phone}</a></dd>
           </>
         )}
       </dl>

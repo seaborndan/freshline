@@ -12,9 +12,8 @@
  *
  * ## Two things it deliberately does not do
  *
- * **It does not page.** The viewport response is not paged and has no cursor; it is the answer to
- * "what is on screen" and it changes the moment the user moves. Paging through a viewport that
- * stopped existing is not a thing to offer.
+ * **It does not fetch additional pages.** The viewport response has no cursor. Local pagination
+ * exposes the loaded records in groups of 50 and resets whenever that response changes.
  *
  * **It does not render everything.** A viewport can hold a thousand establishments and re-renders on
  * every pan; a thousand rows of DOM per pan is work landing on the frames a gesture needs — the
@@ -22,7 +21,7 @@
  * the honest version of the same thing.
  */
 
-import { memo } from 'react'
+import { memo, useState } from 'react'
 import type { MapEstablishment } from '../api/contract'
 import { pinStateOf, pinStyles } from '../map/pinStyle'
 
@@ -30,8 +29,7 @@ import { pinStateOf, pinStyles } from '../map/pinStyle'
  * How many rows are rendered.
  *
  * Enough to scroll through and understand the area, few enough that a pan does not rebuild a
- * thousand DOM nodes. Not a page size — there is no second page, only a narrower viewport or a
- * filter.
+ * thousand DOM nodes. Local pages never claim to include records omitted by the API.
  */
 export const visibleRowCount = 50
 
@@ -48,10 +46,14 @@ function ResultsListContent({
   selectedId,
   onSelect,
 }: ResultsListProps) {
-  // Sorted here rather than by the API: the map endpoint returns primary-key order, which its own
-  // documentation calls arbitrary. Name order is what the list endpoint uses, so the two agree.
+  // Alphabetical within the loaded subset. The API prioritizes severity when truncating;
+  // this local ordering cannot recover omitted establishments.
   const sorted = [...establishments].sort((left, right) => left.name.localeCompare(right.name))
-  const shown = sorted.slice(0, visibleRowCount)
+  // A new viewport response resets pagination; pages only navigate the already-loaded subset.
+  const [pagination, setPagination] = useState({ items: establishments, page: 0 })
+  const page = pagination.items === establishments ? pagination.page : 0
+  const shown = sorted.slice(page * visibleRowCount, (page + 1) * visibleRowCount)
+  const pageCount = Math.ceil(sorted.length / visibleRowCount)
 
   return (
     <section className="results" aria-labelledby="results-heading">
@@ -70,6 +72,14 @@ function ResultsListContent({
               : `${shown.length.toLocaleString('en-GB')} in view.`}
         </p>
       )}
+
+      {pageCount > 1 ? (
+        <div className="results-pagination" aria-label="Loaded places pages">
+          <button type="button" disabled={page === 0} onClick={() => setPagination({ items: establishments, page: page - 1 })}>Previous</button>
+          <span role="status">Page {page + 1} of {pageCount}</span>
+          <button type="button" disabled={page + 1 === pageCount} onClick={() => setPagination({ items: establishments, page: page + 1 })}>Next</button>
+        </div>
+      ) : null}
 
       <ul>
         {shown.map((establishment) => {

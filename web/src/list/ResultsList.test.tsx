@@ -121,7 +121,7 @@ describe('ResultsList', () => {
       <ResultsList establishments={many} isTruncated={false} selectedId={null} onSelect={vi.fn()} />,
     )
 
-    expect(screen.getAllByRole('button')).toHaveLength(visibleRowCount)
+    expect(screen.getAllByRole('listitem')).toHaveLength(visibleRowCount)
     expect(screen.getByText(/Showing 50 of 120/)).toBeInTheDocument()
   })
 
@@ -136,6 +136,21 @@ describe('ResultsList', () => {
 
     expect(screen.getByText(/more than 120/)).toBeInTheDocument()
     expect(screen.queryByText(/Showing 50 of 120\./)).not.toBeInTheDocument()
+  })
+
+  it('reaches places past the first fifty and resets when the viewport data changes', async () => {
+    const many = Array.from({ length: 120 }, (_, i) => pin(i, `PLACE ${String(i).padStart(3, '0')}`))
+    const onSelect = vi.fn()
+    const user = userEvent.setup()
+    const { rerender } = render(<ResultsList establishments={many} isTruncated selectedId={null} onSelect={onSelect} />)
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: /PLACE 050/ }))
+    expect(onSelect).toHaveBeenCalledWith(50)
+    expect(screen.getAllByRole('listitem')).toHaveLength(50)
+    expect(screen.getByText(/more than 120/)).toBeInTheDocument()
+    rerender(<ResultsList establishments={[pin(999, 'NEW AREA')]} isTruncated={false} selectedId={null} onSelect={onSelect} />)
+    expect(screen.getByRole('button', { name: /NEW AREA/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
   })
 
   it('says so when the view holds nothing', () => {

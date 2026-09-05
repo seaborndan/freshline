@@ -5,6 +5,24 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+The `feat/polished-explorer` branch adds the first visual/UX pass requested by the user:
+shared green/white branding, a dedicated desktop sidebar, a stacked phone layout, an expandable
+map key, explicit partial-view emphasis, richer detail summaries, clickable phone numbers, and
+updated report/landing styling. `experience.css` contains the visual treatment over the existing
+component styles. Existing outcome colours and API ranking behavior are unchanged.
+
+Results now page through already-loaded records in groups of 50, resetting when the response
+changes. Pagination does not fetch the records omitted by a truncated API response. Reports
+rename “Supported ≥” to “Conservative poor %” with an explanation; the calculation is unchanged.
+
+Validation for this pass: all 280 frontend tests passed, TypeScript and lint passed, production
+build passed with the existing large-bundle warning (MapLibre remains bundled into the entry).
+Live browser checks covered desktop map, selection/detail, result filtering, reports and landing;
+a 390×844 viewport showed no document-width overflow. This is a viewport simulation, not a
+physical phone performance test. Temporary viewport overrides were reset.
+
+## CARTO authentication (preceding change)
+
 CARTO began watermarking unauthenticated basemap tiles. The map now uses `basemapRequest.ts`
 through MapLibre's `transformRequest` to add a configured key only to CARTO basemap hosts.
 The actual key is in ignored `web/.env.local` on this machine. Never copy it into Git or docs.
@@ -33,7 +51,7 @@ successful restart. Database volumes were preserved.
 ## User direction
 
 The user wants live browser development/debugging and continuity between Claude and Codex.
-They asked to document the CARTO change and push it to Git. No full-vector migration or other
-UI redesign has been requested. Continue to update this handoff when leaving material work or
+They asked to document the CARTO change and push it to Git, then authorized a broader visual
+and usability improvement pass. No full-vector migration has been requested. Update this handoff when leaving material work or
 decisions for another session. Git shares committed files; conversation history and ignored
 local settings do not travel with it.
