@@ -1,4 +1,45 @@
 /* Shared visual treatment and responsive explorer layout. Data colours remain in pinStyle.ts. */
+.prospect-hero { display: grid; grid-template-columns: 1.3fr 1fr; align-items: center; gap: 50px; margin: 10px 0 30px; }
+.prospect-hero h1 { font-size: clamp(30px, 3.5vw, 48px); letter-spacing: -1.8px; line-height: 1.1; margin: 14px 0; color: #163d35; }
+.prospect-lede { color: #586c64; max-width: 48ch; font-size: 16px; }
+.prospect-method { border-left: 2px solid #9abb9f; padding-left: 22px; font-size: 13px; line-height: 1.7; color: #586c64; }
+.prospect-method strong { color: #163d35; }
+.prospect-tabs { display: flex; gap: 8px; border-bottom: 1px solid #dce4df; margin-bottom: 20px; }
+.prospect-tabs button { border: 0; border-bottom: 3px solid transparent; padding: 14px 18px; background: transparent; color: #586c64; }
+.prospect-tabs button[aria-pressed='true'] { border-color: #17634f; color: #17634f; font-weight: 650; }
+.list-tools { display: flex; align-items: end; gap: 22px; margin-bottom: 22px; font-size: 12px; }
+.list-tools label, .prospect-notes label { display: grid; gap: 7px; font-size: 12px; color: #586c64; }
+.list-tools input, .prospect-notes select, .prospect-notes textarea { padding: 10px; border: 1px solid #cedbd2; border-radius: 6px; background: #fff; color: #163d35; font: inherit; }
+.list-tools p { max-width: 55ch; color: #586c64; }
+.list-tools button { margin-left: auto; white-space: nowrap; padding: 10px 15px; border: 1px solid #cedbd2; border-radius: 6px; background: #fff; color: #17634f; }
+.prospect-count { margin: 20px 0; font-size: 13px; color: #586c64; }
+.prospect-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.prospect-card { padding: 25px; background: #fff; border: 1px solid #dce4df; border-radius: 12px; }
+.prospect-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; font-size: 12px; color: #586c64; }
+.prospect-card h2 { font-size: 22px; letter-spacing: -.7px; margin: 15px 0 6px; color: #163d35; }
+.prospect-address { color: #586c64; font-size: 13px; }
+.prospect-evidence { background: #f5f7f2; padding: 16px; margin: 20px 0; border-radius: 7px; }
+.prospect-evidence h3 { font-size: 13px; margin: 0 0 10px; }
+.prospect-evidence ul { padding: 0; list-style: none; margin: 0; font-size: 12px; line-height: 1.7; }
+.prospect-evidence li + li { margin-top: 10px; }
+.prospect-evidence strong { color: #17634f; margin-right: 5px; }
+.prospect-actions { display: flex; gap: 15px; justify-content: space-between; flex-wrap: wrap; font-size: 12px; }
+.prospect-actions a { color: #17634f; }
+.prospect-save { width: 100%; margin-top: 20px; border: 1px solid #17634f; border-radius: 6px; color: #fff; background: #17634f; padding: 11px; }
+.prospect-save:disabled { background: #f0f4ed; color: #586c64; border-color: #dce4df; cursor: default; }
+.prospect-notes { margin-top: 20px; display: grid; gap: 14px; }
+.prospect-notes textarea { min-height: 90px; resize: vertical; }
+.prospect-remove { justify-self: start; border: 0; background: transparent; color: #586c64; text-decoration: underline; padding: 4px 0; font-size: 12px; }
+.prospect-empty { padding: 50px 25px; border: 1px dashed #bbcbbf; text-align: center; border-radius: 12px; }
+.prospect-empty h2 { color: #163d35; }
+.prospect-empty p { color: #586c64; }
+.sr-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (max-width: 700px) {
+  .prospect-hero, .prospect-grid { grid-template-columns: 1fr; gap: 20px; }
+  .list-tools { flex-wrap: wrap; gap: 12px; }
+  .list-tools button { margin-left: 0; }
+  .prospect-card { padding: 20px; }
+}
 :root {
   --ink: #163d35;
   --muted: #586c64;
@@ -111,9 +152,10 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
   .detail { width: 340px; }
 }
 @media (max-width: 600px) {
-  .nav { min-height: 60px; padding-inline: 16px; justify-content: space-between; }
-  .nav a.nav-brand { font-size: 21px; }
-  .nav ul a { padding: 8px 12px; }
+  .nav { min-height: 60px; padding-inline: 12px; justify-content: space-between; gap: 8px; }
+  .nav a.nav-brand { font-size: 18px; }
+  .nav ul { gap: 0; }
+  .nav ul a { padding: 8px 9px; font-size: 12px; }
   .map-status-bar { display: block; padding: 12px 16px; }
   .explorer-title h1 { font-size: 21px; }
   .view-status { max-width: none; margin-top: 9px; }

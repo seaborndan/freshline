@@ -24,6 +24,15 @@ public class MapEndpointTests(ApiFixture fixture)
     /// <summary>Tight enough to contain only FIXTURE DINER, at 40.7200, -74.0010.</summary>
     private const string DinerOnly = "minLat=40.7198&maxLat=40.7202&minLon=-74.0012&maxLon=-74.0008";
 
+    [Fact]
+    public async Task Contains_search_matches_inside_a_name_and_preserves_prefix_search()
+    {
+        MapResponse contains = await GetMapAsync($"{WholeFixture}&nameContains=DINER");
+        Assert.Contains(contains.Items, item => item.Name == "FIXTURE DINER");
+        MapResponse prefix = await GetMapAsync($"{WholeFixture}&nameStartsWith=DINER");
+        Assert.DoesNotContain(prefix.Items, item => item.Name == "FIXTURE DINER");
+    }
+
     private sealed record MapResponse(IReadOnlyList<MapEstablishment> Items, bool IsTruncated);
 
     private async Task<MapResponse> GetMapAsync(string query)

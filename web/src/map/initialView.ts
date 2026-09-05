@@ -133,54 +133,6 @@ export const labelMinimumZoom = 14
  * this key to the browser; keeping it out of Git does not make a browser key secret.
  * See docs/local-development.md for registration and the planned raster retirement.
  *
- * **Only its labels and its lettering are used.** See `basemapRasterTiles` for why, and for what
- * replaces the rest of it.
+ * Full vector geometry and labels. Label density is reduced below zoom 14; source geometry stays vector.
  */
 export const basemapStyleUrl = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json'
-
-/**
- * The basemap's geometry, as pictures rather than as data.
- *
- * **Why a second source exists at all.** Vector tiles have to be parsed before they can be drawn,
- * and that parsing is what makes a map stutter when it moves into somewhere new. Measured against
- * CARTO on 2026-07-26, over Manhattan:
- *
- * | | vector (.mvt) | raster (.png, @2x) |
- * |---|---|---|
- * | zoom 12 | 98KB | 30KB |
- * | zoom 14 | **389KB** | 26KB |
- * | zoom 15+ | *does not exist* | — |
- *
- * That last row is the whole explanation of a symptom reported from a browser: panning and rotating
- * were smooth above zoom 14 and jittery below it. CARTO's vector tiles stop at 14, so every zoom
- * above it **overzooms** — MapLibre scales tiles it has already parsed and parses nothing new.
- * Below 14 it parses a fresh few hundred kilobytes of geometry for every new area moved into, and
- * the further out the camera is, the more new area each gesture exposes. The boundary between smooth
- * and jittery was exactly the boundary where parsing stops.
- *
- * A raster tile is an image. It is decoded off the main thread and drawn as a texture, so moving
- * across it costs nothing to parse at any zoom.
- *
- * **The labels stay vector, and that is the point of the arrangement.** Raster basemaps normally
- * come with their lettering baked into the picture, which rotates with the map — turn it far enough
- * and the street names are upside down, permanently, because nothing is placing them. So this uses
- * the *no-labels* raster for geometry and keeps Positron's own symbol layers over the top, where
- * MapLibre places them dynamically and they stay upright at any bearing.
- *
- * And because MapLibre only fetches a source's tiles when a visible layer needs them, restricting
- * those symbol layers to zoom 14 and up means **no vector tile is fetched or parsed below zoom 14 at
- * all** — the zooms that were jittery become pure raster, and the zooms where labels appear are the
- * ones already served by overzoomed tiles.
- *
- * The cost, stated: two third-party endpoints instead of one, and a style assembled here rather than
- * handed to MapLibre as a URL.
- */
-export const basemapRasterTiles = 'https://basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}@2x.png'
-
-/**
- * Shown for the raster source. The vector source carries its own from its TileJSON, but below zoom
- * 14 nothing is using the vector source, and a basemap on screen with no credit under it would be
- * wrong.
- */
-export const basemapAttribution =
-  '<a href="https://carto.com/attributions">© CARTO</a>, © OpenStreetMap contributors'

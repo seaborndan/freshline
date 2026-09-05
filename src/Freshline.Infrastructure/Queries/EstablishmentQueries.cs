@@ -265,6 +265,12 @@ internal sealed class EstablishmentQueries(FreshlineDbContext dbContext) : IEsta
                 establishment => establishment.Name.StartsWith(filter.NameStartsWith));
         }
 
+        if (!string.IsNullOrWhiteSpace(filter.NameContains))
+        {
+            string term = filter.NameContains.Trim();
+            establishments = establishments.Where(establishment => establishment.Name.Contains(term));
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.Cuisine))
         {
             establishments = establishments.Where(

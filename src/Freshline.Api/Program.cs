@@ -146,6 +146,7 @@ api.MapIdentityEndpoints();
 // there overrides the group policy above it, which is the intent: a report costs many times what a
 // viewport query costs and is asked for far less often, so the two want different budgets.
 api.MapReportEndpoints();
+api.MapProspectEndpoints();
 
 app.Run();
 

@@ -177,19 +177,11 @@ configuration, force-refresh: the browser and CARTO CDN can retain previously ca
 
 ### Are we using vector?
 
-Partly. Freshline currently combines Positron **raster geometry without labels** with **vector
-symbol layers for labels at zoom 14 and above**. Below zoom 14 the basemap uses only raster.
-Restaurant markers are drawn separately from Freshline's data. This hybrid was chosen after
-the July 2026 performance investigation recorded in `docs/milestones/m5-map-ui.md`; it keeps
-labels upright while reducing vector parsing when zoomed out.
-
-CARTO now says raster PNG basemaps are being retired and that it is considering stopping their
-data updates. It recommends vector for sharpness, browser styling, fresher data, and serving
-efficiency. Its key requirement is starting with raster and will also apply to vector; the same
-key covers both. See the [basemap FAQ](https://docs.carto.com/faqs/carto-basemaps) for migration
-guidance. A full-vector migration remains follow-up work: compare real panning/rotation
-performance against the existing hybrid before replacing it. Adding authentication does not
-change the current rendering strategy.
+Yes. Both basemap geometry and labels now use CARTO vector tiles. The previous raster/vector
+hybrid was replaced on 5 September 2026 because CARTO is retiring raster. Label density is still
+reduced below zoom 14. The same configured key authenticates vector requests. See
+[prospecting and explorer changes](prospecting.md) for verification and the remaining physical-phone
+performance check. The earlier performance investigation remains in the milestone log as history.
 
 ## Resetting
 

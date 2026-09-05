@@ -15,6 +15,7 @@
  */
 
 import { LandingPage } from './landing/LandingPage'
+import { ProspectsPage } from './prospects/ProspectsPage'
 import { MapPage } from './map/MapPage'
 import { ReportsPage } from './reports/ReportsPage'
 import { NavBar } from './routing/NavBar'
@@ -38,6 +39,7 @@ function App() {
 
       <div className="app-content" id="content">
         {route === 'landing' ? <LandingPage onNavigate={navigate} /> : null}
+        {route === 'prospects' ? <ProspectsPage onNavigate={navigate} /> : null}
         {route === 'map' ? <MapPage /> : null}
         {route === 'reports' ? <ReportsPage onNavigate={navigate} /> : null}
       </div>

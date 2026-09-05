@@ -1,5 +1,9 @@
 # Freshline
 
+**New: [inspection-based prospecting](docs/prospecting.md).** Find pest-related evidence at a
+restaurant's latest inspection, review its history, and save named prospect lists with notes,
+contact status, and CSV export. Saved lists currently live in this browser, not in a shared account.
+
 Sales intelligence for companies that sell to restaurants. Freshline takes a city's public
 health-inspection data, normalises it into one schema, scores each establishment, and puts the
 result on a map you can filter and work through.

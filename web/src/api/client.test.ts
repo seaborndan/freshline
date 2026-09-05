@@ -79,9 +79,9 @@ describe('fetchMap', () => {
   it('omits an empty name filter rather than sending an empty parameter', async () => {
     const fetchStub = stubFetch(jsonResponse(mapFixture))
 
-    await fetchMap({ viewport, filter: { nameStartsWith: '' } })
+    await fetchMap({ viewport, filter: { nameContains: '' } })
 
-    expect(requestedUrl(fetchStub).searchParams.has('nameStartsWith')).toBe(false)
+    expect(requestedUrl(fetchStub).searchParams.has('nameContains')).toBe(false)
   })
 
   it('sends the outcome as its name, never as a number', async () => {

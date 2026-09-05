@@ -5,6 +5,17 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+`feat/evidence-prospecting` follows the user's instruction to finish the remaining explorer issues
+and then build the supplier workflow. Read `docs/prospecting.md` for the current behavior and
+verification. This supersedes the earlier notes below about hybrid rendering and prefix-only search.
+The map now uses full vector geometry and assembles complete viewport results by subdivision;
+substring search is supported without removing the API prefix option. `/prospects` adds latest-
+inspection pest evidence, named local lists, notes/status, undo removal, and CSV export.
+No migrations, dependency additions, authentication changes, or grading changes were needed.
+Physical-phone performance remains unverified; local lists do not synchronize across devices.
+Full .NET validation passed: 140 API tests and 61 infrastructure tests. Frontend validation,
+TypeScript, lint, and production build passed; see the PR for the final frontend count.
+
 The `feat/polished-explorer` branch adds the first visual/UX pass requested by the user:
 shared green/white branding, a dedicated desktop sidebar, a stacked phone layout, an expandable
 map key, explicit partial-view emphasis, richer detail summaries, clickable phone numbers, and

@@ -96,7 +96,7 @@ describe('FilterPanel', () => {
 
     expect(screen.getByLabelText('Cuisine')).toBeDisabled()
     expect(screen.getByLabelText('Borough')).toBeDisabled()
-    expect(screen.getByLabelText('Name starts with')).toBeEnabled()
+    expect(screen.getByLabelText('Restaurant name')).toBeEnabled()
     expect(screen.getByLabelText('Only places never inspected')).toBeEnabled()
   })
 

@@ -24,6 +24,13 @@ import type {
   EstablishmentFilterOptions,
   MapResult,
 } from './contract'
+import { readProspects, type ProspectResult } from '../prospects/model'
+
+export async function fetchProspects(filters: { locality: string; from: string; to: string }, signal?: AbortSignal): Promise<ProspectResult> {
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value)
+  return readProspects(await requestJson(`${apiRoot}/prospects?${query}`, signal))
+}
 import {
   ApiProblemError,
   ApiUnreachableError,
@@ -114,8 +121,8 @@ function appendFilter(query: URLSearchParams, filter: EstablishmentFilter | unde
     return
   }
 
-  if (filter.nameStartsWith !== undefined && filter.nameStartsWith !== '') {
-    query.set('nameStartsWith', filter.nameStartsWith)
+  if (filter.nameContains !== undefined && filter.nameContains !== '') {
+    query.set('nameContains', filter.nameContains)
   }
 
   if (filter.cuisine !== undefined) {

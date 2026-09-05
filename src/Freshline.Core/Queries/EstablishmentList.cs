@@ -17,6 +17,9 @@ namespace Freshline.Core.Queries;
 /// </summary>
 public sealed record EstablishmentFilter
 {
+    /// <summary>Literal substring search. Unlike the prefix filter this may scan names.</summary>
+    public string? NameContains { get; init; }
+
     /// <summary>Matched against the start of the name, case-insensitively — the database collation
     /// decides, not the application. A prefix rather than a contains-search because a leading
     /// wildcard cannot use an index; see the note on <see cref="EstablishmentCursor"/>.</summary>

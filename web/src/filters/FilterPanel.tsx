@@ -57,13 +57,13 @@ function FilterPanelContent({ filters, options, onChange }: FilterPanelProps) {
       <p className="filter-intro">Explore by name, borough, or result.</p>
 
       <div className="filter-row">
-        <label htmlFor="filter-name">Name starts with</label>
+        <label htmlFor="filter-name">Restaurant name</label>
         <input
           id="filter-name"
           type="search"
-          value={filters.nameStartsWith ?? ''}
+          value={filters.nameContains ?? ''}
           placeholder="e.g. DUNKIN"
-          onChange={(event) => change({ nameStartsWith: event.target.value })}
+          onChange={(event) => change({ nameContains: event.target.value })}
         />
       </div>
 

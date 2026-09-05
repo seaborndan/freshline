@@ -214,7 +214,7 @@ export interface LocalityBounds {
  * than a narrower one.
  */
 export interface EstablishmentFilter {
-  nameStartsWith?: string
+  nameContains?: string
   cuisine?: string
   locality?: string
   outcome?: InspectionOutcome

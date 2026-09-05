@@ -49,6 +49,7 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
         </p>
 
         <div className="landing-actions">
+          <PrimaryLink route="prospects" onNavigate={onNavigate}>Find prospects</PrimaryLink>
           <PrimaryLink route="map" onNavigate={onNavigate}>
             Open the map
           </PrimaryLink>

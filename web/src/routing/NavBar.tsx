@@ -24,6 +24,7 @@ interface NavLink {
 }
 
 const links: NavLink[] = [
+  { route: 'prospects', label: 'Prospects' },
   { route: 'map', label: 'Map' },
   { route: 'reports', label: 'Reports' },
 ]
