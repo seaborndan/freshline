@@ -39,13 +39,13 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
   return (
     <div className="landing">
       <section className="landing-hero">
-        <p className="eyebrow">A CLOSER LOOK AT NEW YORK</p>
-        <h1>New York City restaurant inspections, made legible.</h1>
+        <p className="eyebrow">RESTAURANT INTELLIGENCE / NEW YORK CITY</p>
+        <h1>Know your territory. Find your next conversation.</h1>
 
         <p className="landing-lede">
-          Every restaurant the city inspects, on a map and in a table. Freshline takes the New York
-          City Department of Health and Mental Hygiene&rsquo;s published inspection record,
-          normalises it into one shape, and lets you look at it by area, cuisine, and result.
+          New York City restaurant inspections, made useful for the people who serve restaurants.
+          Explore your territory, find relevant inspection evidence, and build a shortlist with
+          notes and next steps. Every lead starts with a record you can inspect yourself.
         </p>
 
         <div className="landing-actions">
@@ -60,6 +60,12 @@ export function LandingPage({ onNavigate }: LandingPageProps) {
       </section>
 
       <Numbers summary={summary} isLoading={isLoading} failure={failure} />
+
+      <section className="supplier-paths" aria-label="Ways to use Freshline">
+        <article><span className="eyebrow">01 / DISCOVER</span><h2>Find a reason to investigate.</h2><p>Search pest, sanitation, food temperature, or facility citations. Read what was actually recorded before deciding whether your service is relevant.</p></article>
+        <article><span className="eyebrow">02 / UNDERSTAND</span><h2>See the territory around it.</h2><p>Explore by area, cuisine, and inspection result. A general supplier can use the map without needing a violation as a reason to start a conversation.</p></article>
+        <article><span className="eyebrow">03 / FOLLOW THROUGH</span><h2>Keep the next step in sight.</h2><p>Save restaurants into your own lists, map them together, record what you learn, and set a follow-up date. Back up your work to take it with you.</p></article>
+      </section>
 
       <section className="landing-explain">
         <h2>What you are looking at</h2>

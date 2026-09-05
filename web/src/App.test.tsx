@@ -36,16 +36,16 @@ describe('App', () => {
     render(<App />)
 
     expect(
-      screen.getByRole('heading', { name: /New York City restaurant inspections/i }),
+      screen.getByRole('heading', { name: /Know your territory/i }),
     ).toBeInTheDocument()
   })
 
-  it('opens directly on the map when the URL asks for it', () => {
+  it('opens directly on the map when the URL asks for it', async () => {
     window.history.replaceState(null, '', '/map')
 
     render(<App />)
 
-    expect(screen.getByText('map page')).toBeInTheDocument()
+    expect(await screen.findByText('map page')).toBeInTheDocument()
   })
 
   it('changes the page and the address bar together', async () => {
@@ -86,7 +86,7 @@ describe('App', () => {
 
     expect(screen.queryByText('map page')).not.toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { name: /New York City restaurant inspections/i }),
+      screen.getByRole('heading', { name: /Know your territory/i }),
     ).toBeInTheDocument()
   })
 

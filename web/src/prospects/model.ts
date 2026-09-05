@@ -1,3 +1,5 @@
+import { parsePlainDate } from '../api/plainDate'
+
 export interface Prospect {
   id: number
   name: string
@@ -20,7 +22,7 @@ export function readCategories(value: unknown): OpportunityCategory[] {
 }
 export const stages = ['To review', 'Contacted', 'Follow up', 'Not a fit'] as const
 export type Stage = typeof stages[number]
-export interface SavedProspect extends Prospect { list: string; stage: Stage; notes: string }
+export interface SavedProspect extends Prospect { list: string; stage: Stage; notes: string; followUpOn?: string }
 export const storageKey = 'freshline.prospects.v1'
 
 export function isProspect(value: unknown): value is Prospect {
@@ -47,7 +49,9 @@ export function readSaved(raw: string | null): SavedProspect[] {
   if (!Array.isArray(data) || !data.every(p => {
     const saved = p as Partial<SavedProspect> | null
     return isProspect(p) && saved !== null && typeof saved.list === 'string' &&
-      typeof saved.notes === 'string' && stages.includes(saved.stage as Stage)
+      typeof saved.notes === 'string' && stages.includes(saved.stage as Stage) &&
+      (saved.followUpOn === undefined || saved.followUpOn === '' ||
+        (typeof saved.followUpOn === 'string' && parsePlainDate(saved.followUpOn) !== null))
   })) {
     throw new Error('Saved lists could not be read. Existing browser data has not been changed.')
   }

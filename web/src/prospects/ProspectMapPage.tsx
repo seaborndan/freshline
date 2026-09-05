@@ -46,7 +46,11 @@ export function ProspectMapPage() {
         minLongitude: Math.min(...pins.map(p => p.longitude)) - 0.002,
         maxLongitude: Math.max(...pins.map(p => p.longitude)) + 0.002,
       }} onSelect={ids => { setCandidates(ids); setSelected(ids.length === 1 ? ids[0] : null) }} selection={selection} focusOn={focus} onRecentre={centre} />
-      <div className="panels"><ResultsList establishments={pins} isTruncated={false} selectedId={selected} onSelect={id => { setCandidates([id]); setSelected(id) }} /></div>
+      <div className="panels"><ResultsList scope="list" establishments={pins} isTruncated={false} selectedId={selected} onSelect={id => {
+        setCandidates([id]); setSelected(id)
+        const target = pins.find(p => p.id === id)
+        if (target) setFocus(previous => ({ latitude: target.latitude, longitude: target.longitude, token: (previous?.token ?? 0) + 1 }))
+      }} /></div>
       <details className="map-key"><summary>Map key</summary><Legend /></details>
       <DetailPanel candidates={pins.filter(p => candidates.includes(p.id))} view={detail} selectedId={selected} onSelect={setSelected} onCentre={centre} onClose={() => { setCandidates([]); setSelected(null) }} />
     </main> : null}

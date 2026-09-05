@@ -26,7 +26,7 @@ describe('LandingPage', () => {
     render(<LandingPage onNavigate={vi.fn()} />)
 
     expect(
-      screen.getByRole('heading', { name: /New York City restaurant inspections/i }),
+      screen.getByRole('heading', { name: /Know your territory/i }),
     ).toBeInTheDocument()
   })
 

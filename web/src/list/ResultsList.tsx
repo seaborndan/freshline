@@ -34,6 +34,7 @@ import { pinStateOf, pinStyles } from '../map/pinStyle'
 export const visibleRowCount = 50
 
 export interface ResultsListProps {
+  scope?: 'viewport' | 'list'
   establishments: readonly MapEstablishment[]
   isTruncated: boolean
   selectedId: number | null
@@ -41,6 +42,7 @@ export interface ResultsListProps {
 }
 
 function ResultsListContent({
+  scope = 'viewport',
   establishments,
   isTruncated,
   selectedId,
@@ -57,7 +59,7 @@ function ResultsListContent({
 
   return (
     <section className="results" aria-labelledby="results-heading">
-      <h2 id="results-heading">Places in view</h2>
+      <h2 id="results-heading">{scope === 'list' ? 'Places in this list' : 'Places in view'}</h2>
 
       {establishments.length === 0 ? (
         <p className="results-count">Nothing here.</p>
@@ -65,7 +67,7 @@ function ResultsListContent({
         <p className="results-count">
           {/* No total while truncated: which rows were dropped is arbitrary, so "50 of 1,000" would
               be counting an arbitrary subset and calling it the area. */}
-          {isTruncated
+          {scope === 'list' ? `${establishments.length} mapped from this list.` : isTruncated
             ? `Showing ${shown.length} of more than ${establishments.length.toLocaleString('en-GB')}. Zoom in to narrow it down.`
             : shown.length < establishments.length
               ? `Showing ${shown.length} of ${establishments.length.toLocaleString('en-GB')}. Zoom in or filter to narrow it down.`

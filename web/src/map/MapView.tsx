@@ -520,7 +520,7 @@ export function MapView({
         source: selectionSourceId,
         paint: {
           'circle-color': selectionColour,
-          'circle-radius': selectionHaloRadius,
+          'circle-radius': prominentPins ? 19 : selectionHaloRadius,
           'circle-opacity': 0.22,
           'circle-stroke-color': selectionColour,
           'circle-stroke-width': 1,
@@ -534,7 +534,7 @@ export function MapView({
         source: selectionSourceId,
         paint: {
           'circle-color': selectionColour,
-          'circle-radius': selectionRingRadius,
+          'circle-radius': prominentPins ? 15 : selectionRingRadius,
           // White, and thick. The basemap is pale and covered in coloured dots; the one thing none
           // of them has is a heavy light outline, which is what makes this one findable.
           'circle-stroke-color': '#ffffff',

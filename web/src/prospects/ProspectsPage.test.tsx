@@ -6,9 +6,11 @@ import { ProspectsPage } from './ProspectsPage'
 import { readSaved, storageKey } from './model'
 vi.mock('../api/client', () => ({ fetchProspects: vi.fn(), fetchProspectCategories: vi.fn() }))
 vi.mock('../filters/useFilterOptions', () => ({ useFilterOptions: () => ({ localities: ['Queens'] }) }))
+vi.mock('../landing/useDatasetSummary', () => ({ useDatasetSummary: () => ({ summary: { latestInspectionOn: '2026-07-22' }, failure: null }) }))
 const prospect = { id: 1, name: 'TEST CAFE', address: '1 Test Street', locality: 'Queens', phone: null,
   inspectedOn: '2026-07-01', evidence: [{ code: '04L', description: 'Evidence of mice.' }] }
 beforeEach(() => {
+  history.replaceState(null, '', '/prospects')
   localStorage.clear()
   vi.mocked(fetchProspects).mockClear().mockResolvedValue({ items: [prospect], isTruncated: false })
   vi.mocked(fetchProspectCategories).mockResolvedValue([
@@ -101,6 +103,48 @@ it('counts distinct saved lists rather than saved prospects in the tab', async (
   render(<ProspectsPage onNavigate={vi.fn()} />)
   expect(screen.getByRole('button', { name: 'Saved lists (2)' })).toBeInTheDocument()
   await screen.findByText('TEST CAFE')
+})
+
+it('renames a list without losing notes and rejects collisions with another list', async () => {
+  localStorage.setItem(storageKey, JSON.stringify([
+    { ...prospect, list: 'Queens', stage: 'Follow up', notes: 'Keep this', followUpOn: '2026-09-05' },
+    { ...prospect, list: 'Brooklyn', stage: 'To review', notes: 'Separate' },
+  ]))
+  const user = userEvent.setup()
+  render(<ProspectsPage onNavigate={vi.fn()} />)
+  await user.click(screen.getByRole('button', { name: /Saved lists/ }))
+  await user.click(screen.getByRole('button', { name: 'Rename list' }))
+  const name = screen.getByRole('textbox', { name: 'New list name' })
+  await user.clear(name); await user.type(name, 'Brooklyn')
+  await user.click(screen.getByRole('button', { name: 'Save list name' }))
+  expect(screen.getByRole('alert')).toHaveTextContent('already belongs')
+  await user.clear(name); await user.type(name, 'Queens calls')
+  await user.click(screen.getByRole('button', { name: 'Save list name' }))
+  expect(readSaved(localStorage.getItem(storageKey))[0]).toMatchObject({ list: 'Queens calls', notes: 'Keep this', followUpOn: '2026-09-05' })
+})
+
+it('restores discovery from its URL and writes only submitted filters', async () => {
+  history.replaceState(null, '', '/prospects?category=sanitation&locality=Queens&from=2026-06-01&to=2026-07-01')
+  const user = userEvent.setup()
+  render(<ProspectsPage onNavigate={vi.fn()} />)
+  await screen.findByText('TEST CAFE')
+  expect(fetchProspects).toHaveBeenLastCalledWith({ category: 'sanitation', locality: 'Queens', from: '2026-06-01', to: '2026-07-01' }, expect.any(AbortSignal))
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Opportunity type' }), 'all')
+  expect(new URLSearchParams(location.search).get('category')).toBe('sanitation')
+  await user.click(screen.getByRole('button', { name: 'Find prospects' }))
+  expect(new URLSearchParams(location.search).get('category')).toBe('all')
+})
+
+it('does not overwrite another tab’s newer work on an edit', async () => {
+  const initial = { ...prospect, list: 'Queens', stage: 'To review', notes: '' }
+  localStorage.setItem(storageKey, JSON.stringify([initial]))
+  const user = userEvent.setup()
+  render(<ProspectsPage onNavigate={vi.fn()} />)
+  await user.click(screen.getByRole('button', { name: /Saved lists/ }))
+  localStorage.setItem(storageKey, JSON.stringify([{ ...initial, notes: 'Other tab update' }]))
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Contact status' }), 'Contacted')
+  expect(screen.getByRole('alert')).toHaveTextContent('changed in another tab')
+  expect(readSaved(localStorage.getItem(storageKey))[0]).toMatchObject({ stage: 'To review', notes: 'Other tab update' })
 })
 
 it('undoes a removal without losing notes', async () => {

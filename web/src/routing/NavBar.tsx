@@ -65,7 +65,7 @@ export function NavBar({ current, onNavigate }: NavBarProps) {
               // The assistive-technology equivalent of the underline below: it names which of these
               // is the page you are on, which the styling alone conveys only to people who can see
               // it.
-              aria-current={current === link.route ? 'page' : undefined}
+              aria-current={current === link.route || (current === 'prospect-map' && link.route === 'prospects') ? 'page' : undefined}
             >
               {link.label}
             </a>

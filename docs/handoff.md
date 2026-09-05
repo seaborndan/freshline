@@ -5,6 +5,28 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+The autonomous product pass adds saved-list follow-up dates / due view, search and stage filters,
+rename with collision protection, versioned JSON backup / previewed merge restore, and a manual
+newer-inspection check that preserves saved evidence. Discovery filters are bookmarkable; cards
+page by 20. Storage events synchronize tabs and a pre-write guard refuses detected stale edits.
+Landing copy explains the supplier workflow and its evidence limits. See `docs/product-direction.md`
+for evaluated ideas and parked owner decisions; no market-validation claim is made.
+
+Map routes load lazily with a recoverable route error boundary. Build: entry 260.18 kB (79.86 kB
+gzip), shared map JS 949.46 kB (248.00 kB gzip). The map chunk warning remains. List-map selection
+centers the selected pin, its count is labeled as list membership, and Prospects stays active in
+navigation. A clipped live announcement was anchored to prevent document overflow.
+
+Validation: 306 frontend tests passed; TypeScript, lint and local-origin production build passed.
+Live saved search and evidence checks worked without changing user records; 390px layout had no
+horizontal overflow. Physical-phone performance and real-user product validation remain open.
+No dependencies, migrations, authentication or grading changes were made in this pass.
+
+Crash recovery: Docker Desktop failed again on its temporary analytics socket. After stopping its
+processes, its verified local Docker/run directory was renamed to run-stale-20260905-recovery2,
+then Desktop restarted and freshline-sql started. No database volumes were removed. API and Vite
+were restarted on the existing ports. Check running processes before launching duplicates.
+
 Saved-list maps use larger pins (10px radius, 12px for priority pins) with 3px outlines to make
 sparse shortlists easier to spot. Outcome colors and the general explorer's sizing stay consistent.
 

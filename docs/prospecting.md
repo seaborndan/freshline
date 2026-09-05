@@ -53,7 +53,7 @@ lists keep their existing names. The saved view lets you switch between your act
 The same restaurant can belong to several lists, each with independent notes
 and status. Reloading preserves saved records. Browser profiles, origins (`localhost` versus
 `127.0.0.1`), and devices have separate storage. Clearing browser data loses those records;
-export CSV to keep a copy. CSV exports preserve evidence, inspection dates, notes, stage, and the
+download a JSON backup to restore later. CSV exports preserve evidence, inspection dates, notes, stage, follow-up date, and the
 detail URL, using the existing formula-escaping export helper.
 
 Saved evidence is a dated snapshot. It is not silently refreshed; open the history before acting.
@@ -92,5 +92,33 @@ Saved test notes/status survived a browser reload; the temporary verification re
 
 Vector geometry and labels were visually checked at multiple zoom levels. Responsive checks used
 a 390×844 browser viewport; they do not establish physical-phone frame rate, touch behavior, or
-battery use. Real-phone performance remains unverified. The production bundle size warning is
-also still present; route-level loading is a future performance improvement.
+battery use. Real-phone performance remains unverified. Map routes now load lazily: the initial
+JavaScript entry is 260.18 kB and the shared map chunk is 949.46 kB in the local production build.
+The large map-chunk warning remains; these sizes are not network or phone-performance benchmarks.
+
+## Working a territory
+
+Submitted category, locality and date filters are stored in the URL for bookmarking. Draft edits
+take effect on Find prospects. Discovery shows the latest inspection date in the local dataset;
+this is not a claim of live city data. Results and saved cards page in groups of 20.
+
+Saved lists can be renamed (existing names cannot be overwritten), searched by restaurant,
+address, locality or notes, and filtered by stage. Follow-up dates use local calendar days.
+The due view includes overdue records and excludes Not a fit. Dates are reminders inside this
+workspace; no notification or outreach is sent. Existing records without a date remain compatible.
+
+Check for newer inspection reads the current dataset and compares its latest inspection with
+the saved snapshot. It reports repeated saved citation codes where applicable. An absent citation
+does not establish resolution. Neither the saved evidence nor user notes are overwritten.
+
+Backup & restore downloads a versioned JSON workspace. Restore accepts files up to 5 MB and
+10,000 records, previews the number of new memberships, and requires Restore new records before
+writing. Existing restaurant/list memberships win, preserving their current notes and dates.
+Backups are user-managed files and include notes. No server upload occurs. CSV is for sharing /
+analysis, not round-trip restoration. Other-tab storage changes are synchronized and detected stale
+edits are refused; this is a local safeguard, not transactional multi-user storage.
+
+The September product pass passed 306 frontend tests, TypeScript, lint and a production build
+configured with the local API origin. Live checks covered saved filtering and evidence lookup,
+and a 390px viewport had no horizontal overflow. See `product-direction.md` for hypotheses and
+owner decisions; real-user demand has not been validated.

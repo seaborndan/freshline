@@ -14,15 +14,19 @@
  * honest version, and it is the one that cannot produce a subtly broken map.
  */
 
+import { lazy, Suspense } from 'react'
 import { LandingPage } from './landing/LandingPage'
 import { ProspectsPage } from './prospects/ProspectsPage'
-import { ProspectMapPage } from './prospects/ProspectMapPage'
-import { MapPage } from './map/MapPage'
 import { ReportsPage } from './reports/ReportsPage'
 import { NavBar } from './routing/NavBar'
 import { useRoute } from './routing/useRoute'
+import { PageBoundary } from './routing/PageBoundary'
 import './App.css'
 import './experience.css'
+
+// MapLibre and its styles are loaded only when a map route is opened.
+const MapPage = lazy(() => import('./map/MapPage').then(module => ({ default: module.MapPage })))
+const ProspectMapPage = lazy(() => import('./prospects/ProspectMapPage').then(module => ({ default: module.ProspectMapPage })))
 
 function App() {
   const { route, navigate } = useRoute()
@@ -39,11 +43,15 @@ function App() {
       <NavBar current={route} onNavigate={navigate} />
 
       <div className="app-content" id="content">
+        <PageBoundary key={route}>
+        <Suspense fallback={<p className="route-loading" role="status">Loading map workspace…</p>}>
         {route === 'landing' ? <LandingPage onNavigate={navigate} /> : null}
         {route === 'prospects' ? <ProspectsPage onNavigate={navigate} /> : null}
         {route === 'prospect-map' ? <ProspectMapPage /> : null}
         {route === 'map' ? <MapPage /> : null}
         {route === 'reports' ? <ReportsPage onNavigate={navigate} /> : null}
+        </Suspense>
+        </PageBoundary>
       </div>
     </div>
   )

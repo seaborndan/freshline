@@ -787,3 +787,11 @@ adjusted the claim.
 
 Write the decision before the code. Then go and find out whether you were right, and record the answer
 next to the question.
+# September 5 product workspace pass
+
+Implemented local follow-up workflow, backup/restore, manual evidence refresh checks, URL filters,
+and deferred map loading. Verification: 306 frontend tests, TypeScript, lint, production build,
+live saved filtering/evidence lookup and 390px width check. No user notes were changed for live QA.
+Initial JS measured 260.18 kB; map chunk remains large. Physical phone performance, real-user demand,
+cloud collaboration and production ingestion freshness remain unverified. Product hypotheses and
+decisions are recorded in `product-direction.md`; no fabricated intent scores or contacts were added.
