@@ -24,9 +24,13 @@ import type {
   EstablishmentFilterOptions,
   MapResult,
 } from './contract'
-import { readProspects, type ProspectResult } from '../prospects/model'
+import { readCategories, readProspects, type OpportunityCategory, type ProspectResult } from '../prospects/model'
 
-export async function fetchProspects(filters: { locality: string; from: string; to: string }, signal?: AbortSignal): Promise<ProspectResult> {
+export async function fetchProspectCategories(signal?: AbortSignal): Promise<OpportunityCategory[]> {
+  return readCategories(await requestJson(`${apiRoot}/prospects/categories`, signal))
+}
+
+export async function fetchProspects(filters: { locality: string; from: string; to: string; category?: string }, signal?: AbortSignal): Promise<ProspectResult> {
   const query = new URLSearchParams()
   for (const [key, value] of Object.entries(filters)) if (value) query.set(key, value)
   return readProspects(await requestJson(`${apiRoot}/prospects?${query}`, signal))

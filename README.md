@@ -1,6 +1,7 @@
 # Freshline
 
-**New: [inspection-based prospecting](docs/prospecting.md).** Find pest-related evidence at a
+**New: [inspection-based prospecting](docs/prospecting.md).** Select pest control, sanitation,
+food temperature, or plumbing/handwashing evidence at a
 restaurant's latest inspection, review its history, and save named prospect lists with notes,
 contact status, and CSV export. Saved lists currently live in this browser, not in a shared account.
 

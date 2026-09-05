@@ -1,34 +1,47 @@
 # Inspection evidence to prospect lists
 
-Freshline's first supplier workflow targets pest-control prospecting. Open `/prospects`, choose a
-borough and inspection date range, inspect the cited evidence, then save useful places to a named
+Open `/prospects`, choose an opportunity type, borough, and inspection date range, inspect the
+cited evidence, then save useful places to a named
 list. Lists support contact stage, notes, removal with undo, and CSV export. Map links open the
 restaurant's full inspection history. No message or call is sent automatically.
 
 ## What qualifies
 
 The query selects each establishment's latest recorded inspection by date, then ID for same-date
-ties. It must fall inside the requested period and cite at least one of these NYC codes:
+ties. It must fall inside the requested period and cite a code in the selected category. Discovery
+starts with all categories; selecting a type and pressing **Find prospects** changes the query:
 
-- `04L`: evidence of mice.
-- `04N`: flies or other nuisance pests.
-- `08A`: harborage or conditions conducive to pests.
+- **Pest control:** `04L`, `04N`, `08A` — mice, nuisance pests, or harborage conditions.
+- **Cleaning & sanitation:** `06D`, `10F` — food-contact sanitation or other surface conditions;
+  some citations also concern surface construction.
+- **Food temperature control:** `02G` — cold food above required temperatures. This may involve
+  handling or equipment; it does not establish a refrigeration fault.
+- **Plumbing & handwashing:** `10B`, `05D` — drainage, backflow, wastewater, or handwashing
+  facilities. Some citations concern supplies or access rather than repairs.
 
 The response retains the source's actual descriptions; the list above is only a short explanation.
-These three signals are intentionally a narrow starting set, not a complete taxonomy of pest
-violations. A newer inspection without these citations excludes older evidence, even when the
+These are initial evidence groups, not a complete taxonomy of restaurant supplier needs.
+A newer inspection without matching citations excludes older evidence, even when the
 newer inspection is outside the selected date range. A citation is a reason to investigate, not
 proof of an unresolved problem, an unmet service need, or a vendor contract opportunity.
 
-`GET /api/v1/prospects?locality=Queens&from=2026-06-01&to=2026-09-05` returns up to 200 matches,
+`GET /api/v1/prospects/categories` publishes the labels, descriptions, and code mappings used by
+the UI. Category IDs are `pest-control`, `sanitation`, `temperature`, and `facilities`; `all` searches
+their union. Unknown categories return 400. Omitting category preserves the original API's
+pest-control default for compatibility; the UI explicitly sends `all` on first load.
+
+`GET /api/v1/prospects?category=sanitation&locality=Queens&from=2026-06-01&to=2026-09-05` returns up to 200 matches,
 newest inspection first with establishment ID breaking ties. `isTruncated` is explicit; narrow
 the territory/dates when true. It uses the existing report rate-limit policy. Defaults are today
 and 180 days earlier. No schema, authentication, or grading changes were made.
 
 ## Saved work
 
-Lists are stored under `freshline.prospects.v1` in browser local storage, not on the server. Choose
-or type a list name. The same restaurant can belong to several lists, each with independent notes
+Lists are stored under `freshline.prospects.v1` in browser local storage, not on the server. Click
+**Save to list** on a result, then choose an existing list name or type your own. There is no
+hardcoded list name; a name labels saved work and never changes the discovery query. Older saved
+lists keep their existing names. The saved view lets you switch between your actual lists.
+The same restaurant can belong to several lists, each with independent notes
 and status. Reloading preserves saved records. Browser profiles, origins (`localhost` versus
 `127.0.0.1`), and devices have separate storage. Clearing browser data loses those records;
 export CSV to keep a copy. CSV exports preserve evidence, inspection dates, notes, stage, and the
@@ -57,7 +70,8 @@ authentication and persistence design.
 ## Verification, 5 September 2026
 
 API tests cover substring versus prefix search, exact evidence selection, a newer clean inspection,
-and invalid date ranges. Frontend tests cover subdivision, shared boundary deduplication, cancellation,
+category filtering/catalog/validation, and invalid date ranges. Frontend tests cover category selection
+independent of list naming, subdivision, shared boundary deduplication, cancellation,
 bounded work, named lists, reload persistence, and unreadable storage.
 
 Live checks: the map displayed 3,774 places with good results included after zooming beyond the old

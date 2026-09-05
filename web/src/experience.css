@@ -29,6 +29,16 @@
 .prospect-save:disabled { background: #f0f4ed; color: #586c64; border-color: #dce4df; cursor: default; }
 .prospect-notes { margin-top: 20px; display: grid; gap: 14px; }
 .prospect-notes textarea { min-height: 90px; resize: vertical; }
+.category-explanation { padding: 16px 20px; margin: 16px 0; background: #edf3e9; border-radius: 8px; font-size: 13px; color: #42594e; }
+.category-explanation p { margin: 6px 0 12px; max-width: 90ch; }
+.category-explanation summary { text-decoration: underline; }
+.category-explanation details p { margin-top: 12px; }
+.prospect-save-form { margin-top: 20px; padding: 16px; background: #f5f7f2; border-radius: 7px; }
+.prospect-save-form label { display: grid; gap: 6px; font-size: 13px; }
+.prospect-save-form input, .list-tools select { padding: 10px; border: 1px solid #cedbd2; border-radius: 6px; background: #fff; color: #163d35; min-width: 0; }
+.prospect-save-form p, .saved-membership { font-size: 12px; margin-top: 10px; color: #586c64; }
+.prospect-save-form button { margin: 12px 8px 0 0; border: 1px solid #cedbd2; padding: 8px 12px; border-radius: 5px; background: white; }
+.prospect-save-form button[type='submit'] { background: #17634f; color: white; }
 .prospect-remove { justify-self: start; border: 0; background: transparent; color: #586c64; text-decoration: underline; padding: 4px 0; font-size: 12px; }
 .prospect-empty { padding: 50px 25px; border: 1px dashed #bbcbbf; text-align: center; border-radius: 12px; }
 .prospect-empty h2 { color: #163d35; }

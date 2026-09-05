@@ -10,6 +10,39 @@ namespace Freshline.Api.Tests;
 public class ProspectEndpointTests(ApiFixture fixture)
 {
     [Fact]
+    public async Task Category_changes_the_evidence_and_all_combines_it_without_duplicate_places()
+    {
+        using HttpClient client = fixture.CreateClient();
+        const string range = "from=2026-01-01&to=2026-12-31";
+        ProspectResult? sanitation = await client.GetFromJsonAsync<ProspectResult>($"/api/v1/prospects?{range}&category=sanitation");
+        Assert.NotNull(sanitation);
+        Assert.Equal("10F", Assert.Single(Assert.Single(sanitation.Items).Evidence).Code);
+        ProspectResult? all = await client.GetFromJsonAsync<ProspectResult>($"/api/v1/prospects?{range}&category=all");
+        Assert.NotNull(all);
+        Assert.Equal(new[] { "04L", "10F" }, Assert.Single(all.Items).Evidence.Select(e => e.Code));
+        ProspectResult? temperature = await client.GetFromJsonAsync<ProspectResult>($"/api/v1/prospects?{range}&category=temperature");
+        Assert.NotNull(temperature);
+        Assert.Empty(temperature.Items);
+    }
+
+    [Fact]
+    public async Task Unknown_categories_are_rejected_instead_of_falling_back_to_pests()
+    {
+        using HttpClient client = fixture.CreateClient();
+        using HttpResponseMessage response = await client.GetAsync("/api/v1/prospects?category=unknown");
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Category_catalog_exposes_the_evidence_rules()
+    {
+        using HttpClient client = fixture.CreateClient();
+        var categories = await client.GetFromJsonAsync<OpportunityCategory[]>("/api/v1/prospects/categories");
+        Assert.NotNull(categories);
+        Assert.Equal(4, categories.Length);
+        Assert.Contains(categories, c => c.Id == "facilities" && c.Codes.Contains("10B"));
+    }
+    [Fact]
     public async Task Returns_only_relevant_evidence_from_latest_inspection()
     {
         using HttpClient client = fixture.CreateClient();

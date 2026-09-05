@@ -1,20 +1,28 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, expect, it, vi } from 'vitest'
-import { fetchProspects } from '../api/client'
+import { fetchProspectCategories, fetchProspects } from '../api/client'
 import { ProspectsPage } from './ProspectsPage'
 import { readSaved, storageKey } from './model'
-vi.mock('../api/client', () => ({ fetchProspects: vi.fn() }))
+vi.mock('../api/client', () => ({ fetchProspects: vi.fn(), fetchProspectCategories: vi.fn() }))
 vi.mock('../filters/useFilterOptions', () => ({ useFilterOptions: () => ({ localities: ['Queens'] }) }))
 const prospect = { id: 1, name: 'TEST CAFE', address: '1 Test Street', locality: 'Queens', phone: null,
   inspectedOn: '2026-07-01', evidence: [{ code: '04L', description: 'Evidence of mice.' }] }
-beforeEach(() => { localStorage.clear(); vi.mocked(fetchProspects).mockResolvedValue({ items: [prospect], isTruncated: false }) })
+beforeEach(() => {
+  localStorage.clear()
+  vi.mocked(fetchProspects).mockClear().mockResolvedValue({ items: [prospect], isTruncated: false })
+  vi.mocked(fetchProspectCategories).mockResolvedValue([
+    { id: 'sanitation', label: 'Cleaning & sanitation', description: 'Surface cleaning evidence.', codes: ['06D', '10F'] },
+  ])
+})
 
 it('saves evidence and notes in a named list and restores them after remount', async () => {
   const user = userEvent.setup()
   const view = render(<ProspectsPage onNavigate={vi.fn()} />)
   await screen.findByText('TEST CAFE')
   await user.click(screen.getByRole('button', { name: 'Save to list' }))
+  await user.type(screen.getByRole('combobox', { name: 'List name' }), 'My outreach')
+  await user.click(screen.getByRole('button', { name: 'Save prospect' }))
   await user.click(screen.getByRole('button', { name: /Saved lists/ }))
   await user.type(screen.getByRole('textbox', { name: 'Notes' }), 'Ask about service schedule')
   await user.selectOptions(screen.getByRole('combobox', { name: 'Contact status' }), 'Follow up')
@@ -31,11 +39,30 @@ it('keeps the same restaurant independent across named lists', async () => {
   render(<ProspectsPage onNavigate={vi.fn()} />)
   await screen.findByText('TEST CAFE')
   await user.click(screen.getByRole('button', { name: 'Save to list' }))
+  await user.type(screen.getByRole('combobox', { name: 'List name' }), 'First list')
+  await user.click(screen.getByRole('button', { name: 'Save prospect' }))
+  await user.click(screen.getByRole('button', { name: 'Save to list' }))
   const input = screen.getByRole('combobox', { name: 'List name' })
   await user.clear(input)
   await user.type(input, 'Queens follow-up')
-  await user.click(screen.getByRole('button', { name: 'Save to list' }))
+  await user.click(screen.getByRole('button', { name: 'Save prospect' }))
   expect(readSaved(localStorage.getItem(storageKey))).toHaveLength(2)
+})
+
+it('uses category selection for discovery and only asks for a list when saving', async () => {
+  const user = userEvent.setup()
+  render(<ProspectsPage onNavigate={vi.fn()} />)
+  await screen.findByText('TEST CAFE')
+  expect(screen.queryByRole('combobox', { name: 'List name' })).not.toBeInTheDocument()
+  expect(fetchProspects).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'all' }), expect.any(AbortSignal))
+  await user.selectOptions(screen.getByRole('combobox', { name: 'Opportunity type' }), 'sanitation')
+  await user.click(screen.getByRole('button', { name: 'Find prospects' }))
+  expect(fetchProspects).toHaveBeenLastCalledWith(expect.objectContaining({ category: 'sanitation' }), expect.any(AbortSignal))
+  await screen.findByText('TEST CAFE')
+  const calls = vi.mocked(fetchProspects).mock.calls.length
+  await user.click(screen.getByRole('button', { name: 'Save to list' }))
+  await user.type(screen.getByRole('combobox', { name: 'List name' }), 'Custom name')
+  expect(vi.mocked(fetchProspects).mock.calls.length).toBe(calls)
 })
 
 it('does not silently overwrite unreadable saved data', async () => {

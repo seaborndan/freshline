@@ -10,11 +10,17 @@ and then build the supplier workflow. Read `docs/prospecting.md` for the current
 verification. This supersedes the earlier notes below about hybrid rendering and prefix-only search.
 The map now uses full vector geometry and assembles complete viewport results by subdivision;
 substring search is supported without removing the API prefix option. `/prospects` adds latest-
-inspection pest evidence, named local lists, notes/status, undo removal, and CSV export.
+inspection evidence, named local lists, notes/status, undo removal, and CSV export.
+Discovery now starts with all four opportunity categories: pest control, cleaning/sanitation,
+food temperature control, and plumbing/handwashing. The API publishes the code catalog; choosing
+a category changes the evidence query. List naming appears only when saving a result; names are
+user-defined labels, not filters. Existing browser-local lists remain compatible. See prospecting
+documentation for the evidence caveats and the API's backward-compatible omitted-category default.
 No migrations, dependency additions, authentication changes, or grading changes were needed.
 Physical-phone performance remains unverified; local lists do not synchronize across devices.
-Full .NET validation passed: 140 API tests and 61 infrastructure tests. Frontend validation,
-TypeScript, lint, and production build passed; see the PR for the final frontend count.
+Full .NET validation passed: 143 API tests and 61 infrastructure tests. Frontend validation,
+TypeScript, lint, and production build passed; all 289 frontend tests passed. Live category checks
+confirmed sanitation results show only matching evidence and list naming opens when saving.
 
 The `feat/polished-explorer` branch adds the first visual/UX pass requested by the user:
 shared green/white branding, a dedicated desktop sidebar, a stacked phone layout, an expandable

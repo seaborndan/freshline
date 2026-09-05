@@ -8,6 +8,16 @@ export interface Prospect {
   evidence: { code: string; description: string | null }[]
 }
 export interface ProspectResult { items: Prospect[]; isTruncated: boolean }
+export interface OpportunityCategory { id: string; label: string; description: string; codes: string[] }
+
+export function readCategories(value: unknown): OpportunityCategory[] {
+  if (!Array.isArray(value) || !value.every(c => c && typeof c.id === 'string' &&
+    typeof c.label === 'string' && typeof c.description === 'string' &&
+    Array.isArray(c.codes) && c.codes.every((code: unknown) => typeof code === 'string'))) {
+    throw new Error('Opportunity categories could not be read.')
+  }
+  return value
+}
 export const stages = ['To review', 'Contacted', 'Follow up', 'Not a fit'] as const
 export type Stage = typeof stages[number]
 export interface SavedProspect extends Prospect { list: string; stage: Stage; notes: string }
