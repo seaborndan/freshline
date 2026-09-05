@@ -5,6 +5,12 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+Added an across-list due agenda and downloadable text visit briefs. Agenda entries preserve each
+restaurant/list membership and open the exact record; due dates refresh on focus and every minute.
+Briefs include all currently filtered records (not just the visible page), notes, follow-up dates,
+contact details and dated citation snapshots. No routing service, outreach or storage changes.
+Validation: 310 frontend tests pass, lint and production build checked; local saved-work UI checked.
+
 The autonomous product pass adds saved-list follow-up dates / due view, search and stage filters,
 rename with collision protection, versioned JSON backup / previewed merge restore, and a manual
 newer-inspection check that preserves saved evidence. Discovery filters are bookmarkable; cards

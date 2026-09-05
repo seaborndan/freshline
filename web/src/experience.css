@@ -193,7 +193,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 .saved-filters label, .rename-list label, .backup-upload { display: grid; gap: 8px; color: #586c64; font-size: 12px; }
 .saved-filters label:first-child { flex: 1; min-width: 210px; }
 .saved-filters input, .saved-filters select, .rename-list input, .prospect-notes input { padding: 11px; border: 1px solid #cedbd2; border-radius: 6px; background: white; color: #163d35; font: inherit; min-width: 0; }
-.saved-filters button, .rename-list button, .workspace-backup button, .prospect-pagination button { padding: 11px 16px; border: 1px solid #cedbd2; border-radius: 6px; background: white; color: #17634f; }
+.saved-filters button, .rename-list button, .workspace-backup button, .prospect-pagination button, .visit-brief button, .followup-agenda button { padding: 11px 16px; border: 1px solid #cedbd2; border-radius: 6px; background: white; color: #17634f; }
 .workspace-backup { border-top: 1px solid #dce4df; border-bottom: 1px solid #dce4df; padding: 16px 0; font-size: 13px; color: #586c64; }
 .workspace-backup summary { cursor: pointer; color: #17634f; font-weight: 600; }
 .workspace-backup p { max-width: 85ch; line-height: 1.7; }
@@ -223,3 +223,11 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 .evidence-check strong { display: block; margin-top: 12px; color: #163d35; }
 
 .route-loading { padding: 40px; color: #586c64; }
+.followup-agenda { margin-block: 20px; padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.followup-agenda summary { font-weight: 650; color: var(--ink); cursor: pointer; }
+.followup-agenda p, .visit-brief p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+.followup-agenda ul { list-style: none; padding: 0; max-height: 360px; overflow-y: auto; }
+.followup-agenda li { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding-block: 14px; border-top: 1px solid var(--line); }
+.followup-agenda li span { display: block; color: var(--muted); font-size: 13px; margin-top: 5px; }
+.visit-brief { display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: center; margin-block: 20px; padding: 20px; border-radius: 12px; background: #eaf2ed; }
+.visit-brief p { margin-bottom: 0; }

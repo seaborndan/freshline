@@ -98,6 +98,15 @@ The large map-chunk warning remains; these sizes are not network or phone-perfor
 
 ## Working a territory
 
+The across-list agenda shows all due follow-ups, oldest first, excluding Not a fit. Each list
+membership retains its own date and opens the exact restaurant in that list. Clear saved filters
+or Show full list returns to the complete list. Dates refresh while the page remains open.
+
+Download visit brief creates an offline plain-text file for every record in the filtered view,
+including records on other pages. It includes personal notes, published contact details, dated
+evidence, follow-up dates and space for conversation notes. It is not a route optimizer or a backup
+format. The existing JSON backup remains the restoration format.
+
 Submitted category, locality and date filters are stored in the URL for bookmarking. Draft edits
 take effect on Find prospects. Discovery shows the latest inspection date in the local dataset;
 this is not a claim of live city data. Results and saved cards page in groups of 20.

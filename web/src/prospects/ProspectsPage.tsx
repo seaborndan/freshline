@@ -5,6 +5,8 @@ import { useFilterOptions } from '../filters/useFilterOptions'
 import { useDatasetSummary } from '../landing/useDatasetSummary'
 import { WorkspaceBackup } from './WorkspaceBackup'
 import { EvidenceCheck } from './EvidenceCheck'
+import { FollowUpAgenda } from './FollowUpAgenda'
+import { VisitBrief } from './VisitBrief'
 import { isDue, localToday, readDiscovery, savedMatches, workspaceQuery } from './workspace'
 import { downloadCsv, toCsv } from '../reports/csv'
 import type { Route } from '../routing/route'
@@ -33,13 +35,20 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
   const [removed, setRemoved] = useState<SavedProspect | null>(null)
   const listName = list.trim()
   const [savedSearch, setSavedSearch] = useState('')
+  const [agendaId, setAgendaId] = useState<number | null>(null)
   const [stageFilter, setStageFilter] = useState('')
   const [dueOnly, setDueOnly] = useState(false)
   const [rename, setRename] = useState<string | null>(null)
   const [renameError, setRenameError] = useState('')
   const [page, setPage] = useState(1)
   const grid = useRef<HTMLDivElement>(null)
-  const today = localToday()
+  const [today, setToday] = useState(localToday)
+  useEffect(() => {
+    const refresh = () => setToday(localToday())
+    const timer = window.setInterval(refresh, 60_000)
+    window.addEventListener('focus', refresh)
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', refresh) }
+  }, [])
 
   useEffect(() => {
     history.replaceState(null, '', `/prospects${workspaceQuery(request, mode === 'saved' ? listName : undefined)}`)
@@ -106,13 +115,13 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
     persist(saved.map(s => s.id === p.id && s.list === p.list ? { ...s, ...patch } : s))
   }
   const currentList = saved.filter(s => s.list === listName)
-  const filteredSaved = currentList.filter(p => savedMatches(p, savedSearch, stageFilter, dueOnly, today))
+  const filteredSaved = currentList.filter(p => (agendaId === null || p.id === agendaId) && savedMatches(p, savedSearch, stageFilter, dueOnly, today))
     .sort((a, b) => Number(isDue(b, today)) - Number(isDue(a, today)) ||
       (a.followUpOn || '9999').localeCompare(b.followUpOn || '9999') || a.name.localeCompare(b.name))
   const rows: Prospect[] = mode === 'saved' ? filteredSaved : result?.items ?? []
   const visiblePage = Math.min(page, Math.max(1, Math.ceil(rows.length / 20)))
   const visibleRows = rows.slice((visiblePage - 1) * 20, visiblePage * 20)
-  function resetSavedFilters() { setSavedSearch(''); setStageFilter(''); setDueOnly(false) }
+  function resetSavedFilters() { setSavedSearch(''); setStageFilter(''); setDueOnly(false); setAgendaId(null) }
   function renameList() {
     const nextName = rename?.trim() ?? ''
     if (!nextName) { setRenameError('Enter a list name.'); return }
@@ -150,6 +159,8 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
       <button type="button" disabled={!currentList.length} onClick={() => { setRename(listName); setRenameError('') }}>Rename list</button>
     </section> : null}
     {mode === 'saved' ? <>
+      <FollowUpAgenda saved={saved} today={today} onOpen={p => { setList(p.list); resetSavedFilters(); setAgendaId(p.id); setRename(null); setPage(1); grid.current?.scrollIntoView?.({ block: 'start' }) }} />
+      {agendaId !== null ? <p className="prospect-count">Showing the restaurant selected from your agenda. <button type="button" onClick={resetSavedFilters}>Show full list</button></p> : null}
       {rename !== null ? <form className="rename-list" onSubmit={e => { e.preventDefault(); renameList() }}><label>New list name<input autoFocus required maxLength={80} value={rename} onChange={e => setRename(e.target.value)} /></label><button type="submit">Save list name</button><button type="button" onClick={() => setRename(null)}>Cancel rename</button>{renameError ? <p role="alert">{renameError}</p> : null}</form> : null}
       <div className="workspace-stats" aria-label="List progress">
         <button type="button" aria-pressed={!dueOnly && !stageFilter} onClick={resetSavedFilters}><strong>{currentList.length}</strong><span>Saved places</span></button>
@@ -158,6 +169,7 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
       </div>
       <div className="saved-filters"><label>Search saved places<input type="search" value={savedSearch} onChange={e => setSavedSearch(e.target.value)} placeholder="Restaurant, address, borough or notes" /></label><label>Filter contact status<select value={stageFilter} onChange={e => setStageFilter(e.target.value)}><option value="">All statuses</option>{stages.map(s => <option key={s}>{s}</option>)}</select></label><button type="button" onClick={resetSavedFilters}>Clear saved filters</button></div>
       <WorkspaceBackup saved={saved} onRestore={next => { if (!persist(next)) return false; if (!next.some(p => p.list === listName)) setList(next[0]?.list ?? ''); return true }} />
+      <VisitBrief rows={filteredSaved} list={listName} />
     </> : null}
     {storageError ? <p role="alert" className="reports-notice">{storageError}</p> : null}
     {removed ? <p className="prospect-count">Removed {removed.name} from {removed.list}. <button type="button" onClick={() => {
