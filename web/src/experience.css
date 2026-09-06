@@ -251,3 +251,11 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 .saved-searches ul { padding: 0; list-style: none; }
 .saved-searches li { padding-block: 16px; border-top: 1px solid var(--line); align-items: center; }
 .saved-searches li > div { flex: 1; min-width: 180px; overflow-wrap: anywhere; }
+.inspection-comparison { padding: 16px; margin-block: 22px; border: 1px solid var(--line); border-radius: 10px; background: #f4f7f2; }
+.inspection-comparison h3 { margin-top: 0; }
+.inspection-comparison p, .inspection-comparison li { font-size: 13px; line-height: 1.6; color: var(--muted); }
+.inspection-comparison label { display: grid; gap: 6px; font-size: 13px; }
+.inspection-comparison select { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--line); border-radius: 6px; background: white; }
+.inspection-comparison details { border-top: 1px solid var(--line); padding-block: 12px; }
+.inspection-comparison summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+.inspection-comparison ul { padding-left: 18px; }

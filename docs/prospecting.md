@@ -98,6 +98,11 @@ The large map-chunk warning remains; these sizes are not network or phone-perfor
 
 ## Working a territory
 
+Restaurant details include What changed between records? Choose an earlier inspection to compare
+its citation codes with the latest record. Expand the three groups to read their descriptions.
+This compares codes, not severity trends or resolution; inspection scope/type can differ. Same-day
+records have unknown ordering within that day. Full original inspection history remains available.
+
 Saved searches names and stores the submitted category, borough and exact date range in this
 browser. Run search reloads results and restores those filters; it does not store a result snapshot
 or advance the date range. Up to 50 names are supported. Removal offers undo, existing names cannot

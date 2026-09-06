@@ -5,6 +5,13 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+Restaurant details now compare latest citation codes with any earlier stored inspection. Three
+expandable groups show latest-only, shared and comparison-only codes; full history remains below.
+Same-day records explicitly have unknown within-day chronology. Missing codes do not imply resolution.
+323 frontend tests pass; lint/build passed. Live API comparison verified TAL BAGELS has four shared
+and fourteen prior-only codes between July 22 and July 17. Browser visual QA remains blocked by CUA
+kernel-assets initialization. No grading logic or dependencies changed.
+
 Discovery supports named saved searches under freshline.searches.v1, separate from restaurant lists.
 Up to 50 fixed-date searches; save uses submitted filters, Run fetches again, removal has undo.
 Duplicate names, unreadable storage and detected stale writes are protected. Restaurant JSON backups

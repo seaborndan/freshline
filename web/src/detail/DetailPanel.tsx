@@ -21,6 +21,7 @@ import type { MapEstablishment } from '../api/contract'
 import { formatPlainDate } from '../api/plainDate'
 import { pinStateOf, pinStyles } from '../map/pinStyle'
 import type { DetailView } from './useEstablishmentDetail'
+import { InspectionComparison } from './InspectionComparison'
 
 export interface DetailPanelProps {
   /** Everything under the last click. Empty when nothing is selected. */
@@ -213,6 +214,7 @@ function Detail({ view, onCentre }: { view: DetailView; onCentre: () => void }) 
         )}
       </dl>
 
+      <InspectionComparison key={detail.id} inspections={detail.inspections} />
       <h3>Inspections</h3>
 
       {detail.isAwaitingFirstInspection ? (
@@ -223,7 +225,7 @@ function Detail({ view, onCentre }: { view: DetailView; onCentre: () => void }) 
           missing information.
         </p>
       ) : (
-        <ol className="detail-inspections">
+        <ol className="detail-inspections" aria-label="Inspection history">
           {detail.inspections.map((inspection) => (
             <li key={inspection.id}>
               <p className="detail-inspection-head">

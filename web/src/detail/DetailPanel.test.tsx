@@ -129,7 +129,7 @@ describe('DetailPanel', () => {
       />,
     )
 
-    expect(screen.getByText('9 March 2026')).toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Inspection history' })).getByText('9 March 2026')).toBeInTheDocument()
     expect(screen.queryByText('8 March 2026')).not.toBeInTheDocument()
   })
 
