@@ -103,9 +103,11 @@ its citation codes with the latest record. Expand the three groups to read their
 This compares codes, not severity trends or resolution; inspection scope/type can differ. Same-day
 records have unknown ordering within that day. Full original inspection history remains available.
 
-Saved searches names and stores the submitted category, borough and exact date range in this
-browser. Run search reloads results and restores those filters; it does not store a result snapshot
-or advance the date range. Up to 50 names are supported. Removal offers undo, existing names cannot
+Saved searches names and stores the submitted category and borough, with either exact dates or a
+rolling 7/30/90/180-day window. Run search recalculates rolling dates to include the local current
+day and the preceding N-1 days, then reloads results. Fixed dates remain unchanged. Neither mode
+stores a result snapshot or monitors in the background. Windows concern inspection dates, not when
+data was imported. Up to 50 names are supported. Removal offers undo, existing names cannot
 be overwritten, and detected changes from another tab stop stale writes. Search bookmarks use
 freshline.searches.v1 and are separate from restaurant-list JSON backups.
 

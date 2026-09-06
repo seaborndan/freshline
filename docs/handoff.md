@@ -5,6 +5,12 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+Saved searches now optionally use rolling 7/30/90/180-day windows calculated on Run, inclusive of
+the local current day. Existing bookmarks remain fixed-date. These filter inspection dates, not
+ingestion timestamps; there is no background monitoring. Tests cover leap/year boundaries and old
+bookmark compatibility. 325 frontend tests pass; lint/build checked. Live visual QA remains pending
+because the browser automation runtime has been unavailable.
+
 Restaurant details now compare latest citation codes with any earlier stored inspection. Three
 expandable groups show latest-only, shared and comparison-only codes; full history remains below.
 Same-day records explicitly have unknown within-day chronology. Missing codes do not imply resolution.

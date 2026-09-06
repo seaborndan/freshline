@@ -247,7 +247,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--accent); }
 .saved-searches p { color: var(--muted); font-size: 14px; line-height: 1.6; }
 .saved-searches form, .saved-searches li { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .saved-searches label { display: grid; gap: 6px; }
-.saved-searches input, .saved-searches button { padding: 11px 16px; border: 1px solid #cedbd2; border-radius: 6px; background: white; color: #17634f; }
+.saved-searches input, .saved-searches button, .saved-searches select { padding: 11px 16px; border: 1px solid #cedbd2; border-radius: 6px; background: white; color: #17634f; max-width: 100%; }
 .saved-searches ul { padding: 0; list-style: none; }
 .saved-searches li { padding-block: 16px; border-top: 1px solid var(--line); align-items: center; }
 .saved-searches li > div { flex: 1; min-width: 180px; overflow-wrap: anywhere; }
