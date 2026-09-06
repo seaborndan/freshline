@@ -1,0 +1,13 @@
+import { useEffect, useState } from 'react'
+import { fetchDataHealth, type DataHealth } from '../api/client'
+import { formatPlainDate } from '../api/plainDate'
+export function DataHealthPage() {
+  const [data, setData] = useState<DataHealth | null>(null)
+  const [error, setError] = useState('')
+  const [retry, setRetry] = useState(0)
+  useEffect(() => { const abort = new AbortController(); setError(''); setData(null); fetchDataHealth(abort.signal).then(value => { if (!abort.signal.aborted) setData(value) }).catch(() => { if (!abort.signal.aborted) setError('Could not read data health. The API or database may be unavailable.') }); return () => abort.abort() }, [retry])
+  return <div className="work-page reports"><h1>Data health and coverage</h1><p>Freshline is a copy of public records, not a live inspection service. A successful ingestion timestamp and the most recent inspection date answer different questions.</p>{error ? <p role="alert">{error}</p> : null}<button onClick={() => setRetry(v => v + 1)}>Refresh data health</button>{!data && !error ? <p role="status">Checking data health…</p> : null}
+    {data ? <><div className="work-stats"><div><strong>{data.establishments.toLocaleString()}</strong> establishments</div><div><strong>{data.inspections.toLocaleString()}</strong> inspections</div><div><strong>{data.missingCoordinates.toLocaleString()}</strong> without complete coordinates</div></div>{data.sources.map(source => <section key={source.source}><h2>{source.source === 'NycDohmh' ? 'NYC DOHMH inspections' : source.source}</h2><dl><dt>Last recorded successful ingestion completed</dt><dd>{source.lastSuccessfulRunCompletedUtc ? new Date(source.lastSuccessfulRunCompletedUtc).toLocaleString() : 'Not recorded'}</dd><dt>Highest inspection date reached by ingestion</dt><dd>{source.latestInspectionDate ? formatPlainDate(source.latestInspectionDate) : 'Not recorded'}</dd><dt>Recorded ingestion scope</dt><dd>{source.scope || 'Not recorded'}</dd></dl></section>)}{!data.sources.length ? <p>No successful ingestion watermark is recorded.</p> : null}</> : null}
+    <h2>Known coverage limits</h2><ul><li>Failed-run history and current worker status are not stored by this version. A previous successful run does not prove the latest attempt succeeded.</li><li>Restaurant history contains only ingested records; it may not cover the full life of a business.</li><li>Missing coordinates exclude restaurants from maps, not from all other views.</li><li>New-business licence signals and team synchronization are not active data sources.</li></ul><a href="https://data.cityofnewyork.us/Health/DOHMH-New-York-City-Restaurant-Inspection-Results/43nn-pn8j" target="_blank" rel="noreferrer">Inspect the source dataset</a>
+  </div>
+}

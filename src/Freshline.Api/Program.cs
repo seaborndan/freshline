@@ -147,6 +147,11 @@ api.MapIdentityEndpoints();
 // viewport query costs and is asked for far less often, so the two want different budgets.
 api.MapReportEndpoints();
 api.MapProspectEndpoints();
+api.MapResearchEndpoints();
+api.MapGet("/data-health", async (Freshline.Core.Queries.IDataHealthQueries queries, CancellationToken cancellationToken) =>
+    TypedResults.Ok(await queries.GetAsync(cancellationToken)))
+    .WithTags("Data")
+    .WithSummary("Recorded dataset coverage and successful ingestion timestamps");
 
 app.Run();
 

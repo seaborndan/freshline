@@ -25,9 +25,22 @@ import type {
   MapResult,
 } from './contract'
 import { readCategories, readProspects, type OpportunityCategory, type ProspectResult } from '../prospects/model'
+export interface DataHealth { sources: { source: string; latestInspectionDate: string | null; lastSuccessfulRunStartedUtc: string | null; lastSuccessfulRunCompletedUtc: string | null; scope: string | null }[]; establishments: number; inspections: number; missingCoordinates: number }
+export async function fetchDataHealth(signal?: AbortSignal): Promise<DataHealth> {
+  const body = await requestJson(`${apiRoot}/data-health`, signal) as DataHealth
+  if (!body || !['establishments', 'inspections', 'missingCoordinates'].every(k => Number.isInteger(body[k as 'establishments']) && body[k as 'establishments'] >= 0) || !Array.isArray(body.sources) || !body.sources.every(s => s && typeof s.source === 'string' && ['latestInspectionDate', 'lastSuccessfulRunStartedUtc', 'lastSuccessfulRunCompletedUtc', 'scope'].every(k => s[k as 'scope'] === null || typeof s[k as 'scope'] === 'string'))) throw new Error('Data health response is invalid.')
+  return body
+}
 
 export async function fetchProspectCategories(signal?: AbortSignal): Promise<OpportunityCategory[]> {
   return readCategories(await requestJson(`${apiRoot}/prospects/categories`, signal))
+}
+export interface ResearchCandidate { id: number; name: string; address: string | null; locality: string | null; cuisine: string | null; inspectedOn: string; inspectionType: string | null; codes: string[] }
+export interface ResearchResult { items: ResearchCandidate[]; isTruncated: boolean }
+export async function fetchResearch(filters: Record<string, string>, signal?: AbortSignal): Promise<ResearchResult> {
+  const body = await requestJson(`${apiRoot}/research?${new URLSearchParams(filters)}`, signal) as ResearchResult
+  if (!body || typeof body.isTruncated !== 'boolean' || !Array.isArray(body.items) || !body.items.every(p => p && Number.isInteger(p.id) && p.id > 0 && typeof p.name === 'string' && typeof p.inspectedOn === 'string' && Array.isArray(p.codes) && p.codes.every(c => typeof c === 'string') && ['address','locality','cuisine','inspectionType'].every(k => p[k as 'address'] === null || typeof p[k as 'address'] === 'string'))) throw new Error('Research response is invalid.')
+  return body
 }
 
 export async function fetchProspectMap(ids: number[], signal?: AbortSignal): Promise<MapResult> {

@@ -5,6 +5,62 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+The ten-feature product pass adds general map saving, dated activity timelines, My day (/work),
+saved-evidence checks, manual visit planning, saved-territory summaries, custom research (/research)
+and real data health (/data). Read `docs/product-pass-ten-features.md` for exact behavior and limits.
+Validation: 153 API tests and 334 frontend tests passed; TypeScript, lint and local-origin production
+build passed. Initial JS is 294.66 kB; map chunk remains 952.72 kB with the existing size warning.
+Saved map records allow absent inspections/evidence without weakening API discovery validation.
+Activities survive transfer and restaurant JSON backup; visit plans and search bookmarks remain
+separate local keys. No active authentication, migrations or new dependencies were added.
+
+User chose Google accounts for teams. Concrete proposed architecture and setup requirements are
+in ADR-0008; OAuth client/domain and auth/schema review are still required. Pre-permit research is
+implemented using recorded inspection types, but verified opening/permit-issuance data is not.
+Failed-run history is not persisted; data health says so rather than implying successful refresh.
+
+CUA browser inspection recovered after reset during this pass. Live checks now cover map save,
+activity logging/reload, visit stop selection/reordering, unchanged-evidence checks, pre-permit rules
+(Queens + all codes 04N/08A returned 26 matches), and data health. Phone-width checks at 390px had
+no horizontal overflow on research/data health. Temporary QA list/activities and visit stops were
+removed; original GG/a lists preserved. This supersedes older notes saying all visual QA is blocked.
+Data health reports 23,528 establishments, 29,601 inspections, 511 missing coordinates, last successful
+ingestion July 26 and highest inspection date July 23. This pass did not run fresh ingestion.
+
+Saved searches now optionally use rolling 7/30/90/180-day windows calculated on Run, inclusive of
+the local current day. Existing bookmarks remain fixed-date. These filter inspection dates, not
+ingestion timestamps; there is no background monitoring. Tests cover leap/year boundaries and old
+bookmark compatibility. 325 frontend tests pass; lint/build checked. Live visual QA remains pending
+because the browser automation runtime has been unavailable.
+
+Restaurant details now compare latest citation codes with any earlier stored inspection. Three
+expandable groups show latest-only, shared and comparison-only codes; full history remains below.
+Same-day records explicitly have unknown within-day chronology. Missing codes do not imply resolution.
+323 frontend tests pass; lint/build passed. Live API comparison verified TAL BAGELS has four shared
+and fourteen prior-only codes between July 22 and July 17. Browser visual QA remains blocked by CUA
+kernel-assets initialization. No grading logic or dependencies changed.
+
+Discovery supports named saved searches under freshline.searches.v1, separate from restaurant lists.
+Up to 50 fixed-date searches; save uses submitted filters, Run fetches again, removal has undo.
+Duplicate names, unreadable storage and detected stale writes are protected. Restaurant JSON backups
+do not include search bookmarks; the UI states this. 320 frontend tests pass, lint/build checked.
+CUA still fails initializing kernel assets, so live visual verification remains outstanding.
+
+Saved restaurants now support Copy or move to another list, preserving notes, status, dates and
+evidence. Copy is the default; move explicitly removes the source membership and opens the destination.
+Existing destination memberships are never overwritten, and failed writes keep the form available.
+Validation: 317 frontend tests passed, lint and production build checked. CUA still fails before
+tab access with a missing kernel-assets path; this UI has not had live visual verification.
+
+Discovery now supports selecting individual restaurants or the visible page, retaining selections
+across pages, and saving together to one destination. A preview counts new versus existing list
+memberships; existing evidence, notes and status are preserved. New searches and mode changes clear
+selection. Only unsaved places filters loaded results against all local lists, with explicit API-cap
+and already-saved empty-state wording. No API or storage-schema changes.
+Validation: 314 frontend tests passed; lint checked. Browser QA for this addition is blocked by the
+CUA runtime failing to initialize (missing kernel asset path), including after reset; do not assume
+a live visual check was completed. Follow-up: inspect batch controls at desktop and phone widths.
+
 Added an across-list due agenda and downloadable text visit briefs. Agenda entries preserve each
 restaurant/list membership and open the exact record; due dates refresh on focus and every minute.
 Briefs include all currently filtered records (not just the visible page), notes, follow-up dates,

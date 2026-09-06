@@ -98,6 +98,31 @@ The large map-chunk warning remains; these sizes are not network or phone-perfor
 
 ## Working a territory
 
+Restaurant details include What changed between records? Choose an earlier inspection to compare
+its citation codes with the latest record. Expand the three groups to read their descriptions.
+This compares codes, not severity trends or resolution; inspection scope/type can differ. Same-day
+records have unknown ordering within that day. Full original inspection history remains available.
+
+Saved searches names and stores the submitted category and borough, with either exact dates or a
+rolling 7/30/90/180-day window. Run search recalculates rolling dates to include the local current
+day and the preceding N-1 days, then reloads results. Fixed dates remain unchanged. Neither mode
+stores a result snapshot or monitors in the background. Windows concern inspection dates, not when
+data was imported. Up to 50 names are supported. Removal offers undo, existing names cannot
+be overwritten, and detected changes from another tab stop stale writes. Search bookmarks use
+freshline.searches.v1 and are separate from restaurant-list JSON backups.
+
+Saved cards offer Copy or move to another list. Choose an existing destination or name a new one.
+Copy preserves the source; move removes its membership and opens the destination list. Both carry
+notes, stage, follow-up date and saved evidence. If the restaurant is already at the destination,
+the operation is blocked rather than merging or overwriting independent work.
+
+Discovery cards can be selected individually or a page at a time. Selection survives pagination
+but clears for a submitted search, workspace mode change or unsaved-filter change. The batch save
+form previews new versus existing memberships in the destination list. It adds only new entries,
+preserving existing notes, dates, stage and evidence; storage errors leave the selection available.
+Only unsaved places excludes restaurants already in any local list. It filters the loaded API
+results, not the full city, and does not fetch replacements beyond the existing 200-record cap.
+
 The across-list agenda shows all due follow-ups, oldest first, excluding Not a fit. Each list
 membership retains its own date and opens the exact restaurant in that list. Clear saved filters
 or Show full list returns to the complete list. Dates refresh while the page remains open.

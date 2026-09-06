@@ -1,0 +1,26 @@
+import { useEffect, useState } from 'react'
+import { fetchResearch, type ResearchResult } from '../api/client'
+import { useFilterOptions } from '../filters/useFilterOptions'
+import { readDiscovery } from '../prospects/workspace'
+import { formatPlainDate } from '../api/plainDate'
+export function ResearchPage() {
+  const [filters, setFilters] = useState(() => { const q = new URLSearchParams(location.search); const base = readDiscovery(location.search); return { locality: base.locality, from: base.from, to: base.to, cuisine: q.get('cuisine') ?? '', codes: q.get('codes') ?? '', requireAll: q.get('requireAll') === 'true' ? 'true' : 'false', prePermit: q.get('prePermit') === 'true' ? 'true' : 'false' } })
+  const [request, setRequest] = useState(filters)
+  const [result, setResult] = useState<ResearchResult | null>(null)
+  const [error, setError] = useState('')
+  const [page, setPage] = useState(1)
+  const options = useFilterOptions()
+  useEffect(() => { const abort = new AbortController(); setResult(null); setError(''); setPage(1); history.replaceState(null, '', `/research?${new URLSearchParams(request)}`); fetchResearch(request, abort.signal).then(data => { if (!abort.signal.aborted) setResult(data) }).catch(() => { if (!abort.signal.aborted) setError('Could not run research. Check your filters and try again.') }); return () => abort.abort() }, [request])
+  return <div className="work-page reports"><h1>Build your own discovery rules</h1><p>Combine borough, cuisine, inspection dates and exact citation codes. Only the latest recorded inspection qualifies. Leave codes empty to research inspected restaurants without requiring violations; the general map also includes never-inspected restaurants.</p>
+    <form className="research-form" onSubmit={e => { e.preventDefault(); setRequest({ ...filters }) }}>
+      <label>Borough<select value={filters.locality} onChange={e => setFilters({ ...filters, locality: e.target.value })}><option value="">All boroughs</option>{options?.localities.map(v => <option key={v}>{v}</option>)}</select></label>
+      <label>Cuisine<select value={filters.cuisine} onChange={e => setFilters({ ...filters, cuisine: e.target.value })}><option value="">All cuisines</option>{options?.cuisines.map(v => <option key={v}>{v}</option>)}</select></label>
+      <label>Inspected from<input required type="date" value={filters.from} max={filters.to} onChange={e => setFilters({ ...filters, from: e.target.value })} /></label><label>Inspected to<input required type="date" value={filters.to} min={filters.from} onChange={e => setFilters({ ...filters, to: e.target.value })} /></label>
+      <label>Citation codes<input maxLength={129} placeholder="04L, 05D" value={filters.codes} onChange={e => setFilters({ ...filters, codes: e.target.value.toUpperCase() })} /></label><label>Code matching<select value={filters.requireAll} onChange={e => setFilters({ ...filters, requireAll: e.target.value })}><option value="false">Any listed code</option><option value="true">Every listed code</option></select></label><label>Inspection signal<select value={filters.prePermit} onChange={e => setFilters({ ...filters, prePermit: e.target.value })}><option value="false">Any inspection type</option><option value="true">Pre-permit inspection</option></select></label><button type="submit">Run research</button>
+    </form><p>Bookmark the submitted URL to reuse these exact rules. Up to ten codes; dates use inspection dates, not import dates.</p>
+    {request.prePermit === 'true' ? <aside className="research-caveat"><strong>A pre-permit inspection is a lead to investigate, not a verified opening.</strong><p>NYC publishes a <a href="https://data.cityofnewyork.us/Health/Pre-Permit-Restaurant-Inspections/jzz4-5r78" target="_blank" rel="noreferrer">pre-permit inspection view</a>. This search uses that type of signal in our ingested records. It does not establish an opening date, permit issuance or a new owner.</p></aside> : null}
+    {error ? <p role="alert">{error}</p> : !result ? <p role="status">Running research…</p> : <p role="status">{result.items.length} results{result.isTruncated ? ' · first 200 only; narrow your rules' : ''}. Sorted by latest inspection date.</p>}
+    <div className="prospect-grid">{result?.items.slice((page-1)*20,page*20).map(p => <article className="prospect-card" key={p.id}><h2>{p.name}</h2><p>{p.address} · {p.locality} · {p.cuisine ?? 'Cuisine not published'}</p><p>{formatPlainDate(p.inspectedOn)} · {p.inspectionType ?? 'Inspection type not published'}</p><p>Matches the submitted area, cuisine and date rules{request.prePermit === 'true' ? ', with a pre-permit latest inspection' : ''}.{request.codes ? ` Requested codes (${request.requireAll === 'true' ? 'all' : 'any'}): ${request.codes}.` : ' No citation requirement.'}</p><p>Recorded codes: {p.codes.join(', ') || 'None cited'}</p><a href={`/map?id=${p.id}&focus=1`}>Review and save restaurant</a></article>)}</div>
+    {result && result.items.length > 20 ? <nav className="work-actions" aria-label="Research pages"><button disabled={page===1} onClick={() => setPage(p=>p-1)}>Previous</button><span>Page {page} of {Math.ceil(result.items.length/20)}</span><button disabled={page*20>=result.items.length} onClick={() => setPage(p=>p+1)}>Next</button></nav> : null}
+  </div>
+}

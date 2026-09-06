@@ -41,3 +41,11 @@ export function mergeBackup(existing: SavedProspect[], incoming: SavedProspect[]
   }
   return result
 }
+
+/** Read the current source record, and refuse collisions rather than replacing work. */
+export function transferProspect(saved: SavedProspect[], id: number, source: string, destination: string, move: boolean): SavedProspect[] | null {
+  const name = destination.trim()
+  const record = saved.find(p => p.id === id && p.list === source)
+  if (!record || !name || name.length > 80 || saved.some(p => p.id === id && p.list === name)) return null
+  return [...saved.filter(p => !move || p.id !== id || p.list !== source), { ...record, list: name }]
+}

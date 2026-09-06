@@ -7,6 +7,11 @@ import { WorkspaceBackup } from './WorkspaceBackup'
 import { EvidenceCheck } from './EvidenceCheck'
 import { FollowUpAgenda } from './FollowUpAgenda'
 import { VisitBrief } from './VisitBrief'
+import { BatchSave } from './BatchSave'
+import { SavedSearches } from './SavedSearches'
+import { ActivityTimeline } from './ActivityTimeline'
+import { TransferProspect } from './TransferProspect'
+import { transferProspect } from './workspace'
 import { isDue, localToday, readDiscovery, savedMatches, workspaceQuery } from './workspace'
 import { downloadCsv, toCsv } from '../reports/csv'
 import type { Route } from '../routing/route'
@@ -28,6 +33,8 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
   const [storageError, setStorageError] = useState(initialStorage.error)
   const [list, setList] = useState(new URLSearchParams(location.search).get('list') ?? initialStorage.saved[0]?.list ?? '')
   const [savingId, setSavingId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [onlyUnsaved, setOnlyUnsaved] = useState(false)
   const [categories, setCategories] = useState<OpportunityCategory[]>([])
   const [categoryError, setCategoryError] = useState('')
   const [mode, setMode] = useState<'discover' | 'saved'>(new URLSearchParams(location.search).has('list') ? 'saved' : 'discover')
@@ -55,6 +62,7 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
   }, [request, mode, listName])
 
   useEffect(() => { setPage(1) }, [request, mode, listName, savedSearch, stageFilter, dueOnly])
+  useEffect(() => { setSelectedIds([]) }, [request, mode])
 
   useEffect(() => {
     function synchronize(event: StorageEvent) {
@@ -111,14 +119,14 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
       setAnnouncement(`Saved ${p.name} to ${listName}.`)
     }
   }
-  function update(p: SavedProspect, patch: Partial<Pick<SavedProspect, 'stage' | 'notes' | 'followUpOn'>>) {
-    persist(saved.map(s => s.id === p.id && s.list === p.list ? { ...s, ...patch } : s))
+  function update(p: SavedProspect, patch: Partial<Pick<SavedProspect, 'stage' | 'notes' | 'followUpOn' | 'activities'>>) {
+    return persist(saved.map(s => s.id === p.id && s.list === p.list ? { ...s, ...patch } : s))
   }
   const currentList = saved.filter(s => s.list === listName)
   const filteredSaved = currentList.filter(p => (agendaId === null || p.id === agendaId) && savedMatches(p, savedSearch, stageFilter, dueOnly, today))
     .sort((a, b) => Number(isDue(b, today)) - Number(isDue(a, today)) ||
       (a.followUpOn || '9999').localeCompare(b.followUpOn || '9999') || a.name.localeCompare(b.name))
-  const rows: Prospect[] = mode === 'saved' ? filteredSaved : result?.items ?? []
+  const rows: Prospect[] = mode === 'saved' ? filteredSaved : (result?.items ?? []).filter(p => !onlyUnsaved || !saved.some(s => s.id === p.id))
   const visiblePage = Math.min(page, Math.max(1, Math.ceil(rows.length / 20)))
   const visibleRows = rows.slice((visiblePage - 1) * 20, visiblePage * 20)
   function resetSavedFilters() { setSavedSearch(''); setStageFilter(''); setDueOnly(false); setAgendaId(null) }
@@ -147,6 +155,7 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
         <p className="prospect-lede">{mode === 'saved' ? 'Review your shortlist, keep the context, and decide who needs a follow-up.' : 'Choose an opportunity type. Find supporting inspection evidence. Build your own shortlist.'}</p></div>
       <div className="prospect-method"><strong>Evidence, not assumptions.</strong><p>Categories match specific citations at the latest recorded inspection. They suggest something to investigate, not proof of a current problem, equipment failure, or unmet service need.</p></div>
     </header>
+    <div className="work-actions"><a href="/work">My day and visit planner</a><a href="/research">Custom discovery rules</a><a href="/research?prePermit=true">Pre-permit research</a><a href="/data">Data health</a></div>
     <div className="prospect-tabs" aria-label="Prospect workspace">
       <button type="button" aria-pressed={mode === 'discover'} onClick={() => setMode('discover')}>Discover prospects</button>
       <button type="button" aria-pressed={mode === 'saved'} onClick={() => setMode('saved')}>Saved lists ({new Set(saved.map(p => p.list)).size})</button>
@@ -191,22 +200,40 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
       <p className="eyebrow">Results for: {request.category === 'all' ? 'All opportunity types' : categories.find(c => c.id === request.category)?.label ?? request.category}</p>
       {failure ? <p role="alert">{failure}</p> : <p role="status" className="prospect-count">{loading ? 'Checking the latest inspection evidence…' : result?.isTruncated ? 'Showing the 200 most recently inspected matches. Narrow the borough or dates to see a smaller set.' : `${rows.length} matching places · newest inspections first`}</p>}
       <p className="discovery-continuity">Your submitted search is in the address bar. Bookmark or copy its URL to return to this territory.</p>
+      <SavedSearches search={request} categories={categories} onRun={search => { setFilters(search); setRequest({ ...search }); setOnlyUnsaved(false) }} />
+      <label className="prospect-select"><input type="checkbox" checked={onlyUnsaved} onChange={e => { setOnlyUnsaved(e.target.checked); setSelectedIds([]); setPage(1) }} />Only unsaved places</label>
+      {onlyUnsaved && result ? <p className="prospect-count">{rows.length} of {result.items.length} loaded matches are not in any saved list. This filters the loaded results; narrow your search if the API limit was reached.</p> : null}
     </> : <p className="prospect-count">{rows.length} of {currentList.length} saved in “{listName || 'Choose a list name'}” · due follow-ups first · evidence is a snapshot from when you saved it</p>}
     <p className="sr-announcement" role="status">{announcement}</p>
-    {!loading && !failure && rows.length === 0 && mode === 'discover' ? <div className="prospect-empty"><h2>No matching evidence in this period.</h2><p>Try a wider date range or another borough. An older citation is excluded if a newer inspection no longer cites these codes.</p></div> : null}
+    {!loading && !failure && rows.length === 0 && mode === 'discover' ? <div className="prospect-empty"><h2>{onlyUnsaved && result?.items.length ? 'These loaded matches are already in your lists.' : 'No matching evidence in this period.'}</h2><p>{onlyUnsaved && result?.items.length ? 'Turn off Only unsaved places to review them, or change your search to explore another territory.' : 'Try a wider date range or another borough. An older citation is excluded if a newer inspection no longer cites these codes.'}</p></div> : null}
+    {mode === 'discover' && !loading && rows.length > 0 ? <div className="discovery-selection"><button type="button" onClick={() => setSelectedIds(previous => [...new Set([...previous, ...visibleRows.map(p => p.id)])])}>Select this page ({visibleRows.length})</button><span>Select places to save them together. A new search clears the selection.</span></div> : null}
+    {mode === 'discover' && selectedIds.length > 0 ? <BatchSave selected={rows.filter(p => selectedIds.includes(p.id))} saved={saved} onClear={() => setSelectedIds([])} onSave={(additions, destination) => {
+      if (!persist([...saved, ...additions])) return false
+      setSelectedIds([]); setList(destination); setAnnouncement(`Saved ${additions.length} places to ${destination}.`)
+      return true
+    }} /> : null}
     {mode === 'saved' && !rows.length ? <div className="prospect-empty"><h2>{currentList.length ? 'Nothing matches these saved filters.' : 'Your next conversation starts here.'}</h2><p>{currentList.length ? 'Clear the filters to see the rest of this list.' : 'Save a place from Discover prospects to begin this list.'}</p></div> : null}
     <div className="prospect-grid" ref={grid}>{visibleRows.map(p => {
       const existing = saved.find(s => s.id === p.id && s.list === listName)
       return <article key={p.id} className="prospect-card">
-        <div className="prospect-card-head"><span className="eyebrow">{p.locality ?? 'Borough unavailable'}</span><span>{formatPlainDate(p.inspectedOn)}</span></div>
+        {mode === 'discover' ? <label className="prospect-select"><input type="checkbox" checked={selectedIds.includes(p.id)} onChange={e => setSelectedIds(previous => e.target.checked ? [...previous, p.id] : previous.filter(id => id !== p.id))} />Select {p.name}</label> : null}
+        <div className="prospect-card-head"><span className="eyebrow">{p.locality ?? 'Borough unavailable'}</span><span>{p.inspectedOn ? formatPlainDate(p.inspectedOn) : 'No inspection recorded'}</span></div>
         <h2>{p.name}</h2><p className="prospect-address">{p.address ?? 'Address not published'}</p>
-        <div className="prospect-evidence"><h3>Why this place?</h3><ul>{p.evidence.map(e => <li key={e.code}><strong>{e.code}</strong> {e.description ?? 'No description published.'}</li>)}</ul></div>
+        <div className="prospect-evidence"><h3>Saved inspection evidence</h3>{p.evidence.length === 0 ? <p>No citations saved. This restaurant was selected for your territory.</p> : null}<ul>{p.evidence.map(e => <li key={e.code}><strong>{e.code}</strong> {e.description ?? 'No description published.'}</li>)}</ul></div>
         <div className="prospect-actions"><a href={`/map?id=${p.id}&focus=1`} onClick={e => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onNavigate('map', `?id=${p.id}&focus=1`) } }}>View on map</a>
           <a href={`/map?id=${p.id}`} onClick={e => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onNavigate('map', `?id=${p.id}`) } }}>View inspection history ↗</a>
           {p.phone ? <a href={`tel:${p.phone.replace(/[^+\d]/g, '')}`}>{p.phone}</a> : <span>No phone published</span>}
         </div>
         {mode === 'saved' && existing ? <div className="prospect-notes">
           <EvidenceCheck prospect={existing} />
+          <ActivityTimeline prospect={existing} onSave={activities => update(existing, { activities })} />
+          <TransferProspect prospect={existing} saved={saved} onTransfer={(destination, move) => {
+            const next = transferProspect(saved, existing.id, existing.list, destination, move)
+            if (!next || !persist(next)) return false
+            setAnnouncement(`${move ? 'Moved' : 'Copied'} ${existing.name} to ${destination}.`)
+            if (move) { setList(destination); resetSavedFilters(); setRemoved(null) }
+            return true
+          }} />
           {isDue(existing, today) && existing.followUpOn ? <p className="followup-due">{existing.followUpOn === today ? 'Follow up today' : `Follow-up overdue · ${formatPlainDate(existing.followUpOn)}`}</p> : null}
           <label>Contact status<select value={existing.stage} onChange={e => update(existing, { stage: e.target.value as SavedProspect['stage'] })}>{stages.map(s => <option key={s}>{s}</option>)}</select></label>
           <label>Next follow-up<input type="date" value={existing.followUpOn ?? ''} onChange={e => update(existing, { followUpOn: e.target.value })} /></label>

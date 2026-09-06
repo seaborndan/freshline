@@ -789,6 +789,20 @@ Write the decision before the code. Then go and find out whether you were right,
 next to the question.
 # September 5 product workspace pass
 
+Ten-feature pass: general map saves, activity timelines, daily workspace, saved-evidence checks,
+manual visit plans, saved territory aggregates, custom research and source health implemented.
+Browser tooling recovered after reset. Live verification covered a temporary map save and activity
+persisting across reload, then cleanup; visit ordering and cleanup; saved snapshot checks; research
+and data health at 390px. Google teams and authoritative opening data are not implemented: see
+ADR-0008 and product-pass-ten-features.md. Pre-permit inspection signals are not opening claims.
+No schema, auth, normalization or dependency changes were activated. API query tests use an isolated
+seeded SQL database; no tests write to the user's actual restaurant dataset.
+
+Further iteration: multi-select discovery, duplicate-preserving batch save and unsaved-only view.
+314 frontend tests pass, including batch persistence and already-saved empty states. Browser QA is
+unverified: CUA could not initialize its kernel assets even after reset. Desktop/mobile visual
+inspection remains a follow-up; the earlier live checks below cover earlier features only.
+
 Implemented local follow-up workflow, backup/restore, manual evidence refresh checks, URL filters,
 and deferred map loading. Verification: 306 frontend tests, TypeScript, lint, production build,
 live saved filtering/evidence lookup and 390px width check. No user notes were changed for live QA.
