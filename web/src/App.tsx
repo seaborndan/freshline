@@ -21,6 +21,9 @@ import { ReportsPage } from './reports/ReportsPage'
 import { NavBar } from './routing/NavBar'
 import { useRoute } from './routing/useRoute'
 import { PageBoundary } from './routing/PageBoundary'
+import { WorkPage } from './work/WorkPage'
+import { DataHealthPage } from './work/DataHealthPage'
+import { ResearchPage } from './work/ResearchPage'
 import './App.css'
 import './experience.css'
 
@@ -46,6 +49,9 @@ function App() {
         <PageBoundary key={route}>
         <Suspense fallback={<p className="route-loading" role="status">Loading map workspace…</p>}>
         {route === 'landing' ? <LandingPage onNavigate={navigate} /> : null}
+        {route === 'work' ? <WorkPage /> : null}
+        {route === 'data' ? <DataHealthPage /> : null}
+        {route === 'research' ? <ResearchPage /> : null}
         {route === 'prospects' ? <ProspectsPage onNavigate={navigate} /> : null}
         {route === 'prospect-map' ? <ProspectMapPage /> : null}
         {route === 'map' ? <MapPage /> : null}

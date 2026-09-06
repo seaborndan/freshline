@@ -9,6 +9,7 @@ import { FollowUpAgenda } from './FollowUpAgenda'
 import { VisitBrief } from './VisitBrief'
 import { BatchSave } from './BatchSave'
 import { SavedSearches } from './SavedSearches'
+import { ActivityTimeline } from './ActivityTimeline'
 import { TransferProspect } from './TransferProspect'
 import { transferProspect } from './workspace'
 import { isDue, localToday, readDiscovery, savedMatches, workspaceQuery } from './workspace'
@@ -118,8 +119,8 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
       setAnnouncement(`Saved ${p.name} to ${listName}.`)
     }
   }
-  function update(p: SavedProspect, patch: Partial<Pick<SavedProspect, 'stage' | 'notes' | 'followUpOn'>>) {
-    persist(saved.map(s => s.id === p.id && s.list === p.list ? { ...s, ...patch } : s))
+  function update(p: SavedProspect, patch: Partial<Pick<SavedProspect, 'stage' | 'notes' | 'followUpOn' | 'activities'>>) {
+    return persist(saved.map(s => s.id === p.id && s.list === p.list ? { ...s, ...patch } : s))
   }
   const currentList = saved.filter(s => s.list === listName)
   const filteredSaved = currentList.filter(p => (agendaId === null || p.id === agendaId) && savedMatches(p, savedSearch, stageFilter, dueOnly, today))
@@ -154,6 +155,7 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
         <p className="prospect-lede">{mode === 'saved' ? 'Review your shortlist, keep the context, and decide who needs a follow-up.' : 'Choose an opportunity type. Find supporting inspection evidence. Build your own shortlist.'}</p></div>
       <div className="prospect-method"><strong>Evidence, not assumptions.</strong><p>Categories match specific citations at the latest recorded inspection. They suggest something to investigate, not proof of a current problem, equipment failure, or unmet service need.</p></div>
     </header>
+    <div className="work-actions"><a href="/work">My day and visit planner</a><a href="/research">Custom discovery rules</a><a href="/research?prePermit=true">Pre-permit research</a><a href="/data">Data health</a></div>
     <div className="prospect-tabs" aria-label="Prospect workspace">
       <button type="button" aria-pressed={mode === 'discover'} onClick={() => setMode('discover')}>Discover prospects</button>
       <button type="button" aria-pressed={mode === 'saved'} onClick={() => setMode('saved')}>Saved lists ({new Set(saved.map(p => p.list)).size})</button>
@@ -215,15 +217,16 @@ export function ProspectsPage({ onNavigate }: { onNavigate: (route: Route, searc
       const existing = saved.find(s => s.id === p.id && s.list === listName)
       return <article key={p.id} className="prospect-card">
         {mode === 'discover' ? <label className="prospect-select"><input type="checkbox" checked={selectedIds.includes(p.id)} onChange={e => setSelectedIds(previous => e.target.checked ? [...previous, p.id] : previous.filter(id => id !== p.id))} />Select {p.name}</label> : null}
-        <div className="prospect-card-head"><span className="eyebrow">{p.locality ?? 'Borough unavailable'}</span><span>{formatPlainDate(p.inspectedOn)}</span></div>
+        <div className="prospect-card-head"><span className="eyebrow">{p.locality ?? 'Borough unavailable'}</span><span>{p.inspectedOn ? formatPlainDate(p.inspectedOn) : 'No inspection recorded'}</span></div>
         <h2>{p.name}</h2><p className="prospect-address">{p.address ?? 'Address not published'}</p>
-        <div className="prospect-evidence"><h3>Why this place?</h3><ul>{p.evidence.map(e => <li key={e.code}><strong>{e.code}</strong> {e.description ?? 'No description published.'}</li>)}</ul></div>
+        <div className="prospect-evidence"><h3>Saved inspection evidence</h3>{p.evidence.length === 0 ? <p>No citations saved. This restaurant was selected for your territory.</p> : null}<ul>{p.evidence.map(e => <li key={e.code}><strong>{e.code}</strong> {e.description ?? 'No description published.'}</li>)}</ul></div>
         <div className="prospect-actions"><a href={`/map?id=${p.id}&focus=1`} onClick={e => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onNavigate('map', `?id=${p.id}&focus=1`) } }}>View on map</a>
           <a href={`/map?id=${p.id}`} onClick={e => { if (!e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey && e.button === 0) { e.preventDefault(); onNavigate('map', `?id=${p.id}`) } }}>View inspection history ↗</a>
           {p.phone ? <a href={`tel:${p.phone.replace(/[^+\d]/g, '')}`}>{p.phone}</a> : <span>No phone published</span>}
         </div>
         {mode === 'saved' && existing ? <div className="prospect-notes">
           <EvidenceCheck prospect={existing} />
+          <ActivityTimeline prospect={existing} onSave={activities => update(existing, { activities })} />
           <TransferProspect prospect={existing} saved={saved} onTransfer={(destination, move) => {
             const next = transferProspect(saved, existing.id, existing.list, destination, move)
             if (!next || !persist(next)) return false

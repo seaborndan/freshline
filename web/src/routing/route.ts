@@ -27,7 +27,7 @@
  */
 
 /** Every page in the application. A closed union, so a new page cannot be added by typo. */
-export type Route = 'landing' | 'map' | 'reports' | 'prospects' | 'prospect-map'
+export type Route = 'landing' | 'map' | 'reports' | 'prospects' | 'prospect-map' | 'work' | 'data' | 'research'
 
 export const defaultRoute: Route = 'landing'
 
@@ -43,6 +43,9 @@ const paths: Record<Route, string> = {
   reports: '/reports',
   prospects: '/prospects',
   'prospect-map': '/prospects/map',
+  work: '/work',
+  data: '/data',
+  research: '/research',
 }
 
 /**

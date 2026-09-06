@@ -5,6 +5,28 @@ session; it supplements `CLAUDE.md` and the milestone documentation.
 
 ## Latest change
 
+The ten-feature product pass adds general map saving, dated activity timelines, My day (/work),
+saved-evidence checks, manual visit planning, saved-territory summaries, custom research (/research)
+and real data health (/data). Read `docs/product-pass-ten-features.md` for exact behavior and limits.
+Validation: 153 API tests and 334 frontend tests passed; TypeScript, lint and local-origin production
+build passed. Initial JS is 294.66 kB; map chunk remains 952.72 kB with the existing size warning.
+Saved map records allow absent inspections/evidence without weakening API discovery validation.
+Activities survive transfer and restaurant JSON backup; visit plans and search bookmarks remain
+separate local keys. No active authentication, migrations or new dependencies were added.
+
+User chose Google accounts for teams. Concrete proposed architecture and setup requirements are
+in ADR-0008; OAuth client/domain and auth/schema review are still required. Pre-permit research is
+implemented using recorded inspection types, but verified opening/permit-issuance data is not.
+Failed-run history is not persisted; data health says so rather than implying successful refresh.
+
+CUA browser inspection recovered after reset during this pass. Live checks now cover map save,
+activity logging/reload, visit stop selection/reordering, unchanged-evidence checks, pre-permit rules
+(Queens + all codes 04N/08A returned 26 matches), and data health. Phone-width checks at 390px had
+no horizontal overflow on research/data health. Temporary QA list/activities and visit stops were
+removed; original GG/a lists preserved. This supersedes older notes saying all visual QA is blocked.
+Data health reports 23,528 establishments, 29,601 inspections, 511 missing coordinates, last successful
+ingestion July 26 and highest inspection date July 23. This pass did not run fresh ingestion.
+
 Saved searches now optionally use rolling 7/30/90/180-day windows calculated on Run, inclusive of
 the local current day. Existing bookmarks remain fixed-date. These filter inspection dates, not
 ingestion timestamps; there is no background monitoring. Tests cover leap/year boundaries and old

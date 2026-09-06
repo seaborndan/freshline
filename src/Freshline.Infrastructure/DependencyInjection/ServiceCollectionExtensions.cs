@@ -71,6 +71,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEstablishmentQueries, EstablishmentQueries>();
         services.AddScoped<IReportQueries, ReportQueries>();
         services.AddScoped<IProspectQueries, ProspectQueries>();
+        services.AddScoped<IDataHealthQueries, DataHealthQueries>();
+        services.AddScoped<IResearchQueries, ResearchQueries>();
         services.AddScoped<IReadinessProbe, ReadinessProbe>();
 
         return services;
